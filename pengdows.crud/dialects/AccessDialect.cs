@@ -148,6 +148,11 @@
 //   Mode=ReadWrite control connection succeeds normally. Also confirmed live (3/3 trials) that a
 //   held-open Mode=Read connection actively issuing reads does NOT block a concurrent writer on
 //   the same file.
+// - Date/Time Extended (DATETIME2, DAO type 26) is NOT SUPPORTED: an upstream ACE defect, CONFIRMED live (2026-11-11).
+//   The engine stores it correctly (its own Year/Month/Day and a DAO read both return the written value), but OLE DB
+//   reports it as DBTYPE_DBTIMESTAMP with the month one early (Jun reads May, Dec 31 reads Nov 31, Jan reads month 0), a
+//   garbled fraction, and a read can crash the process; CDate/CDbl/Format on it fail. No library fix exists: a faithful
+//   read needs a per-column SELECT rewrite and the library does not know a column's type. Use DATETIME (about 1 ms).
 // - Isolation: CONFIRMED live that only ReadUncommitted and ReadCommitted are accepted by
 //   OleDbConnection.BeginTransaction — RepeatableRead/Serializable/Snapshot all throw "Neither
 //   the isolation level nor a strengthening of it is supported."

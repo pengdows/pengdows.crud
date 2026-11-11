@@ -217,6 +217,12 @@ public static class DatabaseTypeCatalog
             Notes: "Created through DAO, not DDL. Read as child columns (v.FileName, v.FileData); written only with INSERT INTO t (v.FileName) SELECT ... FROM t WHERE ... against an existing row (AccessComplexTypeTests)."),
         new("OLE OBJECT", ColumnTypeCategory.Lob, Aliases: new[] { "GENERAL", "LONGBINARY" }, IsLob: true, IsBinary: true,
             Notes: "Same storage as LONGBINARY; covered by that entry."),
+        new("DATETIME2 (Date/Time Extended)", ColumnTypeCategory.Temporal, IsTemporal: true, CanReturnFromQuery: false,
+            Notes: "NOT SUPPORTED, upstream defect in ACE (verified live 2026-11-11). DATETIME2 creates a distinct Date/Time Extended column " +
+                   "(DAO type 26, 100 ns, 0001 to 9999) and the engine stores it correctly: its own Year/Month/Day and DAO both return the " +
+                   "written value. Through OLE DB it is reported as DBTYPE_DBTIMESTAMP with the month one early (Jun reads as May, Dec 31 as " +
+                   "Nov 31, Jan as month 0) and a garbled fraction, and a read can crash the process. CDate, CDbl and Format fail on it. A " +
+                   "faithful read needs a per-column SELECT rewrite the library cannot do (it does not know a column's type), so use DATETIME."),
         new("DATETIME (DateOnly)", ColumnTypeCategory.Temporal, IsTemporal: true,
             Declaration: "DATETIME", ClrType: typeof(DateOnly), DbType: System.Data.DbType.Date, Sample: new DateOnly(2026, 10, 1)),
         new("DATETIME (TimeOnly)", ColumnTypeCategory.Temporal, IsTemporal: true,

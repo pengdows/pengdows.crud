@@ -512,3 +512,14 @@ SMALLINT (Access's TINYINT is its unsigned BYTE), a rowversion token needs VARBI
 a bit string cannot live in a one-bit YESNO column, and an arbitrary-size integer has no Access type (DECIMAL stops at 28
 digits, NUMBER is a double, and a BigInteger cannot be marshalled to OLE DB). The last two are refusals recorded in
 `gen_fidelity.py` DB_REFUSED.
+
+**Access Date/Time Extended is unsupported: an upstream defect (2026-11-11).** `DATETIME2` is not an alias of `DATETIME`: it
+creates Access's Date/Time Extended column (DAO type 26, 100 ns, 0001 to 9999). The engine stores it correctly: its own
+`Year`/`Month`/`Day` and a DAO read both returned the written value for seven dates from 0100-07-04 to 9999-12-31. Read through
+OLE DB (the only provider the library uses) the column is reported as `DBTYPE_DBTIMESTAMP` and comes back wrong every time: the
+month is one early (Jun reads May, Oct reads Sep, Mar reads Feb), so Dec 31 reads Nov 31 (not a date) and Jan reads month 0, the
+fraction is garbled (1234567 ticks read as 12345), and a read can crash the process (the same row read once and crashed on the
+next run). `CDate`, `CDbl` and `Format` on the column fail through OLE DB. A faithful read would need the SELECT list rewritten
+per column, and the library does not know a column's type when it builds one, so there is no library fix. It is not in the type
+matrix (the matrix's "timestamp without zone" is Access `DATETIME`, about 1 ms); it is recorded in `AccessDialect` and as a
+Notes-only entry in the testbed catalog.
