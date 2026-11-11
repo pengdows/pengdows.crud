@@ -6,17 +6,17 @@
         "pass": 154,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-05 18:00Z",
-        "commit": "9af672d9",
-        "dirtyTree": true
+        "runUtc": "2026-11-11 19:48Z",
+        "commit": "ae6ba38c",
+        "dirtyTree": false
       },
       "net8.0": {
         "pass": 154,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-05 17:58Z",
-        "commit": "9af672d9",
-        "dirtyTree": true
+        "runUtc": "2026-11-11 19:46Z",
+        "commit": "ae6ba38c",
+        "dirtyTree": false
       }
     },
     "AuroraMySql": {
