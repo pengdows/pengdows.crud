@@ -504,6 +504,12 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     /// False for a database with no upsert statement (InterBase, WRT-003), where the gateway refuses
     /// UpsertAsync with NotSupportedException; tests assert that refusal there (HARN-011).
     /// </summary>
+    /// <summary>
+    /// False where the database parses UNIQUE/PRIMARY KEY but does not enforce it (Snowflake standard tables): a test that
+    /// asserts "no duplicate row" cannot hold there, so it skips with that reason (a capability, not a silent pass).
+    /// </summary>
+    protected static bool EnforcesUniqueConstraints(IDatabaseContext context) => context.Dialect.EnforcesConstraints;
+
     protected static bool SupportsUpsert(IDatabaseContext context) =>
         context.DataSourceInfo.SupportsMerge || context.DataSourceInfo.SupportsInsertOnConflict ||
         context.DataSourceInfo.SupportsOnDuplicateKey;

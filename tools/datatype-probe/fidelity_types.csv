@@ -21,6 +21,7 @@ signed 8-bit,signed_8_bit,sbyte,SByte,InterBase,declared,SMALLINT,SMALLINT,
 signed 8-bit,signed_8_bit,sbyte,SByte,SapHana,declared,SMALLINT,SMALLINT,
 signed 8-bit,signed_8_bit,sbyte,SByte,AuroraMySql,declared,TINYINT,TINYINT,
 signed 8-bit,signed_8_bit,sbyte,SByte,AuroraPostgreSql,declared,SMALLINT,smallint,
+signed 8-bit,signed_8_bit,sbyte,SByte,Snowflake,declared,TINYINT,FIXED,
 signed 16-bit,signed_16_bit,short,Int16,PostgreSql,declared,SMALLINT,smallint,
 signed 16-bit,signed_16_bit,short,Int16,SqlServer,declared,SMALLINT,smallint,
 signed 16-bit,signed_16_bit,short,Int16,Oracle,declared,SMALLINT,Decimal,
@@ -43,6 +44,7 @@ signed 16-bit,signed_16_bit,short,Int16,InterBase,declared,SMALLINT,SMALLINT,
 signed 16-bit,signed_16_bit,short,Int16,SapHana,declared,SMALLINT,smallint,
 signed 16-bit,signed_16_bit,short,Int16,AuroraMySql,declared,SMALLINT,SMALLINT,
 signed 16-bit,signed_16_bit,short,Int16,AuroraPostgreSql,declared,SMALLINT,smallint,
+signed 16-bit,signed_16_bit,short,Int16,Snowflake,declared,SMALLINT,FIXED,
 signed 32-bit,signed_32_bit,int,Int32,PostgreSql,declared,INTEGER,integer,
 signed 32-bit,signed_32_bit,int,Int32,SqlServer,declared,INTEGER,int,
 signed 32-bit,signed_32_bit,int,Int32,Oracle,declared,INTEGER,Decimal,
@@ -65,6 +67,7 @@ signed 32-bit,signed_32_bit,int,Int32,InterBase,declared,INTEGER,INTEGER,
 signed 32-bit,signed_32_bit,int,Int32,SapHana,declared,INTEGER,integer,
 signed 32-bit,signed_32_bit,int,Int32,AuroraMySql,declared,INTEGER,INT,
 signed 32-bit,signed_32_bit,int,Int32,AuroraPostgreSql,declared,INTEGER,integer,
+signed 32-bit,signed_32_bit,int,Int32,Snowflake,declared,INTEGER,FIXED,
 signed 64-bit,signed_64_bit,long,Int64,PostgreSql,declared,BIGINT,bigint,
 signed 64-bit,signed_64_bit,long,Int64,SqlServer,declared,BIGINT,bigint,
 signed 64-bit,signed_64_bit,long,Int64,Oracle,declared,"NUMBER(19,0)",Decimal,
@@ -87,6 +90,7 @@ signed 64-bit,signed_64_bit,long,Int64,InterBase,unsupported,,,Dynamic SQL Error
 signed 64-bit,signed_64_bit,long,Int64,SapHana,declared,BIGINT,bigint,
 signed 64-bit,signed_64_bit,long,Int64,AuroraMySql,declared,BIGINT,BIGINT,
 signed 64-bit,signed_64_bit,long,Int64,AuroraPostgreSql,declared,BIGINT,bigint,
+signed 64-bit,signed_64_bit,long,Int64,Snowflake,declared,BIGINT,FIXED,
 signed 128-bit,signed_128_bit,Int128,Object,PostgreSql,declared,"NUMERIC(38,0)",numeric(38),
 signed 128-bit,signed_128_bit,Int128,Object,SqlServer,declared,"NUMERIC(38,0)",decimal,
 signed 128-bit,signed_128_bit,Int128,Object,Oracle,declared,"NUMBER(38,0)",Decimal,
@@ -109,6 +113,7 @@ signed 128-bit,signed_128_bit,Int128,Object,InterBase,unsupported,,,Dynamic SQL 
 signed 128-bit,signed_128_bit,Int128,Object,SapHana,declared,"NUMBER(38,0)",decimal,
 signed 128-bit,signed_128_bit,Int128,Object,AuroraMySql,declared,"NUMERIC(38,0)",DECIMAL,
 signed 128-bit,signed_128_bit,Int128,Object,AuroraPostgreSql,declared,"NUMERIC(38,0)",numeric(38),
+signed 128-bit,signed_128_bit,Int128,Object,Snowflake,declared,"NUMBER(38,0)",FIXED,
 unsigned 8-bit,unsigned_8_bit,byte,Byte,PostgreSql,widened,SMALLINT,(widened),
 unsigned 8-bit,unsigned_8_bit,byte,Byte,SqlServer,declared,TINYINT,tinyint,
 unsigned 8-bit,unsigned_8_bit,byte,Byte,Oracle,widened,SMALLINT,(widened),
@@ -131,6 +136,7 @@ unsigned 8-bit,unsigned_8_bit,byte,Byte,InterBase,widened,SMALLINT,(widened),
 unsigned 8-bit,unsigned_8_bit,byte,Byte,SapHana,declared,TINYINT,tinyint,
 unsigned 8-bit,unsigned_8_bit,byte,Byte,AuroraMySql,declared,TINYINT UNSIGNED,TINYINT,
 unsigned 8-bit,unsigned_8_bit,byte,Byte,AuroraPostgreSql,widened,SMALLINT,(widened),
+unsigned 8-bit,unsigned_8_bit,byte,Byte,Snowflake,declared,TINYINT,FIXED,
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,PostgreSql,widened,INTEGER,(widened),
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,SqlServer,widened,INTEGER,(widened),
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,Oracle,widened,INTEGER,(widened),
@@ -153,6 +159,7 @@ unsigned 16-bit,unsigned_16_bit,ushort,UInt16,InterBase,widened,INTEGER,(widened
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,SapHana,widened,INTEGER,(widened),
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,AuroraMySql,declared,SMALLINT UNSIGNED,SMALLINT,
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,AuroraPostgreSql,widened,INTEGER,(widened),
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,Snowflake,widened,INTEGER,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,PostgreSql,widened,BIGINT,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,SqlServer,widened,BIGINT,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,Oracle,declared,"NUMBER(10,0)",NUMBER,
@@ -175,6 +182,7 @@ unsigned 32-bit,unsigned_32_bit,uint,UInt32,InterBase,declared,"NUMERIC(18,0)",N
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,SapHana,widened,BIGINT,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,AuroraMySql,declared,INT UNSIGNED,INT,
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,AuroraPostgreSql,widened,BIGINT,(widened),
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,Snowflake,widened,BIGINT,(widened),
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,PostgreSql,declared,"NUMERIC(20,0)",numeric(20),
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,SqlServer,declared,"NUMERIC(20,0)",decimal,
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Oracle,declared,"NUMERIC(20,0)",Decimal,
@@ -197,6 +205,7 @@ unsigned 64-bit,unsigned_64_bit,ulong,UInt64,InterBase,unsupported,,,"Dynamic SQ
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,SapHana,declared,"NUMERIC(20,0)",decimal,
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,AuroraMySql,declared,BIGINT UNSIGNED,BIGINT,
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,AuroraPostgreSql,declared,"NUMERIC(20,0)",numeric(20),
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Snowflake,declared,"NUMERIC(20,0)",FIXED,
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,PostgreSql,declared,"NUMERIC(1000,0)",numeric(1000),
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,SqlServer,declared,"NUMERIC(38,0)",decimal,
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,Oracle,declared,NUMBER,Decimal,
@@ -219,6 +228,7 @@ arbitrary-size integer,arbitrary_integer,BigInteger,Object,InterBase,unsupported
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,SapHana,declared,NUMBER,decimal,
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,AuroraMySql,declared,"DECIMAL(65,0)",DECIMAL,
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,AuroraPostgreSql,declared,"NUMERIC(1000,0)",numeric(1000),
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,Snowflake,declared,NUMBER,FIXED,
 binary float32,binary_float32,float,Single,PostgreSql,declared,REAL,real,
 binary float32,binary_float32,float,Single,SqlServer,declared,REAL,real,
 binary float32,binary_float32,float,Single,Oracle,declared,REAL,Decimal,
@@ -241,6 +251,7 @@ binary float32,binary_float32,float,Single,InterBase,declared,REAL,FLOAT,
 binary float32,binary_float32,float,Single,SapHana,declared,REAL,real,
 binary float32,binary_float32,float,Single,AuroraMySql,declared,REAL,DOUBLE,
 binary float32,binary_float32,float,Single,AuroraPostgreSql,declared,REAL,real,
+binary float32,binary_float32,float,Single,Snowflake,declared,REAL,REAL,
 binary float64,binary_float64,double,Double,PostgreSql,declared,DOUBLE PRECISION,double precision,
 binary float64,binary_float64,double,Double,SqlServer,declared,DOUBLE PRECISION,float,
 binary float64,binary_float64,double,Double,Oracle,declared,DOUBLE PRECISION,Decimal,
@@ -263,6 +274,7 @@ binary float64,binary_float64,double,Double,InterBase,declared,DOUBLE PRECISION,
 binary float64,binary_float64,double,Double,SapHana,declared,DOUBLE PRECISION,double,
 binary float64,binary_float64,double,Double,AuroraMySql,declared,DOUBLE PRECISION,DOUBLE,
 binary float64,binary_float64,double,Double,AuroraPostgreSql,declared,DOUBLE PRECISION,double precision,
+binary float64,binary_float64,double,Double,Snowflake,declared,DOUBLE PRECISION,REAL,
 fixed decimal,fixed_decimal,decimal,Decimal,PostgreSql,declared,"DECIMAL(18,4)","numeric(18, 4)",
 fixed decimal,fixed_decimal,decimal,Decimal,SqlServer,declared,"DECIMAL(18,4)",decimal,
 fixed decimal,fixed_decimal,decimal,Decimal,Oracle,declared,"DECIMAL(18,4)",Decimal,
@@ -285,6 +297,7 @@ fixed decimal,fixed_decimal,decimal,Decimal,InterBase,declared,"DECIMAL(18,4)",D
 fixed decimal,fixed_decimal,decimal,Decimal,SapHana,declared,"DECIMAL(18,4)",decimal,
 fixed decimal,fixed_decimal,decimal,Decimal,AuroraMySql,declared,"DECIMAL(18,4)",DECIMAL,
 fixed decimal,fixed_decimal,decimal,Decimal,AuroraPostgreSql,declared,"DECIMAL(18,4)","numeric(18, 4)",
+fixed decimal,fixed_decimal,decimal,Decimal,Snowflake,declared,"DECIMAL(18,4)",FIXED,
 boolean,boolean,bool,Boolean,PostgreSql,declared,BOOLEAN,boolean,
 boolean,boolean,bool,Boolean,SqlServer,declared,BIT,bit,
 boolean,boolean,bool,Boolean,Oracle,declared,BOOLEAN,Boolean,
@@ -307,6 +320,7 @@ boolean,boolean,bool,Boolean,InterBase,declared,BOOLEAN,BOOLEAN,
 boolean,boolean,bool,Boolean,SapHana,declared,BOOLEAN,boolean,
 boolean,boolean,bool,Boolean,AuroraMySql,declared,BOOLEAN,BOOL,
 boolean,boolean,bool,Boolean,AuroraPostgreSql,declared,BOOLEAN,boolean,
+boolean,boolean,bool,Boolean,Snowflake,declared,BOOLEAN,BOOLEAN,
 bit / bitstring,bit_string,BitArray,Object,PostgreSql,declared,BIT VARYING(8),bit varying(8),
 bit / bitstring,bit_string,BitArray,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot specify a column width on data type bit."
 bit / bitstring,bit_string,BitArray,Object,Oracle,unsupported,,,ORA-03060: Data type BIT is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -329,6 +343,7 @@ bit / bitstring,bit_string,BitArray,Object,InterBase,unsupported,,,"Dynamic SQL 
 bit / bitstring,bit_string,BitArray,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""BIT"": line 1 col 55 (at pos 55)"
 bit / bitstring,bit_string,BitArray,Object,AuroraMySql,declared,BIT(3),bit(3),
 bit / bitstring,bit_string,BitArray,Object,AuroraPostgreSql,declared,BIT VARYING(8),bit varying(8),
+bit / bitstring,bit_string,BitArray,Object,Snowflake,unsupported,,,"Error: SQL compilation error: syntax error line 1 at position 57 unexpected '('. SqlState: 42000, VendorCode: 1003, QueryId: 01c85345-0209-c411-0000-0012e67eff95"
 varying character,varying_character,string,String,PostgreSql,declared,VARCHAR(100),character varying(100),
 varying character,varying_character,string,String,SqlServer,declared,VARCHAR(100),varchar,
 varying character,varying_character,string,String,Oracle,declared,VARCHAR(100),Varchar2,
@@ -351,6 +366,7 @@ varying character,varying_character,string,String,InterBase,declared,VARCHAR(100
 varying character,varying_character,string,String,SapHana,declared,VARCHAR(100),varchar,
 varying character,varying_character,string,String,AuroraMySql,declared,VARCHAR(100),VARCHAR,
 varying character,varying_character,string,String,AuroraPostgreSql,declared,VARCHAR(100),character varying(100),
+varying character,varying_character,string,String,Snowflake,declared,VARCHAR(100),TEXT,
 unbounded text,unbounded_text,string,String,PostgreSql,declared,TEXT,text,
 unbounded text,unbounded_text,string,String,SqlServer,declared,TEXT,text,
 unbounded text,unbounded_text,string,String,Oracle,declared,CLOB,Clob,
@@ -373,6 +389,7 @@ unbounded text,unbounded_text,string,String,InterBase,declared,BLOB SUB_TYPE TEX
 unbounded text,unbounded_text,string,String,SapHana,declared,CLOB,clob,
 unbounded text,unbounded_text,string,String,AuroraMySql,declared,TEXT,VARCHAR,
 unbounded text,unbounded_text,string,String,AuroraPostgreSql,declared,TEXT,text,
+unbounded text,unbounded_text,string,String,Snowflake,declared,TEXT,TEXT,
 UUID / GUID,uuid,Guid,Guid,PostgreSql,declared,UUID,uuid,
 UUID / GUID,uuid,Guid,Guid,SqlServer,declared,UNIQUEIDENTIFIER,uniqueidentifier,
 UUID / GUID,uuid,Guid,Guid,Oracle,declared,VARCHAR2(36),VARCHAR2,
@@ -395,6 +412,7 @@ UUID / GUID,uuid,Guid,Guid,InterBase,declared,CHAR(16) CHARACTER SET OCTETS,CHAR
 UUID / GUID,uuid,Guid,Guid,SapHana,declared,CHAR(36),varchar,
 UUID / GUID,uuid,Guid,Guid,AuroraMySql,declared,CHAR(36),CHAR(36),
 UUID / GUID,uuid,Guid,Guid,AuroraPostgreSql,declared,UUID,uuid,
+UUID / GUID,uuid,Guid,Guid,Snowflake,declared,UUID,TEXT,
 calendar date,calendar_date,DateOnly,Date,PostgreSql,declared,DATE,date,
 calendar date,calendar_date,DateOnly,Date,SqlServer,declared,DATE,date,
 calendar date,calendar_date,DateOnly,Date,Oracle,declared,DATE,Date,
@@ -417,6 +435,7 @@ calendar date,calendar_date,DateOnly,Date,InterBase,declared,DATE,DATE,
 calendar date,calendar_date,DateOnly,Date,SapHana,declared,DATE,date,
 calendar date,calendar_date,DateOnly,Date,AuroraMySql,declared,DATE,DATE,
 calendar date,calendar_date,DateOnly,Date,AuroraPostgreSql,declared,DATE,date,
+calendar date,calendar_date,DateOnly,Date,Snowflake,declared,DATE,DATE,
 time without zone,time_of_day,TimeOnly,Time,PostgreSql,declared,TIME(6),time(6) without time zone,
 time without zone,time_of_day,TimeOnly,Time,SqlServer,declared,TIME(6),time,
 time without zone,time_of_day,TimeOnly,Time,Oracle,unsupported,,,ORA-03060: Data type TIME is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -439,6 +458,7 @@ time without zone,time_of_day,TimeOnly,Time,InterBase,declared,TIME,TIME,
 time without zone,time_of_day,TimeOnly,Time,SapHana,declared,TIME,time,
 time without zone,time_of_day,TimeOnly,Time,AuroraMySql,declared,TIME(6),TIME,
 time without zone,time_of_day,TimeOnly,Time,AuroraPostgreSql,declared,TIME(6),time(6) without time zone,
+time without zone,time_of_day,TimeOnly,Time,Snowflake,declared,TIME(6),TIME,
 time without zone,time_span,TimeSpan,Time,PostgreSql,declared,TIME(6),time(6) without time zone,
 time without zone,time_span,TimeSpan,Time,SqlServer,declared,TIME(6),time,
 time without zone,time_span,TimeSpan,Time,Oracle,unsupported,,,ORA-03060: Data type TIME is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -461,6 +481,7 @@ time without zone,time_span,TimeSpan,Time,InterBase,declared,TIME,TIME,
 time without zone,time_span,TimeSpan,Time,SapHana,declared,TIME,time,
 time without zone,time_span,TimeSpan,Time,AuroraMySql,declared,TIME(6),TIME,
 time without zone,time_span,TimeSpan,Time,AuroraPostgreSql,declared,TIME(6),time(6) without time zone,
+time without zone,time_span,TimeSpan,Time,Snowflake,declared,TIME(6),TIME,
 day-time interval,day_time_interval,IntervalDaySecond,Object,PostgreSql,declared,INTERVAL DAY TO SECOND(6),interval(6),
 day-time interval,day_time_interval,IntervalDaySecond,Object,SqlServer,unsupported,,,Incorrect syntax near 'DAY'.
 day-time interval,day_time_interval,IntervalDaySecond,Object,Oracle,declared,INTERVAL DAY TO SECOND(6),IntervalDS,
@@ -483,6 +504,7 @@ day-time interval,day_time_interval,IntervalDaySecond,Object,InterBase,unsupport
 day-time interval,day_time_interval,IntervalDaySecond,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""INTERVAL"": line 1 col 56 (at pos 56)"
 day-time interval,day_time_interval,IntervalDaySecond,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL DAY TO SECOND(6))' at line 1
 day-time interval,day_time_interval,IntervalDaySecond,Object,AuroraPostgreSql,declared,INTERVAL DAY TO SECOND(6),interval(6),
+day-time interval,day_time_interval,IntervalDaySecond,Object,Snowflake,unsupported,,,"Query failed on Snowflake: Error: Snowflake Internal Error: Unknown column type: interval_day_time SqlState: , VendorCode: 270001, QueryId:"
 timestamp without zone,timestamp,DateTime,DateTime2,PostgreSql,declared,TIMESTAMP(6),timestamp(6) without time zone,
 timestamp without zone,timestamp,DateTime,DateTime2,SqlServer,declared,DATETIME2(6),datetime2,
 timestamp without zone,timestamp,DateTime,DateTime2,Oracle,declared,TIMESTAMP(6),TimeStamp,
@@ -505,6 +527,7 @@ timestamp without zone,timestamp,DateTime,DateTime2,InterBase,declared,TIMESTAMP
 timestamp without zone,timestamp,DateTime,DateTime2,SapHana,declared,DATETIME,timestamp,
 timestamp without zone,timestamp,DateTime,DateTime2,AuroraMySql,declared,TIMESTAMP(6),TIMESTAMP,
 timestamp without zone,timestamp,DateTime,DateTime2,AuroraPostgreSql,declared,TIMESTAMP(6),timestamp(6) without time zone,
+timestamp without zone,timestamp,DateTime,DateTime2,Snowflake,declared,TIMESTAMP(6),TIMESTAMP_NTZ,
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,PostgreSql,declared,TIMESTAMP WITH TIME ZONE,timestamp with time zone,
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,SqlServer,declared,DATETIMEOFFSET,datetimeoffset,
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,Oracle,declared,TIMESTAMP WITH TIME ZONE,TimeStampTZ,
@@ -527,6 +550,7 @@ timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,InterBase,
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""WITH"": line 1 col 66 (at pos 66)"
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,AuroraPostgreSql,declared,TIMESTAMP WITH TIME ZONE,timestamp with time zone,
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,Snowflake,declared,TIMESTAMP WITH TIME ZONE,TIMESTAMP_TZ,
 binary LOB,binary,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
 binary LOB,binary,byte[],Binary,SqlServer,declared,IMAGE,image,
 binary LOB,binary,byte[],Binary,Oracle,declared,BLOB,Blob,
@@ -549,6 +573,7 @@ binary LOB,binary,byte[],Binary,InterBase,declared,BLOB,BLOB,
 binary LOB,binary,byte[],Binary,SapHana,declared,BLOB,blob,
 binary LOB,binary,byte[],Binary,AuroraMySql,declared,BLOB,BLOB,
 binary LOB,binary,byte[],Binary,AuroraPostgreSql,declared,BYTEA,bytea,
+binary LOB,binary,byte[],Binary,Snowflake,declared,BINARY,BINARY,
 JSON text / JSON value,json,JsonDocument,Object,PostgreSql,declared,JSON,json,
 JSON text / JSON value,json,JsonDocument,Object,SqlServer,declared,JSON,json,
 JSON text / JSON value,json,JsonDocument,Object,Oracle,declared,CLOB,Clob,
@@ -571,6 +596,7 @@ JSON text / JSON value,json,JsonDocument,Object,InterBase,unsupported,,,Dynamic 
 JSON text / JSON value,json,JsonDocument,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""JSON"": line 1 col 56 (at pos 56)"
 JSON text / JSON value,json,JsonDocument,Object,AuroraMySql,declared,JSON,JSON,
 JSON text / JSON value,json,JsonDocument,Object,AuroraPostgreSql,declared,JSON,json,
+JSON text / JSON value,json,JsonDocument,Object,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'JSON'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85347-0209-c411-0012-e67e000126aa"
 IP address,ip_address,IPAddress,Object,PostgreSql,declared,INET,inet,
 IP address,ip_address,IPAddress,Object,SqlServer,declared,VARCHAR(45),varchar,
 IP address,ip_address,IPAddress,Object,Oracle,declared,VARCHAR(45),Varchar2,
@@ -593,6 +619,7 @@ IP address,ip_address,IPAddress,Object,InterBase,declared,VARCHAR(45),VARCHAR,
 IP address,ip_address,IPAddress,Object,SapHana,declared,VARCHAR(45),varchar,
 IP address,ip_address,IPAddress,Object,AuroraMySql,declared,VARCHAR(45),VARCHAR,
 IP address,ip_address,IPAddress,Object,AuroraPostgreSql,declared,INET,inet,
+IP address,ip_address,IPAddress,Object,Snowflake,declared,IPADDRESS,TEXT,
 SQL array,int_array,int[],Object,PostgreSql,declared,INTEGER ARRAY,integer[],
 SQL array,int_array,int[],Object,SqlServer,unsupported,,,Incorrect syntax near 'ARRAY'.
 SQL array,int_array,int[],Object,Oracle,declared,probe_varray,Array,
@@ -615,6 +642,7 @@ SQL array,int_array,int[],Object,InterBase,unsupported,,,"Dynamic SQL Error SQL 
 SQL array,int_array,int[],Object,SapHana,declared,INTEGER ARRAY,varbinary,
 SQL array,int_array,int[],Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY)' at line 1
 SQL array,int_array,int[],Object,AuroraPostgreSql,declared,INTEGER ARRAY,integer[],
+SQL array,int_array,int[],Object,Snowflake,declared,ARRAY,ARRAY,
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,PostgreSql,unsupported,,,"42704: type ""uhugeint"" does not exist POSITION: 55"
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type UHUGEINT."
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -637,6 +665,7 @@ unsigned 128-bit,unsigned_128_bit,UInt128,Object,InterBase,unsupported,,,Dynamic
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""UHUGEINT"": line 1 col 55 (at pos 55)"
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'UHUGEINT)' at line 1
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,AuroraPostgreSql,unsupported,,,"42704: type ""uhugeint"" does not exist POSITION: 55"
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'UHUGEINT'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85345-0209-c372-0012-e67e00011386"
 decimal floating point,decimal_float,decimal,Decimal,PostgreSql,unsupported,,,"42704: type ""decfloat"" does not exist POSITION: 55"
 decimal floating point,decimal_float,decimal,Decimal,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type DECFLOAT."
 decimal floating point,decimal_float,decimal,Decimal,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -659,6 +688,7 @@ decimal floating point,decimal_float,decimal,Decimal,InterBase,unsupported,,,Dyn
 decimal floating point,decimal_float,decimal,Decimal,SapHana,declared,SMALLDECIMAL,decimal,
 decimal floating point,decimal_float,decimal,Decimal,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DECFLOAT)' at line 1
 decimal floating point,decimal_float,decimal,Decimal,AuroraPostgreSql,unsupported,,,"42704: type ""decfloat"" does not exist POSITION: 55"
+decimal floating point,decimal_float,decimal,Decimal,Snowflake,declared,DECFLOAT,DECFLOAT,
 money / currency,money,decimal,Decimal,PostgreSql,declared,MONEY,money,
 money / currency,money,decimal,Decimal,SqlServer,declared,MONEY,money,
 money / currency,money,decimal,Decimal,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -681,6 +711,7 @@ money / currency,money,decimal,Decimal,InterBase,unsupported,,,Dynamic SQL Error
 money / currency,money,decimal,Decimal,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""MONEY"": line 1 col 55 (at pos 55)"
 money / currency,money,decimal,Decimal,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MONEY)' at line 1
 money / currency,money,decimal,Decimal,AuroraPostgreSql,declared,MONEY,money,
+money / currency,money,decimal,Decimal,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'MONEY'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85345-0209-c364-0012-e67e00010eba"
 fixed character,fixed_character,string,String,PostgreSql,declared,CHAR(10),character(10),
 fixed character,fixed_character,string,String,SqlServer,declared,CHAR(10),char,
 fixed character,fixed_character,string,String,Oracle,declared,CHAR(10),Char,
@@ -703,6 +734,7 @@ fixed character,fixed_character,string,String,InterBase,declared,CHAR(10),CHAR,
 fixed character,fixed_character,string,String,SapHana,declared,CHAR(10),varchar,
 fixed character,fixed_character,string,String,AuroraMySql,declared,CHAR(10),CHAR(10),
 fixed character,fixed_character,string,String,AuroraPostgreSql,declared,CHAR(10),character(10),
+fixed character,fixed_character,string,String,Snowflake,declared,CHAR(10),TEXT,
 national / Unicode character,national_text,string,String,PostgreSql,declared,VARCHAR(100),character varying(100),
 national / Unicode character,national_text,string,String,SqlServer,declared,NVARCHAR(100),nvarchar,
 national / Unicode character,national_text,string,String,Oracle,declared,NVARCHAR2(100),NVarchar2,
@@ -725,6 +757,7 @@ national / Unicode character,national_text,string,String,InterBase,declared,VARC
 national / Unicode character,national_text,string,String,SapHana,declared,NVARCHAR(100),nvarchar,
 national / Unicode character,national_text,string,String,AuroraMySql,declared,NVARCHAR(100),VARCHAR,
 national / Unicode character,national_text,string,String,AuroraPostgreSql,declared,VARCHAR(100),character varying(100),
+national / Unicode character,national_text,string,String,Snowflake,declared,NVARCHAR(100),TEXT,
 long text LOB,long_text,string,String,PostgreSql,declared,TEXT,text,
 long text LOB,long_text,string,String,SqlServer,declared,TEXT,text,
 long text LOB,long_text,string,String,Oracle,declared,CLOB,Clob,
@@ -747,6 +780,7 @@ long text LOB,long_text,string,String,InterBase,declared,BLOB SUB_TYPE TEXT,BLOB
 long text LOB,long_text,string,String,SapHana,declared,CLOB,clob,
 long text LOB,long_text,string,String,AuroraMySql,declared,TEXT,VARCHAR,
 long text LOB,long_text,string,String,AuroraPostgreSql,declared,TEXT,text,
+long text LOB,long_text,string,String,Snowflake,declared,TEXT,TEXT,
 enumeration,enumeration,string,String,PostgreSql,declared,probe_enum,probe_enum,
 enumeration,enumeration,string,String,SqlServer,unsupported,,,Incorrect syntax near 'a'.
 enumeration,enumeration,string,String,Oracle,unsupported,,,ORA-03060: Data type ENUM is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -769,6 +803,7 @@ enumeration,enumeration,string,String,InterBase,unsupported,,,"Dynamic SQL Error
 enumeration,enumeration,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""ENUM"": line 1 col 56 (at pos 56)"
 enumeration,enumeration,string,String,AuroraMySql,declared,"ENUM('active','inactive')",ENUM,
 enumeration,enumeration,string,String,AuroraPostgreSql,unsupported,,,"42704: type ""enum"" does not exist POSITION: 56"
+enumeration,enumeration,string,String,Snowflake,unsupported,,,"Error: SQL compilation error: syntax error line 1 at position 60 unexpected ''a''. syntax error line 1 at position 64 unexpected ''b''. SqlState: 42000, VendorCode: 1003, QueryId: 01c85346-02"
 set-valued enum,set_value,string,String,PostgreSql,unsupported,,,"42704: type ""set"" does not exist POSITION: 56"
 set-valued enum,set_value,string,String,SqlServer,unsupported,,,The definition for column 'c' must include a data type. Incorrect syntax near the keyword 'SET'.
 set-valued enum,set_value,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -791,6 +826,7 @@ set-valued enum,set_value,string,String,InterBase,unsupported,,,"Dynamic SQL Err
 set-valued enum,set_value,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""SET"": line 1 col 56 (at pos 56)"
 set-valued enum,set_value,string,String,AuroraMySql,declared,"SET('a','b')",SET,
 set-valued enum,set_value,string,String,AuroraPostgreSql,unsupported,,,"42704: type ""set"" does not exist POSITION: 56"
+set-valued enum,set_value,string,String,Snowflake,unsupported,,,Error: SQL compilation error: syntax error line 1 at position 55 unexpected 'SET'. syntax error line 1 at position 63 unexpected ''b''. syntax error line 1 at position 67 unexpected ')'. SqlS
 fixed binary,fixed_binary,byte[],Binary,PostgreSql,unsupported,,,"42704: type ""binary"" does not exist POSITION: 56"
 fixed binary,fixed_binary,byte[],Binary,SqlServer,declared,BINARY(16),binary,
 fixed binary,fixed_binary,byte[],Binary,Oracle,declared,RAW(16),Raw,
@@ -813,6 +849,7 @@ fixed binary,fixed_binary,byte[],Binary,InterBase,declared,BLOB SUB_TYPE 0,BLOB,
 fixed binary,fixed_binary,byte[],Binary,SapHana,declared,BINARY(16),varbinary,
 fixed binary,fixed_binary,byte[],Binary,AuroraMySql,declared,BINARY(16),BLOB,
 fixed binary,fixed_binary,byte[],Binary,AuroraPostgreSql,unsupported,,,"42704: type ""binary"" does not exist POSITION: 56"
+fixed binary,fixed_binary,byte[],Binary,Snowflake,declared,BINARY(16),BINARY,
 varying binary,varying_binary,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
 varying binary,varying_binary,byte[],Binary,SqlServer,declared,VARBINARY(16),varbinary,
 varying binary,varying_binary,byte[],Binary,Oracle,declared,RAW(16),Raw,
@@ -835,6 +872,7 @@ varying binary,varying_binary,byte[],Binary,InterBase,declared,BLOB,BLOB,
 varying binary,varying_binary,byte[],Binary,SapHana,declared,VARBINARY(16),varbinary,
 varying binary,varying_binary,byte[],Binary,AuroraMySql,declared,VARBINARY(16),BLOB,
 varying binary,varying_binary,byte[],Binary,AuroraPostgreSql,declared,BYTEA,bytea,
+varying binary,varying_binary,byte[],Binary,Snowflake,declared,VARBINARY(16),BINARY,
 legacy long binary,legacy_binary,byte[],Binary,PostgreSql,unsupported,,,"42601: syntax error at or near ""RAW"" POSITION: 61"
 legacy long binary,legacy_binary,byte[],Binary,SqlServer,declared,IMAGE,image,
 legacy long binary,legacy_binary,byte[],Binary,Oracle,declared,LONG RAW,LongRaw,
@@ -857,6 +895,7 @@ legacy long binary,legacy_binary,byte[],Binary,InterBase,unsupported,,,"Dynamic 
 legacy long binary,legacy_binary,byte[],Binary,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""LONG"": line 1 col 56 (at pos 56)"
 legacy long binary,legacy_binary,byte[],Binary,AuroraMySql,declared,TINYBLOB,BLOB,
 legacy long binary,legacy_binary,byte[],Binary,AuroraPostgreSql,unsupported,,,"42601: syntax error at or near ""RAW"" POSITION: 61"
+legacy long binary,legacy_binary,byte[],Binary,Snowflake,unsupported,,,"Error: SQL compilation error: syntax error line 1 at position 60 unexpected 'RAW'. SqlState: 42000, VendorCode: 1003, QueryId: 01c85346-0209-c411-0012-e67e00012346"
 rowversion / timestamp token,rowversion,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
 rowversion / timestamp token,rowversion,byte[],Binary,SqlServer,declared,ROWVERSION,timestamp,
 rowversion / timestamp token,rowversion,byte[],Binary,Oracle,declared,RAW(16),Raw,
@@ -879,6 +918,7 @@ rowversion / timestamp token,rowversion,byte[],Binary,InterBase,unsupported,,,"D
 rowversion / timestamp token,rowversion,byte[],Binary,SapHana,declared,BINARY(8),varbinary,
 rowversion / timestamp token,rowversion,byte[],Binary,AuroraMySql,declared,VARBINARY(16),BLOB,
 rowversion / timestamp token,rowversion,byte[],Binary,AuroraPostgreSql,declared,BYTEA,bytea,
+rowversion / timestamp token,rowversion,byte[],Binary,Snowflake,declared,BINARY(8),BINARY,
 local-zone timestamp,local_timestamp,DateTime,DateTime,PostgreSql,unsupported,,,"42601: syntax error at or near ""WITH"" POSITION: 66"
 local-zone timestamp,local_timestamp,DateTime,DateTime,SqlServer,unsupported,,,"Incorrect syntax near the keyword 'WITH'. Incorrect syntax near the keyword 'with'. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"
 local-zone timestamp,local_timestamp,DateTime,DateTime,Oracle,declared,TIMESTAMP WITH LOCAL TIME ZONE,TimeStampLTZ,
@@ -901,6 +941,7 @@ local-zone timestamp,local_timestamp,DateTime,DateTime,InterBase,unsupported,,,"
 local-zone timestamp,local_timestamp,DateTime,DateTime,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""WITH"": line 1 col 66 (at pos 66)"
 local-zone timestamp,local_timestamp,DateTime,DateTime,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH LOCAL TIME ZONE)' at line 1
 local-zone timestamp,local_timestamp,DateTime,DateTime,AuroraPostgreSql,unsupported,,,"42601: syntax error at or near ""WITH"" POSITION: 66"
+local-zone timestamp,local_timestamp,DateTime,DateTime,Snowflake,declared,TIMESTAMP WITH LOCAL TIME ZONE,TIMESTAMP_LTZ,
 second-precision datetime,second_datetime,DateTime,DateTime,PostgreSql,declared,TIMESTAMP(0),timestamp(0) without time zone,
 second-precision datetime,second_datetime,DateTime,DateTime,SqlServer,declared,DATETIME2(0),datetime2,
 second-precision datetime,second_datetime,DateTime,DateTime,Oracle,declared,DATE,Date,
@@ -923,6 +964,7 @@ second-precision datetime,second_datetime,DateTime,DateTime,InterBase,declared,T
 second-precision datetime,second_datetime,DateTime,DateTime,SapHana,declared,DATETIME,timestamp,
 second-precision datetime,second_datetime,DateTime,DateTime,AuroraMySql,declared,DATETIME(0),DATETIME,
 second-precision datetime,second_datetime,DateTime,DateTime,AuroraPostgreSql,declared,TIMESTAMP(0),timestamp(0) without time zone,
+second-precision datetime,second_datetime,DateTime,DateTime,Snowflake,declared,DATETIME(0),TIMESTAMP_NTZ,
 time with zone,time_zoned,DateTimeOffset,Time,PostgreSql,declared,TIME WITH TIME ZONE,time with time zone,
 time with zone,time_zoned,DateTimeOffset,Time,SqlServer,unsupported,,,"Incorrect syntax near the keyword 'WITH'. Incorrect syntax near the keyword 'with'. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"
 time with zone,time_zoned,DateTimeOffset,Time,Oracle,unsupported,,,ORA-02000: missing ROWID keyword https://docs.oracle.com/error-help/db/ora-02000/
@@ -945,6 +987,7 @@ time with zone,time_zoned,DateTimeOffset,Time,InterBase,unsupported,,,"Dynamic S
 time with zone,time_zoned,DateTimeOffset,Time,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""WITH"": line 1 col 61 (at pos 61)"
 time with zone,time_zoned,DateTimeOffset,Time,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
 time with zone,time_zoned,DateTimeOffset,Time,AuroraPostgreSql,declared,TIME WITH TIME ZONE,time with time zone,
+time with zone,time_zoned,DateTimeOffset,Time,Snowflake,unsupported,,,"Error: SQL compilation error: syntax error line 1 at position 65 unexpected 'TIME'. SqlState: 42000, VendorCode: 1003, QueryId: 01c85346-0209-c411-0012-e67e000123ee"
 year-only,year_only,short,Int16,PostgreSql,declared,SMALLINT,smallint,
 year-only,year_only,short,Int16,SqlServer,declared,SMALLINT,smallint,
 year-only,year_only,short,Int16,Oracle,declared,SMALLINT,Decimal,
@@ -967,6 +1010,7 @@ year-only,year_only,short,Int16,InterBase,declared,SMALLINT,SMALLINT,
 year-only,year_only,short,Int16,SapHana,declared,SMALLINT,smallint,
 year-only,year_only,short,Int16,AuroraMySql,declared,YEAR,YEAR,
 year-only,year_only,short,Int16,AuroraPostgreSql,declared,SMALLINT,smallint,
+year-only,year_only,short,Int16,Snowflake,declared,SMALLINT,FIXED,
 year-month interval,year_month_interval,IntervalYearMonth,Object,PostgreSql,declared,INTERVAL YEAR TO MONTH,interval(65535),
 year-month interval,year_month_interval,IntervalYearMonth,Object,SqlServer,unsupported,,,Incorrect syntax near 'YEAR'.
 year-month interval,year_month_interval,IntervalYearMonth,Object,Oracle,declared,INTERVAL YEAR TO MONTH,IntervalYM,
@@ -989,6 +1033,7 @@ year-month interval,year_month_interval,IntervalYearMonth,Object,InterBase,unsup
 year-month interval,year_month_interval,IntervalYearMonth,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""INTERVAL"": line 1 col 56 (at pos 56)"
 year-month interval,year_month_interval,IntervalYearMonth,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL YEAR TO MONTH)' at line 1
 year-month interval,year_month_interval,IntervalYearMonth,Object,AuroraPostgreSql,declared,INTERVAL YEAR TO MONTH,interval(65535),
+year-month interval,year_month_interval,IntervalYearMonth,Object,Snowflake,unsupported,,,"Query failed on Snowflake: Error: Snowflake Internal Error: Unknown column type: interval_year_month SqlState: , VendorCode: 270001, QueryId:"
 generic interval,generic_interval,PostgreSqlInterval,Object,PostgreSql,declared,INTERVAL,interval,
 generic interval,generic_interval,PostgreSqlInterval,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type INTERVAL."
 generic interval,generic_interval,PostgreSqlInterval,Object,Oracle,unsupported,,,ORA-30089: missing or invalid <datetime field> https://docs.oracle.com/error-help/db/ora-30089/
@@ -1011,6 +1056,7 @@ generic interval,generic_interval,PostgreSqlInterval,Object,InterBase,unsupporte
 generic interval,generic_interval,PostgreSqlInterval,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""INTERVAL"": line 1 col 56 (at pos 56)"
 generic interval,generic_interval,PostgreSqlInterval,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL)' at line 1
 generic interval,generic_interval,PostgreSqlInterval,Object,AuroraPostgreSql,declared,INTERVAL,interval,
+generic interval,generic_interval,PostgreSqlInterval,Object,Snowflake,unsupported,,,"Error: SQL compilation error: syntax error line 1 at position 63 unexpected ')'. SqlState: 42000, VendorCode: 1003, QueryId: 01c85347-0209-c411-0012-e67e00012606"
 row identifier / ROWID,row_identifier,string,String,PostgreSql,declared,CHAR(18),character(18),
 row identifier / ROWID,row_identifier,string,String,SqlServer,declared,CHAR(18),char,
 row identifier / ROWID,row_identifier,string,String,Oracle,unsupported,,,no candidate was tried
@@ -1033,6 +1079,7 @@ row identifier / ROWID,row_identifier,string,String,InterBase,declared,CHAR(18),
 row identifier / ROWID,row_identifier,string,String,SapHana,declared,CHAR(18),varchar,
 row identifier / ROWID,row_identifier,string,String,AuroraMySql,declared,CHAR(18),CHAR(18),
 row identifier / ROWID,row_identifier,string,String,AuroraPostgreSql,declared,CHAR(18),character(18),
+row identifier / ROWID,row_identifier,string,String,Snowflake,declared,CHAR(18),TEXT,
 object identifier / OID,oid,uint,UInt32,PostgreSql,declared,OID,oid,
 object identifier / OID,oid,uint,UInt32,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type OID."
 object identifier / OID,oid,uint,UInt32,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1055,6 +1102,7 @@ object identifier / OID,oid,uint,UInt32,InterBase,unsupported,,,Dynamic SQL Erro
 object identifier / OID,oid,uint,UInt32,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""OID"": line 1 col 56 (at pos 56)"
 object identifier / OID,oid,uint,UInt32,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'OID)' at line 1
 object identifier / OID,oid,uint,UInt32,AuroraPostgreSql,declared,OID,oid,
+object identifier / OID,oid,uint,UInt32,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'OID'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85347-0209-c364-0012-e67e00013616"
 transaction ID,transaction_id,ulong,UInt64,PostgreSql,declared,XID8,xid8,
 transaction ID,transaction_id,ulong,UInt64,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type XID."
 transaction ID,transaction_id,ulong,UInt64,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1077,6 +1125,7 @@ transaction ID,transaction_id,ulong,UInt64,InterBase,unsupported,,,Dynamic SQL E
 transaction ID,transaction_id,ulong,UInt64,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""XID"": line 1 col 56 (at pos 56)"
 transaction ID,transaction_id,ulong,UInt64,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XID)' at line 1
 transaction ID,transaction_id,ulong,UInt64,AuroraPostgreSql,declared,XID8,xid8,
+transaction ID,transaction_id,ulong,UInt64,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'XID'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85347-0209-c364-0012-e67e0001362a"
 WAL / log position,wal_position,string,String,PostgreSql,declared,PG_LSN,pg_lsn,
 WAL / log position,wal_position,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type PG_LSN."
 WAL / log position,wal_position,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1099,6 +1148,7 @@ WAL / log position,wal_position,string,String,InterBase,unsupported,,,Dynamic SQ
 WAL / log position,wal_position,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""PG_LSN"": line 1 col 56 (at pos 56)"
 WAL / log position,wal_position,string,String,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'PG_LSN)' at line 1
 WAL / log position,wal_position,string,String,AuroraPostgreSql,declared,PG_LSN,pg_lsn,
+WAL / log position,wal_position,string,String,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'PG_LSN'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85347-0209-c364-0012-e67e0001363a"
 native binary JSON,binary_json,JsonDocument,Object,PostgreSql,declared,JSONB,jsonb,
 native binary JSON,binary_json,JsonDocument,Object,SqlServer,declared,JSON,json,
 native binary JSON,binary_json,JsonDocument,Object,Oracle,declared,JSON,Json,
@@ -1121,6 +1171,7 @@ native binary JSON,binary_json,JsonDocument,Object,InterBase,unsupported,,,Dynam
 native binary JSON,binary_json,JsonDocument,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""JSONB"": line 1 col 56 (at pos 56)"
 native binary JSON,binary_json,JsonDocument,Object,AuroraMySql,declared,JSON,JSON,
 native binary JSON,binary_json,JsonDocument,Object,AuroraPostgreSql,declared,JSONB,jsonb,
+native binary JSON,binary_json,JsonDocument,Object,Snowflake,declared,VARIANT,VARIANT,
 XML,xml,string,String,PostgreSql,declared,XML,xml,
 XML,xml,string,String,SqlServer,declared,XML,xml,
 XML,xml,string,String,Oracle,declared,CLOB,Clob,
@@ -1143,6 +1194,7 @@ XML,xml,string,String,InterBase,unsupported,,,Dynamic SQL Error SQL error code =
 XML,xml,string,String,SapHana,declared,CLOB,clob,
 XML,xml,string,String,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XML)' at line 1
 XML,xml,string,String,AuroraPostgreSql,declared,XML,xml,
+XML,xml,string,String,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'XML'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85347-0209-c364-0012-e67e000136c6"
 BSON,bson,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
 BSON,bson,byte[],Binary,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type BSON."
 BSON,bson,byte[],Binary,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1165,6 +1217,7 @@ BSON,bson,byte[],Binary,InterBase,unsupported,,,Dynamic SQL Error SQL error code
 BSON,bson,byte[],Binary,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""BSON"": line 1 col 56 (at pos 56)"
 BSON,bson,byte[],Binary,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BSON)' at line 1
 BSON,bson,byte[],Binary,AuroraPostgreSql,declared,BYTEA,bytea,
+BSON,bson,byte[],Binary,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'BSON'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85347-0209-c364-0012-e67e000136ea"
 variant / dynamic value,variant,object,Object,PostgreSql,unsupported,,,"42704: type ""variant"" does not exist POSITION: 56"
 variant / dynamic value,variant,object,Object,SqlServer,declared,SQL_VARIANT,sql_variant,
 variant / dynamic value,variant,object,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1187,6 +1240,7 @@ variant / dynamic value,variant,object,Object,InterBase,unsupported,,,Dynamic SQ
 variant / dynamic value,variant,object,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""VARIANT"": line 1 col 56 (at pos 56)"
 variant / dynamic value,variant,object,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VARIANT)' at line 1
 variant / dynamic value,variant,object,Object,AuroraPostgreSql,unsupported,,,"42704: type ""variant"" does not exist POSITION: 56"
+variant / dynamic value,variant,object,Object,Snowflake,declared,VARIANT,VARIANT,
 IP network / CIDR,cidr,Cidr,Object,PostgreSql,declared,CIDR,cidr,
 IP network / CIDR,cidr,Cidr,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type CIDR."
 IP network / CIDR,cidr,Cidr,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1209,6 +1263,7 @@ IP network / CIDR,cidr,Cidr,Object,InterBase,unsupported,,,Dynamic SQL Error SQL
 IP network / CIDR,cidr,Cidr,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""CIDR"": line 1 col 56 (at pos 56)"
 IP network / CIDR,cidr,Cidr,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CIDR)' at line 1
 IP network / CIDR,cidr,Cidr,Object,AuroraPostgreSql,declared,CIDR,cidr,
+IP network / CIDR,cidr,Cidr,Object,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'CIDR'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85347-0209-c364-0012-e67e00013766"
 MAC address,mac_address,MacAddress,Object,PostgreSql,declared,MACADDR,macaddr,
 MAC address,mac_address,MacAddress,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type MACADDR."
 MAC address,mac_address,MacAddress,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1231,6 +1286,7 @@ MAC address,mac_address,MacAddress,Object,InterBase,unsupported,,,Dynamic SQL Er
 MAC address,mac_address,MacAddress,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""MACADDR"": line 1 col 56 (at pos 56)"
 MAC address,mac_address,MacAddress,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MACADDR)' at line 1
 MAC address,mac_address,MacAddress,Object,AuroraPostgreSql,declared,MACADDR,macaddr,
+MAC address,mac_address,MacAddress,Object,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'MACADDR'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85347-0209-c364-0012-e67e00013776"
 point geometry,point,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 point geometry,point,Geometry,Object,SqlServer,declared,GEOMETRY,geometry,
 point geometry,point,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
@@ -1253,6 +1309,7 @@ point geometry,point,Geometry,Object,InterBase,unsupported,,,Dynamic SQL Error S
 point geometry,point,Geometry,Object,SapHana,declared,ST_GEOMETRY(4326),varbinary,
 point geometry,point,Geometry,Object,AuroraMySql,declared,POINT,GEOMETRY,
 point geometry,point,Geometry,Object,AuroraPostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
+point geometry,point,Geometry,Object,Snowflake,declared,GEOMETRY,TEXT,
 line / linestring geometry,linestring,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""linestring"" does not exist POSITION: 56"
 line / linestring geometry,linestring,Geometry,Object,SqlServer,declared,GEOMETRY,geometry,
 line / linestring geometry,linestring,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
@@ -1275,6 +1332,7 @@ line / linestring geometry,linestring,Geometry,Object,InterBase,unsupported,,,Dy
 line / linestring geometry,linestring,Geometry,Object,SapHana,declared,ST_GEOMETRY(4326),varbinary,
 line / linestring geometry,linestring,Geometry,Object,AuroraMySql,declared,LINESTRING,GEOMETRY,
 line / linestring geometry,linestring,Geometry,Object,AuroraPostgreSql,unsupported,,,"42704: type ""linestring"" does not exist POSITION: 56"
+line / linestring geometry,linestring,Geometry,Object,Snowflake,declared,GEOMETRY,TEXT,
 polygon geometry,polygon,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 polygon geometry,polygon,Geometry,Object,SqlServer,declared,GEOMETRY,geometry,
 polygon geometry,polygon,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
@@ -1297,6 +1355,7 @@ polygon geometry,polygon,Geometry,Object,InterBase,unsupported,,,Dynamic SQL Err
 polygon geometry,polygon,Geometry,Object,SapHana,declared,ST_GEOMETRY(4326),varbinary,
 polygon geometry,polygon,Geometry,Object,AuroraMySql,declared,POLYGON,GEOMETRY,
 polygon geometry,polygon,Geometry,Object,AuroraPostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
+polygon geometry,polygon,Geometry,Object,Snowflake,declared,GEOMETRY,TEXT,
 general geometry,geometry,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 general geometry,geometry,Geometry,Object,SqlServer,declared,GEOMETRY,geometry,
 general geometry,geometry,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
@@ -1319,6 +1378,7 @@ general geometry,geometry,Geometry,Object,InterBase,unsupported,,,Dynamic SQL Er
 general geometry,geometry,Geometry,Object,SapHana,declared,ST_GEOMETRY(4326),varbinary,
 general geometry,geometry,Geometry,Object,AuroraMySql,declared,GEOMETRY,GEOMETRY,
 general geometry,geometry,Geometry,Object,AuroraPostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
+general geometry,geometry,Geometry,Object,Snowflake,declared,GEOMETRY,TEXT,
 geography / geodetic,geography,Geography,Object,PostgreSql,unsupported,,,"42704: type ""geography"" does not exist POSITION: 56"
 geography / geodetic,geography,Geography,Object,SqlServer,declared,GEOGRAPHY,geography,
 geography / geodetic,geography,Geography,Object,Oracle,declared,SDO_GEOMETRY,Object,
@@ -1341,6 +1401,7 @@ geography / geodetic,geography,Geography,Object,InterBase,unsupported,,,Dynamic 
 geography / geodetic,geography,Geography,Object,SapHana,declared,ST_GEOMETRY(4326),varbinary,
 geography / geodetic,geography,Geography,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'GEOGRAPHY)' at line 1
 geography / geodetic,geography,Geography,Object,AuroraPostgreSql,declared,"geography(POINT,4326)",geography,
+geography / geodetic,geography,Geography,Object,Snowflake,declared,GEOGRAPHY,TEXT,
 fixed-length array,fixed_array,int[],Object,PostgreSql,declared,INTEGER ARRAY[10],integer[],
 fixed-length array,fixed_array,int[],Object,SqlServer,unsupported,,,Incorrect syntax near 'ARRAY'.
 fixed-length array,fixed_array,int[],Object,Oracle,unsupported,,,ORA-03099: unexpected item ARRAY in a column definition https://docs.oracle.com/error-help/db/ora-03099/
@@ -1363,6 +1424,7 @@ fixed-length array,fixed_array,int[],Object,InterBase,declared,INTEGER[10],ARRAY
 fixed-length array,fixed_array,int[],Object,SapHana,declared,INTEGER ARRAY,varbinary,
 fixed-length array,fixed_array,int[],Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY[10])' at line 1
 fixed-length array,fixed_array,int[],Object,AuroraPostgreSql,declared,INTEGER ARRAY[10],integer[],
+fixed-length array,fixed_array,int[],Object,Snowflake,unsupported,,,"Error: SQL compilation error: syntax error line 1 at position 63 unexpected 'ARRAY'. syntax error line 1 at position 68 unexpected '['. SqlState: 42000, VendorCode: 1003, QueryId: 01c85348-02"
 list / multiset / set collection,list_collection,int[],Object,PostgreSql,unsupported,,,"42601: syntax error at or near ""MULTISET"" POSITION: 64"
 list / multiset / set collection,list_collection,int[],Object,SqlServer,unsupported,,,Incorrect syntax near 'MULTISET'.
 list / multiset / set collection,list_collection,int[],Object,Oracle,unsupported,,,ORA-03099: unexpected item MULTISET in a column definition https://docs.oracle.com/error-help/db/ora-03099/
@@ -1385,6 +1447,7 @@ list / multiset / set collection,list_collection,int[],Object,InterBase,unsuppor
 list / multiset / set collection,list_collection,int[],Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""MULTISET"": line 1 col 64 (at pos 64)"
 list / multiset / set collection,list_collection,int[],Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1
 list / multiset / set collection,list_collection,int[],Object,AuroraPostgreSql,unsupported,,,"42601: syntax error at or near ""MULTISET"" POSITION: 64"
+list / multiset / set collection,list_collection,int[],Object,Snowflake,declared,ARRAY,ARRAY,
 map / dictionary,map,"Dictionary<string,object>",Object,PostgreSql,declared,HSTORE,hstore,
 map / dictionary,map,"Dictionary<string,object>",Object,SqlServer,unsupported,,,Incorrect syntax near '('.
 map / dictionary,map,"Dictionary<string,object>",Object,Oracle,unsupported,,,ORA-03060: Data type MAP is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -1407,6 +1470,7 @@ map / dictionary,map,"Dictionary<string,object>",Object,InterBase,unsupported,,,
 map / dictionary,map,"Dictionary<string,object>",Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""MAP"": line 1 col 56 (at pos 56)"
 map / dictionary,map,"Dictionary<string,object>",Object,AuroraMySql,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MAP(VARCHAR(10),INTEGER))' at line 1"
 map / dictionary,map,"Dictionary<string,object>",Object,AuroraPostgreSql,unsupported,,,"42601: syntax error at or near "","" POSITION: 71"
+map / dictionary,map,"Dictionary<string,object>",Object,Snowflake,declared,"MAP(VARCHAR(10),INTEGER)",OBJECT,
 range,range,Range<int>,Object,PostgreSql,declared,INT4RANGE,int4range,
 range,range,Range<int>,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type INT4RANGE."
 range,range,Range<int>,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1429,6 +1493,7 @@ range,range,Range<int>,Object,InterBase,unsupported,,,Dynamic SQL Error SQL erro
 range,range,Range<int>,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""INT4RANGE"": line 1 col 56 (at pos 56)"
 range,range,Range<int>,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4RANGE)' at line 1
 range,range,Range<int>,Object,AuroraPostgreSql,declared,INT4RANGE,int4range,
+range,range,Range<int>,Object,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'INT4RANGE'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c364-0012-e67e00013a16"
 multirange,multirange,Range<int>[],Object,PostgreSql,declared,INT4MULTIRANGE,int4multirange,
 multirange,multirange,Range<int>[],Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type INT4MULTIRANGE."
 multirange,multirange,Range<int>[],Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1451,6 +1516,7 @@ multirange,multirange,Range<int>[],Object,InterBase,unsupported,,,Dynamic SQL Er
 multirange,multirange,Range<int>[],Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""INT4MULTIRANGE"": line 1 col 56 (at pos 56)"
 multirange,multirange,Range<int>[],Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4MULTIRANGE)' at line 1
 multirange,multirange,Range<int>[],Object,AuroraPostgreSql,declared,INT4MULTIRANGE,int4multirange,
+multirange,multirange,Range<int>[],Object,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'INT4MULTIRANGE'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c364-0012-e67e00013a3a"
 user-defined enum / domain,domain,string,String,PostgreSql,declared,probe_domain,character varying(100),
 user-defined enum / domain,domain,string,String,SqlServer,declared,probe_domain,varchar,
 user-defined enum / domain,domain,string,String,Oracle,declared,probe_domain,Varchar2,
@@ -1473,6 +1539,7 @@ user-defined enum / domain,domain,string,String,InterBase,unsupported,,,"Dynamic
 user-defined enum / domain,domain,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""CREATE"": line 1 col 56 (at pos 56)"
 user-defined enum / domain,domain,string,String,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
 user-defined enum / domain,domain,string,String,AuroraPostgreSql,unsupported,,,"42601: syntax error at or near ""CREATE"" POSITION: 56"
+user-defined enum / domain,domain,string,String,Snowflake,unsupported,,,"Error: SQL compilation error: syntax error line 1 at position 55 unexpected 'CREATE'. SqlState: 42000, VendorCode: 1003, QueryId: 01c85348-0209-c411-0012-e67e00012aa2"
 full-text search vector / query,full_text,string,String,PostgreSql,declared,TSQUERY,tsquery,
 full-text search vector / query,full_text,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type TSVECTOR."
 full-text search vector / query,full_text,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1495,6 +1562,7 @@ full-text search vector / query,full_text,string,String,InterBase,unsupported,,,
 full-text search vector / query,full_text,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""TSVECTOR"": line 1 col 56 (at pos 56)"
 full-text search vector / query,full_text,string,String,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'TSVECTOR)' at line 1
 full-text search vector / query,full_text,string,String,AuroraPostgreSql,declared,TSQUERY,tsquery,
+full-text search vector / query,full_text,string,String,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'TSVECTOR'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c364-0012-e67e00013a76"
 native point,native_point,PostgreSqlPoint,Object,PostgreSql,declared,POINT,point,
 native point,native_point,PostgreSqlPoint,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type POINT."
 native point,native_point,PostgreSqlPoint,Object,Oracle,unsupported,,,no candidate was tried
@@ -1517,6 +1585,7 @@ native point,native_point,PostgreSqlPoint,Object,InterBase,unsupported,,,Dynamic
 native point,native_point,PostgreSqlPoint,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""POINT"": line 1 col 56 (at pos 56)"
 native point,native_point,PostgreSqlPoint,Object,AuroraMySql,unsupported,,,no candidate was tried
 native point,native_point,PostgreSqlPoint,Object,AuroraPostgreSql,declared,POINT,point,
+native point,native_point,PostgreSqlPoint,Object,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'POINT'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c364-0012-e67e00013b36"
 native polygon,native_polygon,PostgreSqlPolygon,Object,PostgreSql,declared,POLYGON,polygon,
 native polygon,native_polygon,PostgreSqlPolygon,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type POLYGON."
 native polygon,native_polygon,PostgreSqlPolygon,Object,Oracle,unsupported,,,no candidate was tried
@@ -1539,6 +1608,7 @@ native polygon,native_polygon,PostgreSqlPolygon,Object,InterBase,unsupported,,,D
 native polygon,native_polygon,PostgreSqlPolygon,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""POLYGON"": line 1 col 56 (at pos 56)"
 native polygon,native_polygon,PostgreSqlPolygon,Object,AuroraMySql,unsupported,,,no candidate was tried
 native polygon,native_polygon,PostgreSqlPolygon,Object,AuroraPostgreSql,declared,POLYGON,polygon,
+native polygon,native_polygon,PostgreSqlPolygon,Object,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'POLYGON'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c364-0012-e67e00013b3e"
 32-bit transaction ID,xid32,uint,UInt32,PostgreSql,declared,XID,xid,
 32-bit transaction ID,xid32,uint,UInt32,SqlServer,declared,BIGINT,bigint,
 32-bit transaction ID,xid32,uint,UInt32,Oracle,declared,"NUMERIC(10,0)",Int64,
@@ -1561,6 +1631,7 @@ native polygon,native_polygon,PostgreSqlPolygon,Object,AuroraPostgreSql,declared
 32-bit transaction ID,xid32,uint,UInt32,SapHana,declared,BIGINT,bigint,
 32-bit transaction ID,xid32,uint,UInt32,AuroraMySql,declared,BIGINT,BIGINT,
 32-bit transaction ID,xid32,uint,UInt32,AuroraPostgreSql,declared,XID,xid,
+32-bit transaction ID,xid32,uint,UInt32,Snowflake,declared,BIGINT,FIXED,
 vector embedding,vector,float[],Object,PostgreSql,unsupported,,,"42704: type ""vector"" does not exist POSITION: 56"
 vector embedding,vector,float[],Object,SqlServer,declared,VECTOR(3),varchar,
 vector embedding,vector,float[],Object,Oracle,declared,VECTOR(3),"VECTOR(3, *)",
@@ -1583,6 +1654,7 @@ vector embedding,vector,float[],Object,InterBase,unsupported,,,"Dynamic SQL Erro
 vector embedding,vector,float[],Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""VECTOR"": line 1 col 56 (at pos 56)"
 vector embedding,vector,float[],Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VECTOR(3))' at line 1
 vector embedding,vector,float[],Object,AuroraPostgreSql,declared,vector(3),vector,
+vector embedding,vector,float[],Object,Snowflake,declared,"VECTOR(FLOAT, 3)",VECTOR,
 hierarchical path,hierarchy,HierarchyId,Object,PostgreSql,declared,LTREE,ltree,
 hierarchical path,hierarchy,HierarchyId,Object,SqlServer,declared,HIERARCHYID,hierarchyid,
 hierarchical path,hierarchy,HierarchyId,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1605,6 +1677,7 @@ hierarchical path,hierarchy,HierarchyId,Object,InterBase,unsupported,,,Dynamic S
 hierarchical path,hierarchy,HierarchyId,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""HIERARCHYID"": line 1 col 56 (at pos 56)"
 hierarchical path,hierarchy,HierarchyId,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'HIERARCHYID)' at line 1
 hierarchical path,hierarchy,HierarchyId,Object,AuroraPostgreSql,unsupported,,,"42704: type ""hierarchyid"" does not exist POSITION: 56"
+hierarchical path,hierarchy,HierarchyId,Object,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'HIERARCHYID'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c372-0012-e67e0001415a"
 external-file reference,file_reference,string,String,PostgreSql,unsupported,,,"42704: type ""bfile"" does not exist POSITION: 56"
 external-file reference,file_reference,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type BFILE."
 external-file reference,file_reference,string,String,Oracle,declared,BFILE,bfile,
@@ -1627,6 +1700,7 @@ external-file reference,file_reference,string,String,InterBase,unsupported,,,Dyn
 external-file reference,file_reference,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""BFILE"": line 1 col 56 (at pos 56)"
 external-file reference,file_reference,string,String,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BFILE)' at line 1
 external-file reference,file_reference,string,String,AuroraPostgreSql,unsupported,,,"42704: type ""bfile"" does not exist POSITION: 56"
+external-file reference,file_reference,string,String,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'BFILE'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c372-0012-e67e00014186"
 specialized security label,security_label,string,String,PostgreSql,unsupported,,,"42704: type ""idssecuritylabel"" does not exist POSITION: 56"
 specialized security label,security_label,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type IDSSECURITYLABEL."
 specialized security label,security_label,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1649,3 +1723,4 @@ specialized security label,security_label,string,String,InterBase,unsupported,,,
 specialized security label,security_label,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""IDSSECURITYLABEL"": line 1 col 56 (at pos 56)"
 specialized security label,security_label,string,String,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'IDSSECURITYLABEL)' at line 1
 specialized security label,security_label,string,String,AuroraPostgreSql,unsupported,,,"42704: type ""idssecuritylabel"" does not exist POSITION: 56"
+specialized security label,security_label,string,String,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'IDSSECURITYLABEL'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c372-0012-e67e000141d2"

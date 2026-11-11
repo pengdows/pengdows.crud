@@ -310,6 +310,11 @@ refused on purpose, and each reason is recorded there:
 - **Oracle `ANYDATA`**: built by its type's constructor functions, not bound as a value.
 - **Oracle `ROWID`**: a physical row address. A ROWID value is read as text and is usable in `WHERE ROWID = ?`, but the
   library cannot choose one to write.
+- **SAP HANA `REAL_VECTOR`** (a `float[]` embedding): not supported, and not testable here. The HANA Express builds we can
+  pull (2.00.076 from July 2024, 2.00.082 from May 2025, 2.00.088 from November 2025, which is `latest`) have no vector type
+  in their catalogue, and `REAL_VECTOR` fails with `incorrect syntax`. The vector-capable HANA is SAP HANA Cloud, which is a
+  hosted service with no Docker image, so no test of the type can run in this repository. Testing it needs a HANA Cloud
+  instance (an endpoint the testbed can use instead of starting a container). Until then the cell stays refused.
 - **YugabyteDB `xid8`**: an upstream defect. A raw integer gains high bits on write (`4294967296` reads back as
   `18700287606784`), so no value round-trips. Reported as an upstream defect, not a library limit.
 - **YugabyteDB and CockroachDB `xml`**: the server has no working `xml` column. Map the property as `string` and store

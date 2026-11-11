@@ -246,6 +246,14 @@ DB_PREFER = {
 # A (database, type) the library documents as unsupported, with the reason. Its declaration is not written, so the cell is
 # UNSUPPORTED with that reason (the same as a database that refused the column): it is a decision, not a fix.
 DB_REFUSED = {
+    # A Snowflake FILE value names a file on a stage. The fidelity test has no stage or staged file, so the cell is refused until a
+    # stage fixture exists (the server accepts the type; the refusal is the test's missing fixture).
+    ("Snowflake", "external-file reference"): "test fixture: a Snowflake FILE value names a file on a stage, and the fidelity test has no stage or staged file; refused until a stage fixture exists",
+    # SAP ASE 16 refuses the spatial types (probe, results/SybaseASE.jsonl: "Can't find type"). No ASE spatial documentation was
+    # found to confirm it against; the refusal rests on the probe.
+    ("SybaseASE", "point geometry"): "probe: SAP ASE 16 refuses POINT (\"Can't find type\", results/SybaseASE.jsonl); no ASE spatial documentation was found to confirm it",
+    ("SybaseASE", "line / linestring geometry"): "probe: SAP ASE 16 refuses LINESTRING (\"Can't find type\", results/SybaseASE.jsonl); no ASE spatial documentation was found to confirm it",
+    ("SybaseASE", "polygon geometry"): "probe: SAP ASE 16 refuses POLYGON (\"Can't find type\", results/SybaseASE.jsonl); no ASE spatial documentation was found to confirm it",
     # YugabyteDB accepts the XML column declaration (results/YugabyteDb.jsonl), but an INSERT of an XML value fails with
     # "unsupported XML feature" (YugabyteDb suite): the values are refused, so the cell is refused.
     ("YugabyteDb", "XML"): "server: YugabyteDB accepts an XML column, but an INSERT of an XML value fails with 'unsupported XML feature' (YugabyteDb suite); the values are refused",
@@ -326,7 +334,7 @@ DB_GENERATED = {
 DB_ENUM = [
     "PostgreSql", "SqlServer", "Oracle", "Firebird", "CockroachDb", "MariaDb", "MySql", "Sqlite", "DuckDB",
     "YugabyteDb", "TiDb", "SingleStore", "SybaseASE", "Spanner", "FlatFile", "Access", "Db2", "Informix",
-    "InterBase", "SapHana", "AuroraMySql", "AuroraPostgreSql",
+    "InterBase", "SapHana", "AuroraMySql", "AuroraPostgreSql", "Snowflake",
 ]
 
 
@@ -386,6 +394,12 @@ NATIVE_TYPE = {
     # conversion functions (STRING_TO_VECTOR / VECTOR_TO_STRING; VEC_FromText / VEC_ToText).
     ("MySql", "vector embedding"): "VECTOR(3)",
     ("MariaDb", "vector embedding"): "VECTOR(3)",
+    # Snowflake's ARRAY column: written as PARSE_JSON of the array's JSON, read as TO_JSON (SnowflakeArrayTests).
+    ("Snowflake", "SQL array"): "ARRAY",
+    ("Snowflake", "list / multiset / set collection"): "ARRAY",
+    # Snowflake's OBJECT and VARIANT columns: the value is written as its JSON through PARSE_JSON (SnowflakeSemiStructuredTests).
+    ("Snowflake", "map / dictionary"): "OBJECT",
+    ("Snowflake", "variant / dynamic value"): "VARIANT",
     # The VARRAY's native type: the library builds it from the elements' JSON (OracleDialect.CollectionArgument).
     ("Oracle", "SQL array"): "probe_varray",
     ("Firebird", "decimal floating point"): "DECFLOAT",

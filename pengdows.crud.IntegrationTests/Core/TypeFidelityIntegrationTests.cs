@@ -103,6 +103,7 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
                     // A TIME WITH TIME ZONE keeps no date, so its value is compared by its UTC time of day.
                     Func<object?, string>? canonical = semantic == "time with zone" ? ZonedTimeOfDay
                         : semantic == "geography / geodetic" && provider == SupportedDatabase.SingleStore ? SixPlaceCoordinates
+                        : provider == SupportedDatabase.Snowflake && SnowflakeSpatialSemantics.Contains(semantic) ? WithoutSpaces
                         : null;
                     // A server-generated cell takes three arguments; only the round-trip cell takes the comparison.
                     var arguments = cell == nameof(GeneratedCellAsync)
@@ -224,9 +225,10 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
             var compare = canonical ?? Canonical;
             var wrote = compare(typeof(TRow).GetProperty("Value")!.GetValue(expected));
             var read = compare(typeof(TRow).GetProperty("Value")!.GetValue(actual));
+            var readValue = typeof(TRow).GetProperty("Value")!.GetValue(actual);
             return wrote == read
                 ? "PASS"
-                : $"FAIL wrote {wrote}, read {read}";
+                : $"FAIL wrote {wrote}, read {read} (read as {readValue?.GetType().Name ?? "null"})";
         }
         catch (Exception ex)
         {
@@ -242,6 +244,15 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
     // The coordinates of a WKT compare as numbers: "1" and "1.0" are the same ordinate, and a server prints either.
     // A TIME WITH TIME ZONE holds a time of day and an offset, not a date (a read may return any date): the value is its
     // local time of day and its offset. A lost offset or a shifted time of day fails the comparison.
+    // Snowflake writes WKT with a space before each parenthesis and after each comma, and reads it back without them
+    // ("POINT (1 2)" and "POINT(1 2)", live 2026-11-11). The coordinates are the same text, so only the spacing is compared away.
+    private static readonly HashSet<string> SnowflakeSpatialSemantics = new()
+    {
+        "geography / geodetic", "general geometry", "point geometry", "line / linestring geometry", "polygon geometry",
+    };
+
+    private static string WithoutSpaces(object? value) => Canonical(value).Replace(" ", string.Empty, StringComparison.Ordinal);
+
     // SingleStore keeps a geography's coordinates in single precision (about seven significant digits): 1 reads back as
     // 0.99999998. The comparison is at six decimal places for that database only, so every other database is compared exactly.
     private static string SixPlaceCoordinates(object? value) =>

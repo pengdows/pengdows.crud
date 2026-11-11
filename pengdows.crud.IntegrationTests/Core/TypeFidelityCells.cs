@@ -1246,6 +1246,70 @@ public sealed class Cell_Vector_MariaDb : IFidelityRow<Cell_Vector_MariaDb>
 }
 
 [Table("type_fidelity")]
+public sealed class Cell_IntArray_Snowflake : IFidelityRow<Cell_IntArray_Snowflake>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("int_array", DbType.Object, NativeType = "ARRAY")]
+    public int[] Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("int_array", "Value", "SQL array") };
+
+    public static Cell_IntArray_Snowflake Expected() => new() { Id = 1, Value = new[] { 1, 2, 3 } };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_ListCollection_Snowflake : IFidelityRow<Cell_ListCollection_Snowflake>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("list_collection", DbType.Object, NativeType = "ARRAY")]
+    public int[] Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("list_collection", "Value", "list / multiset / set collection") };
+
+    public static Cell_ListCollection_Snowflake Expected() => new() { Id = 1, Value = new int[] { 1, 2, 3 } };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Map_Snowflake : IFidelityRow<Cell_Map_Snowflake>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("map", DbType.Object, NativeType = "OBJECT")]
+    public Dictionary<string,object> Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("map", "Value", "map / dictionary") };
+
+    public static Cell_Map_Snowflake Expected() => new() { Id = 1, Value = new Dictionary<string, object> { ["a"] = "1" } };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Variant_Snowflake : IFidelityRow<Cell_Variant_Snowflake>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("variant", DbType.Object, NativeType = "VARIANT")]
+    public object Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("variant", "Value", "variant / dynamic value") };
+
+    public static Cell_Variant_Snowflake Expected() => new() { Id = 1, Value = (object)"variant text" };
+}
+
+[Table("type_fidelity")]
 public sealed class Cell_IntArray_Oracle : IFidelityRow<Cell_IntArray_Oracle>
 {
     [Id(true)]
@@ -1924,6 +1988,10 @@ internal static class TypeFidelityCells
     {
         (SupportedDatabase.MySql, "vector embedding") => typeof(Cell_Vector_MySql),
         (SupportedDatabase.MariaDb, "vector embedding") => typeof(Cell_Vector_MariaDb),
+        (SupportedDatabase.Snowflake, "SQL array") => typeof(Cell_IntArray_Snowflake),
+        (SupportedDatabase.Snowflake, "list / multiset / set collection") => typeof(Cell_ListCollection_Snowflake),
+        (SupportedDatabase.Snowflake, "map / dictionary") => typeof(Cell_Map_Snowflake),
+        (SupportedDatabase.Snowflake, "variant / dynamic value") => typeof(Cell_Variant_Snowflake),
         (SupportedDatabase.Oracle, "SQL array") => typeof(Cell_IntArray_Oracle),
         (SupportedDatabase.Firebird, "decimal floating point") => typeof(Cell_DecimalFloat_Firebird),
         (SupportedDatabase.Oracle, "external-file reference") => typeof(Cell_FileReference_Oracle),

@@ -316,5 +316,41 @@ class ResolveTests(unittest.TestCase):
         self.assertNotIn("reads back NULL", reason)
 
 
+    def test_sybase_ase_spatial_refusals_cite_the_probe_not_an_unverified_vendor_claim(self):
+        # ASE 16 refuses POINT, LINESTRING and POLYGON ("Can't find type", results/SybaseASE.jsonl). SAP's own ASE spatial
+        # documentation was not found, so the reason names the probe, not a documentation source.
+        for sem in ("point geometry", "line / linestring geometry", "polygon geometry"):
+            if ("SybaseASE", sem) in g.DB_REFUSED:
+                self.assertIn("probe", g.DB_REFUSED[("SybaseASE", sem)])
+                self.assertIn("no ASE spatial documentation", g.DB_REFUSED[("SybaseASE", sem)])
+
+
+    def test_snowflake_is_enumerated_and_its_accepted_types_are_declared(self):
+        # Snowflake is in the integration run (cloud, credentials set), and its probe accepted 96 declarations
+        # (results/Snowflake.jsonl), so the generator declares them rather than reporting every cell as unrecorded.
+        self.assertIn("Snowflake", g.DB_ENUM)
+        accepted = {("Snowflake", "signed 8-bit"): [("NUMBER(3,0)", "NUMBER")]}
+        self.assertIsNotNone(g.resolve(accepted, "Snowflake", "signed 8-bit"))
+
+
+    def test_snowflake_array_columns_are_native_arrays_not_vectors(self):
+        # A Snowflake ARRAY column takes its array as JSON (PARSE_JSON) and is read as TO_JSON (SnowflakeArrayTests); the
+        # fidelity cells for SQL array and list declare that native type, so they are not written as VECTOR casts.
+        self.assertEqual(g.NATIVE_TYPE[("Snowflake", "SQL array")], "ARRAY")
+        self.assertEqual(g.NATIVE_TYPE[("Snowflake", "list / multiset / set collection")], "ARRAY")
+
+
+    def test_snowflake_map_and_variant_are_native_semi_structured_columns(self):
+        # A Snowflake OBJECT takes its dictionary as JSON and a VARIANT takes its value as JSON (SnowflakeSemiStructuredTests).
+        self.assertEqual(g.NATIVE_TYPE[("Snowflake", "map / dictionary")], "OBJECT")
+        self.assertEqual(g.NATIVE_TYPE[("Snowflake", "variant / dynamic value")], "VARIANT")
+
+
+    def test_snowflake_external_file_is_refused_until_a_stage_fixture_exists(self):
+        # A Snowflake FILE value names a file on a stage; the fidelity test has no stage, so the cell is refused with that reason.
+        self.assertIn(("Snowflake", "external-file reference"), g.DB_REFUSED)
+        self.assertIn("stage", g.DB_REFUSED[("Snowflake", "external-file reference")])
+
+
 if __name__ == "__main__":
     unittest.main()

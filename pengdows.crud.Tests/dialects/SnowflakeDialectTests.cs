@@ -125,4 +125,28 @@ public class SnowflakeDialectTests
 
         Assert.Equal(new TimeSpan(1, 2, 3), parameter.Value);
     }
+
+    // Snowflake's NUMBER takes a wide integer as its decimal text, as every dialect that sets BindsWideIntegersAsText does.
+    // Without it the parameter is bound as Object, and Snowflake refuses it: "No corresponding Snowflake type for type Object"
+    // (fidelity: signed 128-bit and arbitrary-size integer, live 2026-11-11).
+    [Fact]
+    public void Int128_IsBoundAsItsDecimalText()
+    {
+        var dialect = new SnowflakeDialect(new fakeDbFactory(SupportedDatabase.Snowflake), NullLogger<SnowflakeDialect>.Instance);
+
+        var parameter = dialect.CreateDbParameter("p", System.Data.DbType.Object, Int128.MaxValue);
+
+        Assert.Equal(Int128.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture), Assert.IsType<string>(parameter.Value));
+    }
+
+    [Fact]
+    public void BigInteger_IsBoundAsItsDecimalText()
+    {
+        var dialect = new SnowflakeDialect(new fakeDbFactory(SupportedDatabase.Snowflake), NullLogger<SnowflakeDialect>.Instance);
+        var value = System.Numerics.BigInteger.Parse("123456789012345678901234567890");
+
+        var parameter = dialect.CreateDbParameter("p", System.Data.DbType.Object, value);
+
+        Assert.Equal("123456789012345678901234567890", Assert.IsType<string>(parameter.Value));
+    }
 }

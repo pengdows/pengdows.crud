@@ -51,12 +51,13 @@ internal static class ColumnQuirkReads
             return targetType == typeof(Cidr) ? cidr : Expression.Convert(cidr, targetType);
         }
 
-        if (fieldType == typeof(DateTime) && underlying == typeof(DateTimeOffset) &&
+        if (fieldType == typeof(DateTime) && (underlying == typeof(DateTimeOffset) || underlying == typeof(DateTime)) &&
             options?.ReadsOffsetTimestampsSpecially == true)
         {
             // Snowflake.Data reports TIMESTAMP_LTZ/TZ as DateTime but GetValue returns the exact DateTimeOffset, while
             // GetDateTime gives local wall time or throws (TYPE-002); ODP.NET 21 returns only the wall time of a
             // TIMESTAMP WITH TIME ZONE, read with its GetDateTimeOffset. A value that is a DateTime converts as before.
+            // A DateTime target takes the instant too (its UTC time), not the wall time (SnowflakeTypeFixesTests).
             var raw = Expression.Call(OffsetTimestampFieldReader.ReadMethod, record, ordinalExpr,
                 Expression.Constant(options.OffsetTimestampDataTypeName, typeof(string)));
             return ColumnConversion.Build(raw, typeof(object), targetType, options);

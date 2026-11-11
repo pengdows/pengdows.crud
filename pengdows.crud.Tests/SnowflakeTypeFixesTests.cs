@@ -242,4 +242,29 @@ public sealed class SnowflakeTypeFixesTests
         Assert.Equal(Instant.UtcTicks, row.Ltz.UtcTicks);
         Assert.Equal(Instant.UtcTicks, row.Tz!.Value.UtcTicks);
     }
+
+    // A DateTime property on a TIMESTAMP_LTZ column: the instant is its UTC time, not the client's wall time (live: a
+    // 13:45Z value read as 08:45 Central, five hours early, because GetDateTime gives the local wall time).
+    [Fact]
+    public async Task RetrieveOneAsync_DateTimeProperty_OnAnOffsetReportedColumn_IsTheUtcInstant()
+    {
+        var (context, _) = Context();
+        await using var __ = context;
+
+        var row = await new TableGateway<PlainRow, int>(context).RetrieveOneAsync(1);
+
+        Assert.Equal(Instant.UtcDateTime, row!.Ltz);
+        Assert.Equal(DateTimeKind.Utc, row.Ltz.Kind);
+    }
+
+    [Table("sf_rows")]
+    public class PlainRow
+    {
+        [Id]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("ltz", DbType.DateTime)]
+        public DateTime Ltz { get; set; }
+    }
 }

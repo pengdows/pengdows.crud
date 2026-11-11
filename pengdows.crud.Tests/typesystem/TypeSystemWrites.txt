@@ -692,8 +692,8 @@
   HierarchyId: String "/1/2/"
   RowVersion: Binary 0x0000000000000009
   BitArray: Object BitArray:101
-  Int128: Object BigInteger:36893488147419103228
-  BigInteger: Object BigInteger:123456789012345678901234567890
+  Int128: String "36893488147419103228"
+  BigInteger: String "123456789012345678901234567890"
 == AuroraMySql
   null String: String DBNull
   DBNull Int32: Int32 DBNull

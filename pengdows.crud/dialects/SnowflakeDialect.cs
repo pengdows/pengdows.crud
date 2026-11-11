@@ -20,6 +20,7 @@ using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.types.coercion;
 using pengdows.crud.exceptions.translators;
 using pengdows.crud.types.valueobjects;
 using pengdows.crud.types;
@@ -116,6 +117,15 @@ internal class SnowflakeDialect : SqlDialect
 
     internal override bool AllowsColumnArgumentsInValues => false;
 
+    // An ARRAY column is read as its JSON (TO_JSON), which the array property deserializes: an ARRAY is not a text column.
+    // A VARIANT holding a string is read as its text (the driver would return its quoted JSON); any other VARIANT as its JSON.
+    internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
+        column.NativeType is { } declared && string.Equals(declared, "ARRAY", StringComparison.OrdinalIgnoreCase)
+            ? $"TO_JSON({columnReference}) AS {wrappedName}"
+            : column.NativeType is { } variant && string.Equals(variant, "VARIANT", StringComparison.OrdinalIgnoreCase)
+                ? $"CASE WHEN TYPEOF({columnReference}) = 'VARCHAR' THEN TO_VARCHAR({columnReference}) ELSE TO_JSON({columnReference}) END AS {wrappedName}"
+                : base.RenderColumnSelect(columnReference, wrappedName, column);
+
     // ── VECTOR (TYPE-020), confirmed live: Snowflake.Data can't bind it and Snowflake takes a value
     // only as PARSE_JSON(:p)::VECTOR(FLOAT|INT, n) with n its exact dimension (text, an ARRAY or a cast
     // without the dimension are refused). The driver reports the column only as VECTOR, so the cast is
@@ -123,9 +133,14 @@ internal class SnowflakeDialect : SqlDialect
     // Reads come back as JSON array text, which coerces to the array.
     private const string VectorMarker = "\u0001pengdows:snowflake:vector";
 
+    // Stamped on a VARIANT or OBJECT parameter once its value is JSON text (PrepareCommandAsync skips any other marker).
+    private const string SemiStructuredMarker = "\u0001pengdows:snowflake:semi-structured";
+
     private static string? VectorElementType(IColumnInfo column)
     {
-        if (column.IsJsonType)
+        // A column declared as an ARRAY takes an array (PARSE_JSON, below), not a vector: only a VECTOR column (or one
+        // with no declared type) takes the VECTOR cast.
+        if (column.IsJsonType || (column.NativeType is { } declared && !declared.StartsWith("VECTOR", StringComparison.OrdinalIgnoreCase)))
         {
             return null;
         }
@@ -135,15 +150,29 @@ internal class SnowflakeDialect : SqlDialect
     }
 
     public override bool RendersColumnArgument(IColumnInfo column) =>
-        VectorElementType(column) != null || base.RendersColumnArgument(column);
+        VectorElementType(column) != null || IsArrayColumn(column) || IsSemiStructuredColumn(column) ||
+        base.RendersColumnArgument(column);
 
     public override string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
-        VectorElementType(column) is { } element
+        IsArrayColumn(column) || IsSemiStructuredColumn(column) ? string.Concat("PARSE_JSON(", parameterMarker, ")")
+        : VectorElementType(column) is { } element
             ? string.Concat("PARSE_JSON(", parameterMarker, ")::VECTOR(", element, ", 0)")
             : base.RenderColumnArgument(parameterMarker, column);
 
     internal override bool MarksColumnParameter(IColumnInfo column) =>
-        VectorElementType(column) != null || base.MarksColumnParameter(column);
+        VectorElementType(column) != null || IsArrayColumn(column) || IsSemiStructuredColumn(column) ||
+        base.MarksColumnParameter(column);
+
+    // A VARIANT or OBJECT column (declared so): its value is written as JSON text, a string as a quoted JSON string.
+    private static bool IsSemiStructuredColumn(IColumnInfo column) =>
+        column.NativeType is { } declared &&
+        (string.Equals(declared, "VARIANT", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(declared, "OBJECT", StringComparison.OrdinalIgnoreCase));
+
+    // A column declared ARRAY (an array property): its JSON text goes through PARSE_JSON in a SELECT source.
+    private static bool IsArrayColumn(IColumnInfo column) =>
+        column.NativeType is { } declared && string.Equals(declared, "ARRAY", StringComparison.OrdinalIgnoreCase) &&
+        column.PropertyInfo?.PropertyType is { IsArray: true } type && type != typeof(byte[]);
 
     // DRY-029: TIMESTAMP_TZ keeps the offset, so the gateways learn which columns are TIMESTAMP_TZ
     // (Snowflake.Data reports TIMESTAMP_NTZ, TIMESTAMP_LTZ, TIMESTAMP_TZ, confirmed live) and send those
@@ -167,6 +196,35 @@ internal class SnowflakeDialect : SqlDialect
     public override void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
     {
         base.MarkColumnParameter(parameter, column);
+        if (IsSemiStructuredColumn(column))
+        {
+            // Marked once: the library can mark a parameter again, and a string must not be quoted a second time.
+            if (parameter.SourceColumn == SemiStructuredMarker)
+            {
+                return;
+            }
+
+            if (parameter.Value is not null and not DBNull)
+            {
+                parameter.DbType = DbType.String;
+                parameter.Value = System.Text.Json.JsonSerializer.Serialize(parameter.Value, parameter.Value.GetType());
+            }
+
+            parameter.SourceColumn = SemiStructuredMarker;
+            return;
+        }
+
+        if (IsArrayColumn(column))
+        {
+            if (parameter.Value is Array arrayValue)
+            {
+                parameter.DbType = DbType.String;
+                parameter.Value = pengdows.crud.types.coercion.JsonCoercion.GetJsonText(arrayValue);
+            }
+
+            return;
+        }
+
         if (VectorElementType(column) == null)
         {
             return;
@@ -219,6 +277,13 @@ internal class SnowflakeDialect : SqlDialect
 
     // Snowflake.Data reports TIMESTAMP_LTZ/TZ as DateTime; GetValue returns the DateTimeOffset.
     internal override bool ReportsOffsetTimestampsAsDateTime => true;
+
+    // An OBJECT is read as its JSON text, and a dictionary property takes it (JsonObjectCoercion).
+    internal override bool ReturnsCollectionsAsJsonText => true;
+
+    // NUMBER takes a wide integer as its decimal text: a BigInteger or Int128 bound as Object is refused ("No corresponding
+    // Snowflake type for type Object", fidelity cells signed 128-bit and arbitrary-size integer, live 2026-11-11).
+    internal override bool BindsWideIntegersAsText => true;
 
     /// <summary>
     /// "USING (SELECT :p AS col, ...) AS s": the base "USING (VALUES (...))" source can't carry
@@ -587,7 +652,9 @@ internal class SnowflakeDialect : SqlDialect
         {
             // EWKT (or EWKB hex / GeoJSON) text (TYPE-002).
             SpatialFormat = SpatialWireFormat.ExtendedTextOrHex,
-            RegisterTypeMappings = RegisterSnowflakeTypeMappings
+            RegisterTypeMappings = RegisterSnowflakeTypeMappings,
+            // An OBJECT is read as its JSON text, which a dictionary property takes (TextCollections, shared with DuckDB).
+            RegisterCoercions = registry => TextCollections.RegisterCoercions(registry, SupportedDatabase.Snowflake)
         };
 
     private static void RegisterSnowflakeTypeMappings(AdvancedTypeRegistry registry)

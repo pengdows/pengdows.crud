@@ -55,6 +55,12 @@ public class ConcurrentUpsertTests : DatabaseTestBase
                 Output.WriteLine($"{provider}: capability - upsert not supported");
                 return;
             }
+            if (!EnforcesUniqueConstraints(context))
+            {
+                Output.WriteLine($"{provider}: capability - unique constraints are not enforced, so no duplicate-row guarantee to test");
+                return;
+            }
+
 
             await RecreateTableAsync(provider, context);
             var gateway = new PrimaryKeyTableGateway<ConcurrentUpsertRow>(context);
@@ -114,6 +120,12 @@ public class ConcurrentUpsertTests : DatabaseTestBase
                 Output.WriteLine($"{provider}: capability - upsert not supported");
                 return;
             }
+            if (!EnforcesUniqueConstraints(context))
+            {
+                Output.WriteLine($"{provider}: capability - unique constraints are not enforced, so no duplicate-row guarantee to test");
+                return;
+            }
+
 
             if (provider == SupportedDatabase.SingleStore)
             {

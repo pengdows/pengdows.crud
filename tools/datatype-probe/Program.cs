@@ -25,6 +25,7 @@ using testbed.Access;
 using testbed.Db2;
 using testbed.Informix;
 using testbed.Aurora;
+using testbed.Snowflake;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -51,6 +52,7 @@ ITestContainer Make(string name) => name switch
     "Spanner" => new SpannerOmniTestContainer(),
     "FlatFile" => new FlatFileTestContainer(),
     "Access" => new AccessTestContainer(),
+    "Snowflake" => new SnowflakeTestContainer(),
     "Db2" => new Db2TestContainer(image),
     "Informix" => new InformixTestContainer(image),
     "InterBase" => new testbed.InterBase.InterBaseTestContainer(),
