@@ -346,10 +346,31 @@ class ResolveTests(unittest.TestCase):
         self.assertEqual(g.NATIVE_TYPE[("Snowflake", "variant / dynamic value")], "VARIANT")
 
 
-    def test_snowflake_external_file_is_refused_until_a_stage_fixture_exists(self):
-        # A Snowflake FILE value names a file on a stage; the fidelity test has no stage, so the cell is refused with that reason.
-        self.assertIn(("Snowflake", "external-file reference"), g.DB_REFUSED)
-        self.assertIn("stage", g.DB_REFUSED[("Snowflake", "external-file reference")])
+    def test_snowflake_external_file_is_a_native_file_column_with_a_stage_fixture(self):
+        # A Snowflake FILE column holds a staged file; the fidelity test creates the stage and the file, so the cell is tested, not refused.
+        self.assertEqual(g.NATIVE_TYPE[("Snowflake", "external-file reference")], "FILE")
+        self.assertNotIn(("Snowflake", "external-file reference"), g.DB_REFUSED)
+
+
+    def test_snowflake_file_sample_names_the_stage_the_fixture_creates(self):
+        # The Snowflake FILE sample is a stage path: TypeFidelityIntegrationTests creates FIDELITY_STAGE and the file in it.
+        clr, val = g.native_clr("Snowflake", "external-file reference", "string", "\"DATA_DIR/file.bin\"")
+        self.assertEqual(val, "\"@FIDELITY_STAGE/file.bin\"")
+
+
+    def test_db2_security_label_is_declared_as_db2securitylabel_not_refused(self):
+        # Db2 LBAC's column type is DB2SECURITYLABEL (live 2026-11-11, the probe's IDSSECURITYLABEL candidate is Informix's).
+        self.assertNotIn(("Db2", "specialized security label"), g.DB_REFUSED)
+        self.assertEqual(g.resolve({}, "Db2", "specialized security label"), ("DB2SECURITYLABEL", "DB2SECURITYLABEL"))
+
+    def test_db2_security_label_native_type_names_the_policy_the_fixture_creates(self):
+        # The column names its policy (POL) for SECLABEL and SECLABEL_TO_CHAR; the fixture creates POL in the testbed.
+        self.assertEqual(g.NATIVE_TYPE[("Db2", "specialized security label")], "DB2SECURITYLABEL(POL)")
+
+    def test_db2_security_label_sample_is_the_label_text_the_fixture_grants(self):
+        # The fixture grants db2inst1 the LOW label; SECLABEL('POL', 'LOW') writes it and SECLABEL_TO_CHAR reads back LOW.
+        clr, val = g.native_clr("Db2", "specialized security label", "string", "\"label\"")
+        self.assertEqual(val, "\"LOW\"")
 
 
 if __name__ == "__main__":

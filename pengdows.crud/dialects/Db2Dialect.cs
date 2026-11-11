@@ -143,6 +143,35 @@ internal sealed class Db2Dialect : SqlDialect
     // pattern of not gating this behind MaxSupportedStandard/IsInitialized. Same reasoning applies
     // to window functions and CTEs below: real, unconditional Db2 LUW 8+ capabilities that
     // shouldn't depend on MaxSupportedStandard's runtime-detected StandardCompliance value.
+    // A DB2SECURITYLABEL column names its LBAC policy in its native type, DB2SECURITYLABEL(POL). Its value is a label's
+    // text: written through SECLABEL(policy, text), read through SECLABEL_TO_CHAR(policy, column).
+    public override bool RendersColumnArgument(IColumnInfo column) =>
+        SecurityLabelPolicy(column) != null || base.RendersColumnArgument(column);
+
+    public override string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
+        SecurityLabelPolicy(column) is { } policy
+            ? string.Concat("SECLABEL('", policy, "', ", parameterMarker, ")")
+            : base.RenderColumnArgument(parameterMarker, column);
+
+    internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
+        SecurityLabelPolicy(column) is { } policy
+            ? string.Concat("SECLABEL_TO_CHAR('", policy, "', ", columnReference, ") AS ", wrappedName)
+            : base.RenderColumnSelect(columnReference, wrappedName, column);
+
+    private static string? SecurityLabelPolicy(IColumnInfo column)
+    {
+        const string prefix = "DB2SECURITYLABEL(";
+        var declared = column.NativeType;
+        if (declared is null || !declared.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || !declared.EndsWith(')'))
+        {
+            return null;
+        }
+
+        var policy = declared.Substring(prefix.Length, declared.Length - prefix.Length - 1);
+        // The policy name is written into the SQL text, so it is an identifier only (no quote or space can reach the statement).
+        return policy.Length > 0 && policy.All(c => char.IsLetterOrDigit(c) || c == '_') ? policy : null;
+    }
+
     public override bool SupportsMerge => true;
     public override bool SupportsWindowFunctions => true;
     public override bool SupportsCommonTableExpressions => true;

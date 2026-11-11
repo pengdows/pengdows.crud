@@ -30,7 +30,7 @@ that was run for the release is green. Access runs only on Windows.
 | SybaseASE | 156 pass, 0 fail, 0 skip · 2026-11-10 18:00Z · 2bb5c46c+ | 156 pass, 0 fail, 0 skip · 2026-11-10 18:26Z · 2bb5c46c+ |
 | Spanner | 156 pass, 0 fail, 0 skip · 2026-11-10 18:03Z · 2bb5c46c+ | 156 pass, 0 fail, 0 skip · 2026-11-10 18:29Z · 2bb5c46c+ |
 | SingleStore | 163 pass, 0 fail, 0 skip · 2026-11-10 18:02Z · 2bb5c46c+ | 163 pass, 0 fail, 0 skip · 2026-11-10 18:28Z · 2bb5c46c+ |
-| Snowflake | 156 pass, 0 fail, 0 skip · 2026-11-11 11:11Z · dbc3a701+ | 156 pass, 0 fail, 0 skip · 2026-11-11 11:29Z · dbc3a701+ |
+| Snowflake | 156 pass, 0 fail, 0 skip · 2026-11-11 12:31Z · eef76336+ | 156 pass, 0 fail, 0 skip · 2026-11-11 12:49Z · eef76336+ |
 | SapHana | 156 pass, 0 fail, 0 skip · 2026-11-10 17:45Z · 2bb5c46c+ | 156 pass, 0 fail, 0 skip · 2026-11-10 18:11Z · 2bb5c46c+ |
 | InterBase | 156 pass, 0 fail, 0 skip · 2026-11-10 18:05Z · 2bb5c46c+ | 156 pass, 0 fail, 0 skip · 2026-11-10 18:31Z · 2bb5c46c+ |
 | Access | 154 pass, 0 fail, 0 skip · 2026-11-05 17:58Z · 9af672d9+ | 154 pass, 0 fail, 0 skip · 2026-11-05 18:00Z · 9af672d9+ |

@@ -9,6 +9,7 @@ public class Db2TestContainer : TestContainer
 {
     private const string _password = "MyStr0ngP@ssw0rd";
     private const string _username = "db2inst1";
+    private const string _securityAdministrator = "secadm1";
     private const string _database = "testdb";
     private const int _port = 50000;
     private readonly IContainer _container;
@@ -46,12 +47,31 @@ public class Db2TestContainer : TestContainer
     public override async Task StartAsync()
     {
         await _container.StartAsync();
+        // The LBAC fixture (TypeFidelityIntegrationTests) grants labels as this security administrator: the instance owner cannot.
+        await CreateOsUserAsync(_securityAdministrator, _password);
 
         var hostPort = _container.GetMappedPublicPort(_port);
 
         _connectionString = $"Server=localhost:{hostPort};Database={_database};UID={_username};PWD={_password};";
 
         await WaitForDbToStart(DB2Factory.Instance, _connectionString, _container, 300);
+    }
+
+    /// <summary>
+    /// Creates an operating-system user inside the container (as root), so Db2 can authenticate it. Db2 LBAC needs a
+    /// security administrator other than the instance owner, because the instance owner cannot grant SECADM or a label to
+    /// itself (SQL0554N). Returns the command's exit code.
+    /// </summary>
+    public async Task<long> CreateOsUserAsync(string user, string password)
+    {
+        var script = $"id -u {user} >/dev/null 2>&1 || useradd -m {user}; echo '{user}:{password}' | chpasswd";
+        var result = await _container.ExecAsync(new[] { "/bin/sh", "-c", script });
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"Creating OS user '{user}' failed ({result.ExitCode}): {result.Stderr}{result.Stdout}");
+        }
+
+        return result.ExitCode;
     }
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)

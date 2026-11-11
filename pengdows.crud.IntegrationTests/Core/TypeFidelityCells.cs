@@ -1294,6 +1294,38 @@ public sealed class Cell_Map_Snowflake : IFidelityRow<Cell_Map_Snowflake>
 }
 
 [Table("type_fidelity")]
+public sealed class Cell_SecurityLabel_Db2 : IFidelityRow<Cell_SecurityLabel_Db2>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("security_label", DbType.String, NativeType = "DB2SECURITYLABEL(POL)")]
+    public string Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("security_label", "Value", "specialized security label") };
+
+    public static Cell_SecurityLabel_Db2 Expected() => new() { Id = 1, Value = "LOW" };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_FileReference_Snowflake : IFidelityRow<Cell_FileReference_Snowflake>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("file_reference", DbType.String, NativeType = "FILE")]
+    public string Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("file_reference", "Value", "external-file reference") };
+
+    public static Cell_FileReference_Snowflake Expected() => new() { Id = 1, Value = "@FIDELITY_STAGE/file.bin" };
+}
+
+[Table("type_fidelity")]
 public sealed class Cell_Variant_Snowflake : IFidelityRow<Cell_Variant_Snowflake>
 {
     [Id(true)]
@@ -1991,6 +2023,8 @@ internal static class TypeFidelityCells
         (SupportedDatabase.Snowflake, "SQL array") => typeof(Cell_IntArray_Snowflake),
         (SupportedDatabase.Snowflake, "list / multiset / set collection") => typeof(Cell_ListCollection_Snowflake),
         (SupportedDatabase.Snowflake, "map / dictionary") => typeof(Cell_Map_Snowflake),
+        (SupportedDatabase.Db2, "specialized security label") => typeof(Cell_SecurityLabel_Db2),
+        (SupportedDatabase.Snowflake, "external-file reference") => typeof(Cell_FileReference_Snowflake),
         (SupportedDatabase.Snowflake, "variant / dynamic value") => typeof(Cell_Variant_Snowflake),
         (SupportedDatabase.Oracle, "SQL array") => typeof(Cell_IntArray_Oracle),
         (SupportedDatabase.Firebird, "decimal floating point") => typeof(Cell_DecimalFloat_Firebird),

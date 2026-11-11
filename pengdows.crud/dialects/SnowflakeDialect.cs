@@ -150,11 +150,12 @@ internal class SnowflakeDialect : SqlDialect
     }
 
     public override bool RendersColumnArgument(IColumnInfo column) =>
-        VectorElementType(column) != null || IsArrayColumn(column) || IsSemiStructuredColumn(column) ||
+        VectorElementType(column) != null || IsArrayColumn(column) || IsSemiStructuredColumn(column) || IsFileColumn(column) ||
         base.RendersColumnArgument(column);
 
     public override string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
         IsArrayColumn(column) || IsSemiStructuredColumn(column) ? string.Concat("PARSE_JSON(", parameterMarker, ")")
+        : IsFileColumn(column) ? string.Concat("TO_FILE(", parameterMarker, ")")
         : VectorElementType(column) is { } element
             ? string.Concat("PARSE_JSON(", parameterMarker, ")::VECTOR(", element, ", 0)")
             : base.RenderColumnArgument(parameterMarker, column);
@@ -164,6 +165,10 @@ internal class SnowflakeDialect : SqlDialect
         base.MarksColumnParameter(column);
 
     // A VARIANT or OBJECT column (declared so): its value is written as JSON text, a string as a quoted JSON string.
+    // A FILE column holds a staged file: its value is a stage path, which TO_FILE resolves on the server.
+    private static bool IsFileColumn(IColumnInfo column) =>
+        column.NativeType is { } declared && string.Equals(declared, "FILE", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsSemiStructuredColumn(IColumnInfo column) =>
         column.NativeType is { } declared &&
         (string.Equals(declared, "VARIANT", StringComparison.OrdinalIgnoreCase) ||

@@ -49,6 +49,24 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
                 ? u
                 : new Dictionary<string, string>();
 
+            // A Db2 security label cell needs LBAC: a security administrator creates the policy and its labels, and grants db2inst1 one.
+            if (provider == SupportedDatabase.Db2)
+            {
+                await CreateDb2LbacFixtureAsync(context, Fixture.GetRawConnectionString(provider));
+            }
+
+            // A Snowflake FILE cell names a file on the stage FIDELITY_STAGE: create the stage and the file once per run.
+            if (provider == SupportedDatabase.Snowflake)
+            {
+                using var stage = context.CreateSqlContainer("CREATE STAGE IF NOT EXISTS FIDELITY_STAGE");
+                await stage.ExecuteNonQueryAsync();
+
+                // COPY INTO a stage writes the file server-side, so no client-side PUT is needed.
+                using var file = context.CreateSqlContainer(
+                    "COPY INTO @FIDELITY_STAGE/file.bin FROM (SELECT 'x') FILE_FORMAT = (TYPE = CSV) SINGLE = TRUE OVERWRITE = TRUE");
+                await file.ExecuteNonQueryAsync();
+            }
+
             // An Oracle BFILE cell names the directory object DATA_DIR, which the application fixes: create it once per run.
             if (provider == SupportedDatabase.Oracle)
             {
@@ -104,6 +122,7 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
                     Func<object?, string>? canonical = semantic == "time with zone" ? ZonedTimeOfDay
                         : semantic == "geography / geodetic" && provider == SupportedDatabase.SingleStore ? SixPlaceCoordinates
                         : provider == SupportedDatabase.Snowflake && SnowflakeSpatialSemantics.Contains(semantic) ? WithoutSpaces
+                        : provider == SupportedDatabase.Snowflake && semantic == "external-file reference" ? SnowflakeStagePath
                         : null;
                     // A server-generated cell takes three arguments; only the round-trip cell takes the comparison.
                     var arguments = cell == nameof(GeneratedCellAsync)
@@ -185,13 +204,45 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
         }
     }
 
-    // The CREATE TABLE for a cell's columns: the database's template where it has one (a tablespace, a rowstore table).
-    private static string CreateTableSql(IDatabaseContext context, string columns)
+    // The CREATE TABLE for a cell's columns: the database's template where it has one (a tablespace, a rowstore table), then
+    // any table-level clause the cell needs (a Db2 LBAC policy).
+    private static string CreateTableSql(IDatabaseContext context, string columns, string suffix = "")
     {
         var table = IntegrationObjectNameHelper.Table(context, TableName);
-        return TypeFidelityDeclarations.TableTemplates.TryGetValue(context.Dialect.DatabaseType, out var template)
+        return (TypeFidelityDeclarations.TableTemplates.TryGetValue(context.Dialect.DatabaseType, out var template)
             ? template.Replace("{table}", table).Replace("{columns}", columns)
-            : $"CREATE TABLE {table} ({columns})";
+            : $"CREATE TABLE {table} ({columns})") + suffix;
+    }
+
+    // Db2 LBAC (live 2026-11-11): the instance owner cannot grant SECADM or a label to itself (SQL0554N), so it grants SECADM to
+    // secadm1 (created in the container by Db2TestContainer), which creates the policy POL with two labels and grants db2inst1
+    // the LOW label. A user holds one label per policy for ALL access, so only LOW is granted. Rerunning in the same container
+    // finds the policy and labels already present; those statements are skipped.
+    // The raw connection string: the context's own is redacted, and would carry no password for secadm1.
+    private static async Task CreateDb2LbacFixtureAsync(IDatabaseContext context, string rawConnectionString)
+    {
+        await TryExecuteAsync(context, "GRANT SECADM ON DATABASE TO USER SECADM1");
+
+        await using var admin = new DatabaseContext(
+            rawConnectionString.Replace("UID=db2inst1", "UID=secadm1", StringComparison.Ordinal), IBM.Data.Db2.DB2Factory.Instance);
+        await TryExecuteAsync(admin, "CREATE SECURITY LABEL COMPONENT LVL ARRAY ['LOW','HIGH']");
+        await TryExecuteAsync(admin, "CREATE SECURITY POLICY POL COMPONENTS LVL WITH DB2LBACRULES");
+        await TryExecuteAsync(admin, "CREATE SECURITY LABEL POL.LOW_LABEL COMPONENT LVL 'LOW'");
+        await TryExecuteAsync(admin, "CREATE SECURITY LABEL POL.HIGH_LABEL COMPONENT LVL 'HIGH'");
+        await TryExecuteAsync(admin, "GRANT SECURITY LABEL POL.LOW_LABEL TO USER DB2INST1 FOR ALL ACCESS");
+    }
+
+    private static async Task TryExecuteAsync(IDatabaseContext context, string sql)
+    {
+        try
+        {
+            await using var container = context.CreateSqlContainer(sql);
+            await container.ExecuteNonQueryAsync();
+        }
+        catch (Exception)
+        {
+            // Already in place from an earlier run in this container, or refused for that reason; the cell itself reports any gap.
+        }
     }
 
     // One cell: create the table with the declaration, write one row, read it back, compare the value.
@@ -202,9 +253,11 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
         try
         {
             await DropTableIfExistsAsync(context, TableName);
+            // A Db2 LBAC table names its policy at table level: the security-label cell's table takes POL.
+            var suffix = context.Dialect.DatabaseType == SupportedDatabase.Db2 && column == "security_label" ? " SECURITY POLICY POL" : string.Empty;
             await using (var create = context.CreateSqlContainer(
                              CreateTableSql(context, $"{context.WrapObjectName("id")} INTEGER NOT NULL PRIMARY KEY, " +
-                                                    $"{context.WrapObjectName(column)} {declaration} NOT NULL")))
+                                                    $"{context.WrapObjectName(column)} {declaration} NOT NULL", suffix)))
             {
                 await create.ExecuteNonQueryAsync();
             }
@@ -250,6 +303,21 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
     {
         "geography / geodetic", "general geometry", "point geometry", "line / linestring geometry", "polygon geometry",
     };
+
+    // A Snowflake FILE reads back as its JSON document (STAGE, RELATIVE_PATH, ...). The stage is fully qualified, so the file is
+    // compared by its stage's name and its relative path: "@FIDELITY_STAGE/file.bin", the value the cell wrote.
+    private static string SnowflakeStagePath(object? value)
+    {
+        if (value is not string json || !json.TrimStart().StartsWith('{'))
+        {
+            return Canonical(value);
+        }
+
+        using var document = JsonDocument.Parse(json);
+        var stage = document.RootElement.GetProperty("STAGE").GetString()!;
+        var relative = document.RootElement.GetProperty("RELATIVE_PATH").GetString()!;
+        return "text:@" + stage.Split('.')[^1].TrimStart('@') + "/" + relative;
+    }
 
     private static string WithoutSpaces(object? value) => Canonical(value).Replace(" ", string.Empty, StringComparison.Ordinal);
 

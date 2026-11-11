@@ -1700,7 +1700,7 @@ external-file reference,file_reference,string,String,InterBase,unsupported,,,Dyn
 external-file reference,file_reference,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""BFILE"": line 1 col 56 (at pos 56)"
 external-file reference,file_reference,string,String,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BFILE)' at line 1
 external-file reference,file_reference,string,String,AuroraPostgreSql,unsupported,,,"42704: type ""bfile"" does not exist POSITION: 56"
-external-file reference,file_reference,string,String,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'BFILE'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c372-0012-e67e00014186"
+external-file reference,file_reference,string,String,Snowflake,declared,FILE,OBJECT,
 specialized security label,security_label,string,String,PostgreSql,unsupported,,,"42704: type ""idssecuritylabel"" does not exist POSITION: 56"
 specialized security label,security_label,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type IDSSECURITYLABEL."
 specialized security label,security_label,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1717,7 +1717,7 @@ specialized security label,security_label,string,String,SybaseASE,unsupported,,,
 specialized security label,security_label,string,String,Spanner,unsupported,,,P0001: Type <idssecuritylabel> does not exist.
 specialized security label,security_label,string,String,FlatFile,unsupported,,,"Unknown SQL data type 'IDSSECURITYLABEL'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
 specialized security label,security_label,string,String,Access,unsupported,,,Syntax error in field definition.
-specialized security label,security_label,string,String,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""IDSSECURITYLABEL"" is an undefined name."
+specialized security label,security_label,string,String,Db2,declared,DB2SECURITYLABEL,DB2SECURITYLABEL,
 specialized security label,security_label,string,String,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]User (informix) does not have DBSECADM authority.
 specialized security label,security_label,string,String,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
 specialized security label,security_label,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""IDSSECURITYLABEL"": line 1 col 56 (at pos 56)"

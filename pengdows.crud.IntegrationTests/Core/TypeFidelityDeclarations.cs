@@ -817,6 +817,7 @@ internal static class TypeFidelityDeclarations
                 ["XML"] = ("XML", "XML"),
                 ["user-defined enum / domain"] = ("probe_domain", "VARCHAR"),
                 ["32-bit transaction ID"] = ("BIGINT", "BIGINT"),
+                ["specialized security label"] = ("DB2SECURITYLABEL", "DB2SECURITYLABEL"),
             },
             [SupportedDatabase.Informix] = new Dictionary<string, (string Declaration, string ProviderType)>
             {
@@ -1091,6 +1092,7 @@ internal static class TypeFidelityDeclarations
                 ["map / dictionary"] = ("MAP(VARCHAR(10),INTEGER)", "OBJECT"),
                 ["32-bit transaction ID"] = ("BIGINT", "FIXED"),
                 ["vector embedding"] = ("VECTOR(FLOAT, 3)", "VECTOR"),
+                ["external-file reference"] = ("FILE", "OBJECT"),
             },
         };
 
@@ -1666,7 +1668,6 @@ internal static class TypeFidelityDeclarations
                 ["vector embedding"] = "refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token \"(\" was found following \"RIMARY KEY, c VECTOR\". Expected tokens may include: \"CHECK\".",
                 ["hierarchical path"] = "refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N \"HIERARCHYID\" is an undefined name.",
                 ["external-file reference"] = "refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N \"BFILE\" is an undefined name.",
-                ["specialized security label"] = "refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N \"IDSSECURITYLABEL\" is an undefined name.",
             },
             [SupportedDatabase.Informix] = new Dictionary<string, string>
             {
@@ -1877,7 +1878,6 @@ internal static class TypeFidelityDeclarations
                 ["native point"] = "refused: Error: SQL compilation error: Unsupported data type 'POINT'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c364-0012-e67e00013b36",
                 ["native polygon"] = "refused: Error: SQL compilation error: Unsupported data type 'POLYGON'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c364-0012-e67e00013b3e",
                 ["hierarchical path"] = "refused: Error: SQL compilation error: Unsupported data type 'HIERARCHYID'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c372-0012-e67e0001415a",
-                ["external-file reference"] = "refused: test fixture: a Snowflake FILE value names a file on a stage, and the fidelity test has no stage or staged file; refused until a stage fixture exists",
                 ["specialized security label"] = "refused: Error: SQL compilation error: Unsupported data type 'IDSSECURITYLABEL'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c372-0012-e67e000141d2",
             },
         };

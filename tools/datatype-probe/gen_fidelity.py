@@ -159,6 +159,8 @@ DB_PREFER = {
     # confirmed live 2026-11-06). SMALLINT holds the 0..255 range of an unsigned 8-bit value.
     ("Informix", "unsigned 8-bit"): ("SMALLINT", "SMALLINT"),
     ("Oracle", "external-file reference"): ("BFILE", "bfile"),
+    # Db2 LBAC's column type (CREATE TABLE ... DB2SECURITYLABEL SECURITY POLICY POL, live 2026-11-11).
+    ("Db2", "specialized security label"): ("DB2SECURITYLABEL", "DB2SECURITYLABEL"),
     ("FlatFile", "second-precision datetime"): ("TIMESTAMP", "timestamp"),
     # A fixed-width BIT(3) for the 3-bit sample: the column keeps its width, which the entity's NativeType supplies on read.
     ("MySql", "bit / bitstring"): ("BIT(3)", "bit(3)"),
@@ -248,7 +250,6 @@ DB_PREFER = {
 DB_REFUSED = {
     # A Snowflake FILE value names a file on a stage. The fidelity test has no stage or staged file, so the cell is refused until a
     # stage fixture exists (the server accepts the type; the refusal is the test's missing fixture).
-    ("Snowflake", "external-file reference"): "test fixture: a Snowflake FILE value names a file on a stage, and the fidelity test has no stage or staged file; refused until a stage fixture exists",
     # SAP ASE 16 refuses the spatial types (probe, results/SybaseASE.jsonl: "Can't find type"). No ASE spatial documentation was
     # found to confirm it against; the refusal rests on the probe.
     ("SybaseASE", "point geometry"): "probe: SAP ASE 16 refuses POINT (\"Can't find type\", results/SybaseASE.jsonl); no ASE spatial documentation was found to confirm it",
@@ -399,6 +400,10 @@ NATIVE_TYPE = {
     ("Snowflake", "list / multiset / set collection"): "ARRAY",
     # Snowflake's OBJECT and VARIANT columns: the value is written as its JSON through PARSE_JSON (SnowflakeSemiStructuredTests).
     ("Snowflake", "map / dictionary"): "OBJECT",
+    # Db2's SECLABEL / SECLABEL_TO_CHAR take the policy name; the fixture creates the policy POL (TypeFidelityIntegrationTests).
+    ("Db2", "specialized security label"): "DB2SECURITYLABEL(POL)",
+    # A FILE column holds a staged file; the fidelity test creates the stage and the file (TypeFidelityIntegrationTests).
+    ("Snowflake", "external-file reference"): "FILE",
     ("Snowflake", "variant / dynamic value"): "VARIANT",
     # The VARRAY's native type: the library builds it from the elements' JSON (OracleDialect.CollectionArgument).
     ("Oracle", "SQL array"): "probe_varray",
@@ -474,9 +479,18 @@ NATIVE_CLR = {
 }
 
 
+# A Snowflake FILE holds a staged file, so its sample is a stage path: the fidelity test creates FIDELITY_STAGE and the file in it.
+NATIVE_SAMPLE = {
+    # Db2 LBAC: the fixture grants db2inst1 the LOW label; SECLABEL('POL', 'LOW') writes it and SECLABEL_TO_CHAR reads back LOW.
+    ("Db2", "specialized security label"): "\"LOW\"",
+    ("Snowflake", "external-file reference"): "\"@FIDELITY_STAGE/file.bin\"",
+}
+
+
 def native_clr(db, sem, clr, val):
     """The CLR type and sample of a native row: the library's value type where NATIVE_CLR names one, else the spec's."""
-    return NATIVE_CLR.get((rules_db(db), sem), (clr, val))
+    clr, val = NATIVE_CLR.get((rules_db(db), sem), (clr, val))
+    return clr, NATIVE_SAMPLE.get((rules_db(db), sem), val)
 
 
 def prerequisites(prereqs, resolved):
