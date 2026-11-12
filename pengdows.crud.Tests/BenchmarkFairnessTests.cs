@@ -463,10 +463,14 @@ public class BenchmarkFairnessTests
         AssertAllPresent(fileName, text, new[]
         {
             "P÷D",
-            "EF÷P",
+            "EF raw SQL ÷P",
+            "EF LINQ ÷P",
+            "EF compiled ÷P",
             "_Pengdows",
             "_Dapper",
             "_EntityFramework",
+            "_EntityFramework_Linq",
+            "_EntityFramework_Compiled",
             "BenchmarkDotNet's built-in Ratio column"
         });
     }
@@ -481,7 +485,7 @@ public class BenchmarkFairnessTests
         {
             "BenchmarkCorrectnessArtifacts.LoadForSummary",
             "if (!means.IsValid(Framework.Pengdows) || !means.IsValid(Framework.Dapper))",
-            "Rows requiring invalid framework results are excluded."
+            "Rows requiring invalid framework results are excluded"
         });
     }
 
