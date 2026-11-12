@@ -514,7 +514,7 @@ native type is a probe case). Checked against the core sources on 2026-10-30: th
 | TYPE-033 | SAP HANA `REAL_VECTOR` (cross-reference B71, V). Out of scope: no HANA Express build we can pull has the type (2.00.076, 2.00.082, 2.00.088), and the vector-capable HANA is SAP HANA Cloud, which has no Docker image. Refused, documented in docs/advanced-types.md, "Refused by design". | Out of scope (refused) |
 | TYPE-034 | SAP ASE native `POINT` / `LINESTRING` / `POLYGON` (cross-reference N). The ASE 16 probe refuses all three ("Can't find type"). The refusal is validated against SAP ASE documentation (confirmed 2026-11-11) and the probe. | Refused (validated: SAP ASE documentation and probe) |
 | TYPE-035 | Db2 12.1 native JSON (cross-reference R) and the Db2 / Informix security labels (need an access policy). Not tested. | Open |
-| TYPE-036 | Application converters (escape hatch): `IProviderValueConverter<T>` and `ProviderValueConverters.Register<T>`. Added 2.0.6; a second registration for a type is refused. | Done |
+| TYPE-036 | Application converters (escape hatch): `IProviderValueConverter<T>` and `ProviderValueConverters.Register<T>`. Drafted during 2.0.6 and removed before release: users never write type hooks (maintainer goal, 2026-09-29). Composite types (DuckDB `STRUCT`, Informix `ROW`) are a gap, not an application hook. | Removed (not shipped) |
 
 **Already in the core, failing only in the EF provider:** `bit`, `pg_lsn`, `timetz`, `money`, the scalar range types, `cidr`,
 `inet`, `macaddr`/`macaddr8`. The EF provider needs its own mappings for those; the core already has the CLR side and the
@@ -990,11 +990,11 @@ adding one back is a minor release): `SupportsPaging` (the public `AppendPaging`
 | API-001 | `IDatabaseContext.DataSource` (also on `DatabaseContext` and `TransactionContext`) | Hands out the raw `DbDataSource`: `context.DataSource.CreateConnection()` bypasses the governor, the pools and lifecycle tracking. The only raw ADO.NET outputs in the public surface; `PublicSurfaceGuardTests` allows exactly these three and fails on any new one. |
 | API-002 | `ConnectionLocalState.ComputeShapeHash(DbCommand)` | Public static helper on a public class; internal use only. |
 | API-003 | `IEphemeralSecureString.Reveal`, `WithRevealed`, `WithRevealedAsync` | A public interface that hands out the plaintext secret; used only inside the core. |
-| API-004 | `IConnectionLocalState.MarkSessionSettingsApplied` | Plumbing. |
-| API-005 | `IDataSourceInformation.DefaultPrepareStatements`, `IsUsingFallbackDialect` | Undocumented, unused outside the core. |
-| API-006 | `IDatabaseProductInfo.ProductName`, `ProductVersion` | Undocumented; only tests use them. Review before deciding. |
-| API-007 | `IIsolationResolver.GetSupportedLevels`, `ResolveWithDetail` | Undocumented, unused outside the core. |
-| API-008 | `ISqlDialect.ParameterMarkerAt` | Undocumented plumbing. |
+| API-004 | `IConnectionLocalState.MarkSessionSettingsApplied` | Plumbing. **Deprecated on 2.0.6:** the type already was; the member is removed in 3.0. |
+| API-005 | `IDataSourceInformation.DefaultPrepareStatements`, `IsUsingFallbackDialect` | Undocumented, unused outside the core. **Deprecated on 2.0.6** (warning); removed in 3.0. |
+| API-006 | `IDatabaseProductInfo.ProductName`, `ProductVersion` | Undocumented; only tests use them. **Deprecated on 2.0.6** (warning); removed in 3.0. |
+| API-007 | `IIsolationResolver.GetSupportedLevels`, `ResolveWithDetail` | Undocumented, unused outside the core. **Deprecated on 2.0.6** (warning); removed in 3.0. |
+| API-008 | `ISqlDialect.ParameterMarkerAt` | Undocumented plumbing. **Deprecated on 2.0.6** (warning); removed in 3.0. |
 | API-009 | The 99 public classes and types of `pengdows.crud` shipped in 2.0.5 | Not yet audited: which could be internal. |
 | API-010 | `ITrackedReader : IDataReader, IDataRecord` (shipped in 2.0.5, returned by `ExecuteReaderAsync`) | **Closed 2026-10-10 by the maintainer: intentional, stays.** The governed lease is an `IDataReader` on purpose (it feeds `DataTable.Load` and the mappers); the provider's own reader never leaves the library. `PublicSurfaceGuardTests` allows exactly this inheritance. Not a 3.0 candidate. |
 

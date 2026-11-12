@@ -341,32 +341,14 @@ fails (permissions, a write-only context) nothing changes: the column is written
 methods never query; they use the types once a gateway has learned them on that context. Dialects that
 need no declared types never probe. PostgreSQL needs them only for writes, so its reads don't probe.
 
-## Application converters (the escape hatch)
+## Types the library does not map
 
-The library owns every type it can map, and the supported matrix above is the product contract. For a type the library
-does not map, an application can register a converter once per process:
+The library owns every type it can map, and the supported matrix above is the product contract. Users never write
+converters or hooks for database types. A type the database supports natively and the library does not map is a gap to
+report, not something to work around in the application.
 
-```csharp
-public sealed class MinorUnitsConverter : IProviderValueConverter<MinorUnits>
-{
-    public object? ToProvider(MinorUnits value, SupportedDatabase provider) => value.Value.ToString(CultureInfo.InvariantCulture);
-    public MinorUnits FromProvider(object value, SupportedDatabase provider) => new() { Value = Convert.ToInt64(value, CultureInfo.InvariantCulture) };
-}
-
-ProviderValueConverters.Register(new MinorUnitsConverter());
-```
-
-After that, the library writes and reads `MinorUnits` through the converter, as it does its own types. A null stays
-null. A second registration for the same type throws `InvalidOperationException`, because the converter is process-wide.
-The converter's output is validated against the column's declared `DbType`, not the application type.
-
-Use it only for a type the library does not map. A type the database supports natively and the library does not map is a
-gap to report, not a converter to write.
-
-**Composite types** (a struct, row, or record column, such as DuckDB `STRUCT` or Informix `ROW`) are an application type,
-so they use the escape hatch. Map the composite to a class or record, and let the converter write it as JSON text and read
-it back. The column is declared as the database's composite type, and the converter's text is what the server takes.
-The library adds no composite mapping of its own. This pattern has no live integration test in the repository yet.
+**Composite types** (a struct, row, or record column, such as DuckDB `STRUCT` or Informix `ROW`) are not mapped in
+2.0.6. The library adds no composite mapping, so a composite column is a gap to report.
 
 **Oracle `ROWID`** is read as its text (`ROWIDTOCHAR`) and is `NonInsertable` and `NonUpdateable`: the database assigns it,
 so an insert or update leaves it out. Read it on a property marked with those attributes.

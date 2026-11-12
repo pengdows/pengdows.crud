@@ -39,7 +39,7 @@ The full contract, with the per-database rationale and live-verification trail, 
 
 - Semantics: Identical to Standard, plus a governor profile: writable connections capped at 1 concurrent writer, read-only connections allow 0 writers; writer-starvation-prevention turnstile enabled.
 - Reads:
-  - Non-transactional → ephemeral read-only connections that use the read-only preamble.
+  - Non-transactional → ephemeral read-only connections that use the read-only session settings.
   - Read-only transactions → ephemeral read-only connections (reader concurrency pauses while writers wait).
   - Write transactions → serialize through the write permit while retaining the connection for the transaction's duration.
 - Used for: the file-based embedded engines (SQLite, DuckDB, Microsoft Access, pengdows.flatfile) and SQLite shared caches, where writers must serialize without pinning a connection. `SingleWriter` is a general write-admission policy, not a SQLite workaround: any engine whose safe topology needs one writer at a time gets it.
@@ -97,7 +97,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 ## 4. Session Settings & Read-Only
 
-- SessionSettingsPreamble is applied once per `TrackedConnection` wrapper, at its first open.
+- The session settings (`GetBaseSessionSettings()`) are applied once per `TrackedConnection` wrapper, at its first open.
   - Pinned (`SingleConnection`): the one wrapper lives for the context, so it runs once.
   - Ephemeral (`Standard`, `SingleWriter`): a wrapper is created per operation, so it runs on every checkout, even when the provider's pool returns an already-open physical connection. This is deliberate; see `docs/connection/connection-modes.md`, section 4.
 - Do not mutate session-scoped settings mid-connection when using pooling.
@@ -132,9 +132,9 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 ## 8. Metrics & Limits
 
-- Connection counting is handled by `TrackedConnection`.
-- Counts increment on physical open, decrement on close.
-- Includes pinned and ephemeral connections, including transaction connections.
+- Connection counts are pengdows **leases**, not provider events: `ConnectionsOpened`/`ConnectionsClosed` count leases acquired and released by the context's `PoolGovernor`s, and `NumberOfOpenConnections` is the leases handed out and not yet disposed.
+- Those leases cover pinned and ephemeral connections, transaction connections, and each PreventDatabaseUnload sentinel or SingleConnection's shared connection.
+- `TrackedConnection` measures open and close durations; it does not count connections. See the Metrics section of `docs/release-notes-2.0.6.md`.
 - Limits:
   - `MaxParameterLimit`, `MaxOutputParameters`, `ParameterNameMaxLength` come from `DataSourceInformation`.
   - Mode-independent.

@@ -130,7 +130,7 @@ Two thresholds matter for each database:
 | Sybase ASE | not recorded | not recorded | No version gate in `SybaseAseDialect`; verified live against ASE 16 (SP02) |
 | Spanner | not recorded | not recorded | PostgreSQL interface through PGAdapter; the suite runs Spanner Omni `2026.r2.1-beta` with the PGAdapter image |
 | SAP HANA, InterBase, Access | not recorded | not recorded | No version gates in their dialects; opt-in (HANA, InterBase) or Windows-only (Access) integration coverage, no server version recorded in the repo |
-| FlatFile | n/a | n/a | Embedded provider; dialect verified against `pengdows.flatfile` 0.2.1-preview.1 source, testbed runs 0.2.1-preview.2 |
+| FlatFile | n/a | n/a | Embedded provider; dialect verified against `pengdows.flatfile` 0.2.1-preview.1 source, testbed runs 0.2.1-preview.27 (the version pinned in `testbed/testbed.csproj`) |
 
 > **MySQL / MariaDB read-only note:** The `SET SESSION transaction_read_only = 1` syntax requires
 > MySQL 5.7.20+. MariaDB uses `SET SESSION tx_read_only = 1` which is available in 10.1+.

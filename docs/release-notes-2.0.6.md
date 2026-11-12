@@ -147,10 +147,6 @@ the integration run (`INCLUDE_AURORA=true`). Per-database requirements and versi
 
 ## New API
 
-- `IProviderValueConverter<T>` (abstractions) and `ProviderValueConverters.Register<T>` (pengdows.crud): the escape hatch
-  for an application type the library does not map. Registration is process-wide and refuses a second registration for the
-  same type. The library owns the conversion once registered. See `docs/advanced-types.md`, "Application converters".
-  Added (not changed): nothing shipped is altered, so this is a semver-safe addition.
 
 - `ColumnName(string propertyName)` on `ITableGateway`/`IPrimaryKeyTableGateway`, and
   `ColumnName<TEntity>(string propertyName)` as an `IDatabaseContext` extension, return a property's
@@ -669,6 +665,36 @@ mix 64% later (P99 27.4 s against 15.1 s at 1,000 callers), the cost described i
 **Synchronous callers parked behind an asynchronous slot holder** (real PostgreSQL, `PostgreSqlSyncWaiterStarvationTests`): the
 holder's release is delayed by about 0.9 to 1.0 s once synchronous callers are parked, regardless of how many (64 to 1,000); see
 [connection-pooling.md](connection-pooling.md).
+
+## Deprecations
+
+A deprecated member still works on 2.0.6 with the same behavior. It compiles with a warning (`[Obsolete]` with the error flag off), and the warning names the removal in 3.0 and the replacement, or says why there is none.
+
+Deprecated since 2.0.5, removed in 3.0:
+
+- `DataSource` on `IDatabaseContext`, `DatabaseContext` and `TransactionContext`: hands out the raw `DbDataSource`, which bypasses the pool governor. Use the context's execution APIs.
+- The `DatabaseContext` constructor that takes a `DbDataSource`.
+- `SqlContainer.WrapForStoredProc`: use the `CommandType.StoredProcedure` overloads.
+- `GetLastInsertedIdFromCommand` on `ISqlDialect` and the dialects: takes a raw `DbCommand`.
+- `DatabaseContext.ReadWriteMode` and `ProcWrappingStyle` setters: assigning after construction has no effect. Set `ReadWriteMode` in `DatabaseContextConfiguration`; `ProcWrappingStyle` is detected from the database.
+- `TotalConnectionsReused` and `ConnectionPoolEfficiency`: always 0.
+- `DbMode.KeepAlive`: use `PreventDatabaseUnload`.
+- `StandardCompliance`, `ISqlDialect.MaxSupportedStandard` and `SqlStandardLevel`: a coarse heuristic. Query the specific `Supports*` capability instead.
+- `EphemeralSecureString`, `IEphemeralSecureString`, `TypeCoercionOptions`, `ILockerAsync`, `IConnectionLocalState`, `ConnectionLocalState` and `ITenantConfiguration`: not supported application API.
+- `DbProviderLoader` and its `LoadAndRegisterProviders`: the constructor is internal, so the class is reachable only through `AddDbProviderLoading`. It becomes internal in 3.0.
+- The inert attributes `EnumStorage`, `DbEnumAttribute`, `JsonContractAttribute`, `ConcurrencyTokenAttribute`, `RangeTypeAttribute`, `ComputedAttribute`, `CaseInsensitiveAttribute`, `AsStringAttribute`, `MaxLengthForInlineAttribute`, `AllowZeroDateAttribute`, `CaseFoldOnReadAttribute`, `SpatialTypeAttribute` and `CurrencyAttribute`. They have no effect. Each warning names what to use instead.
+
+Newly deprecated in 2.0.6 (undocumented, and unused outside the core):
+
+- `ITrackedConnection.LocalState`
+- `IDataSourceInformation.DefaultPrepareStatements` and `IsUsingFallbackDialect`
+- `IDatabaseProductInfo.ProductName` and `ProductVersion`
+- `IIsolationResolver.ResolveWithDetail` and `GetSupportedLevels`
+- `ISqlDialect.ParameterMarkerAt`
+
+`TransactionModeNotSupportedException` is not deprecated. `BeginTransaction(IsolationProfile)` still throws it, and it remains the type to catch.
+
+Policy for 2.x: a member is deprecated only with a warning, never an error. The message names the 3.0 removal and the replacement when one exists. A member added in the same release is never deprecated. `ObsoletePolicyTests` checks the warning-only and removal-named rules for every marked member in the shipped assemblies.
 
 ## Tests, review policy and provenance
 

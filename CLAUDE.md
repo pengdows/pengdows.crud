@@ -780,7 +780,7 @@ those are neither created nor deleted. The clusters are billed while they exist 
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** — SQLite `:memory:` = SingleConnection, file SQLite/DuckDB/Access/pengdows.flatfile = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload; explicit `Standard` is honored where the dialect permits it, but SQLite and pengdows.flatfile coerce it to SingleWriter
+8. **DbMode.Best auto-selects** — isolated SQLite `:memory:` = SingleConnection, file SQLite/DuckDB/Access/pengdows.flatfile = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload; explicit `Standard` is honored where the dialect permits it, but SQLite and pengdows.flatfile coerce it to SingleWriter
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL. Get a mapped column's name with `ColumnName(nameof(Order.CustomerId))` on a gateway, or `ctx.ColumnName<Customer>(nameof(Customer.Name))` for any entity, instead of hard-coding it
 10. **NEVER use TransactionScope** — incompatible with connection management, use `Context.BeginTransaction()`
 11. **Execution methods return ValueTask** — not Task, for reduced allocations

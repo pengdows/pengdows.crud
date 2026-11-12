@@ -790,7 +790,7 @@ those are neither created nor deleted. The clusters are billed while they exist 
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** — SQLite `:memory:` = SingleConnection, file SQLite/DuckDB/Access/pengdows.flatfile = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload; explicit `Standard` is honored where the dialect permits it, but SQLite and pengdows.flatfile coerce it to SingleWriter
+8. **DbMode.Best auto-selects** — isolated SQLite `:memory:` = SingleConnection, file SQLite/DuckDB/Access/pengdows.flatfile = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload; explicit `Standard` is honored where the dialect permits it, but SQLite and pengdows.flatfile coerce it to SingleWriter
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL. Get a mapped column's name with `ColumnName(nameof(Order.CustomerId))` on a gateway, or `ctx.ColumnName<Customer>(nameof(Customer.Name))` for any entity, instead of hard-coding it
 10. **NEVER use TransactionScope** — incompatible with connection management, use `Context.BeginTransaction()`
 11. **Execution methods return ValueTask** — not Task, for reduced allocations
@@ -3695,11 +3695,11 @@ The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWr
 
 ### PreventDatabaseUnload
 
-**PreventDatabaseUnload exists for exactly one reason, and it has nothing to do with performance.** It is not a health check, TCP keepalive, periodic ping, warmed working connection, or concurrency mode. It retains a passive sentinel connection per enabled pool solely to prevent a target database from unloading, deactivating, closing, or pausing.
+**PreventDatabaseUnload is Standard mode plus passive sentinels.** It exists for exactly one reason, and it has nothing to do with query execution performance or concurrency. It is not a health check, TCP keepalive, periodic ping, or warmed working connection. It retains a passive sentinel connection per enabled pool solely to prevent a target database from unloading, deactivating, closing, or pausing.
 
 The mechanism: pengdows.crud's default philosophy (Standard mode) opens a connection late and closes it early — every operation gets a fresh connection from the pool and releases it back immediately after. That's normally harmless, because the ADO.NET connection pool keeps the underlying physical connections warm behind the scenes. But **SQL Server LocalDB is not a normal server** — it's a lightweight, self-managed engine process that watches its own connection count and **automatically unloads the database (shuts the engine instance down) once it observes zero active connections for a while**. If pengdows.crud used plain Standard mode against LocalDB, a quiet period (no requests for a stretch) would let the pool drain to zero open connections, LocalDB would notice and unload the database, and the *next* request would pay the cost of LocalDB re-launching and re-attaching the database file before it could even open a connection.
 
-The mode retains one sentinel connection per enabled pool: the connection opened during construction for dialect detection is kept open instead of being disposed (it is the writer-pool sentinel on a read-write context, the reader-pool sentinel on a read-only one), and when a dedicated `ReadOnlyConnectionString` is configured on a read-write context a second sentinel is opened for the reader pool. **The sentinel never executes application commands, opens transactions, or hands work to callers** — every real read and write still goes through its own fresh ephemeral connection exactly like Standard mode — and, because it is never used for work, session settings are not applied to it. Each sentinel holds one permit from its own pool's governor, so effective working capacity per pool is the configured capacity minus its sentinel (which is why enabled pools are raised to at least 2 — see `docs/connection-pooling.md`).
+The mode retains one sentinel connection per enabled pool: the connection opened during construction for dialect detection is kept open instead of being disposed (it is the writer-pool sentinel on a read-write context, the reader-pool sentinel on a read-only one), and when a dedicated `ReadOnlyConnectionString` is configured on a read-write context a second sentinel is opened for the reader pool. **The sentinel is never used for any database work: it never executes application commands, opens transactions, or hands work to callers.** Every real read and write follows the exact same open-late/close-early path as Standard mode through a separate ephemeral connection. The only purpose of the sentinel is to keep the database loaded so that the next real operation does not pay the slow database reload/startup cost after an idle period. Because it is never used for work, session settings are not applied to it. Each sentinel holds one permit from its own pool's governor, so effective working capacity per pool is the configured capacity minus its sentinel (which is why enabled pools are raised to at least 2 — see `docs/connection-pooling.md`).
 
 - `Best` auto-selects it for **SQL Server LocalDB**, **Firebird** (embedded and client-server) and **Db2 LUW**. Firebird's default `LINGER` discards the database's page cache when its last attachment closes (the testbed probe measured a sentinel saving ~7-10ms per cold checkout). Db2 LUW's default implicit activation deactivates a database when its last connection closes (measured ~1.1 s per cold connection, ~4 ms with a sentinel); it is recognized on the detection connection, and any Db2 server not positively recognized as LUW keeps `Standard`. SQL Server with `AUTO_CLOSE` explicitly on stays knob-only: `Best` resolves to `Standard`.
 - **`Best` is a default, not a mandate.** Wherever `Best` selects `PreventDatabaseUnload`, an explicit `Standard` request is always honored: a deployment busy enough never to drain its pool doesn't need the sentinel, and one deliberately built to scale to zero must not have that defeated. Firebird honors every explicit mode; LocalDB honors `Standard` (the single-connection modes have no purpose there and resolve to `PreventDatabaseUnload`), with a performance-only warning.
@@ -3710,10 +3710,10 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 
 - Semantics: One pinned connection handles everything — reads, writes, transactions.
 - Threadsafe via `RealAsyncLocker`.
-- Used for: SQLite/DuckDB `:memory:` and explicitly selected specialized single-connection
+- Used for: isolated SQLite/DuckDB `:memory:` and explicitly selected specialized single-connection
   deployments. Durable Firebird (embedded or client-server) gets `PreventDatabaseUnload` from
   `Best` (see the PreventDatabaseUnload section above), not SingleConnection.
-- For SQLite/DuckDB `:memory:`, this is primarily a testing, example, or ephemeral-scratch
+- For isolated SQLite/DuckDB `:memory:`, this is primarily a testing, example, or ephemeral-scratch
   mode. The database is owned by the connection; if that connection closes, its contents
   cannot be recovered by opening another connection.
 - Firebird embedded is different: durable embedded storage can explicitly select
@@ -3722,9 +3722,11 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 - **A second, distinct gate spans an entire open transaction, on top of the transaction's own
   user-operation/completion locks** (`DatabaseContext.GetSingleConnectionTransactionGate()`, a
   non-reentrant `SemaphoreSlim`). Because every operation shares one physical connection in this
-  mode, an ordinary non-transactional write (or read) issued while a transaction is open must
+  mode, an ordinary non-transactional write issued while a transaction is open must
   wait behind that transaction rather than risk being silently absorbed into its uncommitted
-  scope and rolled back with it — a hazard unique to sharing one physical connection, which no
+  scope and rolled back with it. A non-transactional read through the context is rejected with
+  `InvalidOperationException` instead (read through the transaction), and an open plain reader
+  holds the gate until it is disposed, so a transaction waits for it — a hazard unique to sharing one physical connection, which no
   other `DbMode` needs to guard against, so no other mode pays for this gate. A call made *from
   inside* the transaction itself is a no-op against this gate (the transaction already holds it —
   re-acquiring the same non-reentrant semaphore would deadlock).
@@ -3733,10 +3735,10 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 
 - Semantics: Identical to Standard, plus a governor profile: writable connections capped at 1 concurrent writer, read-only connections allow 0 writers; writer-starvation-prevention turnstile enabled.
 - Reads:
-  - Non-transactional → ephemeral read-only connections that use the read-only preamble.
+  - Non-transactional → ephemeral read-only connections that use the read-only session settings.
   - Read-only transactions → ephemeral read-only connections (reader concurrency pauses while writers wait).
   - Write transactions → serialize through the write permit while retaining the connection for the transaction's duration.
-- Used for: the file-based embedded engines (SQLite, DuckDB, Microsoft Access, pengdows.flatfile) and SQLite shared caches, where writers must serialize without pinning a connection. `SingleWriter` is a general write-admission policy, not a SQLite workaround: any engine whose safe topology needs one writer at a time gets it.
+- Used for: the file-based embedded engines (SQLite, DuckDB, Microsoft Access, pengdows.flatfile) and SQLite shared in-memory caches, where writers must serialize without pinning a working connection. SQLite shared in-memory caches additionally retain a read-only sentinel so the database is not unloaded when ephemeral work connections close. `SingleWriter` is a general write-admission policy, not a SQLite workaround: any engine whose safe topology needs one writer at a time gets it.
 - **The turnstile is held for the writer's entire transaction, not just the moment of acquiring the write permit** — a deliberate tradeoff, not an oversight. It exists specifically to prevent writer starvation: without it, a steady stream of readers could keep a waiting writer permanently queued behind them under `PoolGovernor`'s otherwise reader/writer-symmetric admission. Holding it for the whole transaction span means new readers gate behind an in-flight writer (readers already queued when the writer grabbed the turnstile are not displaced — see `PoolGovernor`'s own remarks), trading a bounded amount of reader latency for a hard guarantee that writers make progress.
 - **Production default for the file-based embedded engines (SQLite, DuckDB, Access, pengdows.flatfile)** (equal footing with Standard's production status for client-server databases). For SQLite, the turnstile-governed write serialization is purpose-built to eliminate the file-locking errors (`SQLITE_BUSY`) the engine is otherwise prone to under concurrent writers. DuckDB's own engine handles concurrent *disjoint-row* writes, but concurrent writers targeting the *same* row/resource can fail with a write-write conflict (surfaced as `SerializationConflictException`) — so SingleWriter there is both a deterministic policy choice for the disjoint case AND a fix for the same-resource case, not purely a policy preference (see `docs/positioning/product-thesis.md`). Reads still execute fully concurrently on ephemeral connections for both — a level of write-contention governance most comparable libraries don't provide for these engines at all.
 - **The write permit is not the connection.** `PoolGovernor`'s capacity-1 semaphore for writers is enforced via `PoolSlot`/`PoolSlotToken` (`pengdows.crud/infrastructure/PoolSlot.cs`), which holds no reference to any `DbConnection`/`DbCommand` at all — releasing a slot back to the governor is pure counter bookkeeping, independent of whether the connection used during that slot's lifetime succeeded or died. A pinned-writer design (GRDB's `DatabasePool`, Peewee's `SqliteQueueDatabase`, or a size-1 writer pool such as Rust's `sqlx-sqlite-conn-mgr`) makes the one long-lived writer connection itself part of the concurrency mechanism, so a poisoned or severed connection requires rebuilding the writer object to recover. (Writer queues such as `EntityFrameworkCore.Sqlite.Concurrency` serialize through one background writer in the same way.) "Ephemeral" here means the lease: the provider's own pool may keep the physical connection open between writes, and the per-write check-out costs more than a pinned writer on tiny writes (see `benchmarks/CrudBenchmarks/README.md`). Here, a bad connection is simply discarded and the next admitted write acquires a fresh ephemeral one — concurrency policy is decoupled from connection identity. See `docs/positioning/product-thesis.md`'s expanded treatment of this distinction.
@@ -3748,7 +3750,7 @@ The mode retains one sentinel connection per enabled pool: the connection opened
   - Full servers (PostgreSQL family, MySQL family, Oracle, SQL Server, Snowflake, Spanner, Informix, SAP HANA, InterBase, Sybase ASE, non-LUW Db2) → Standard; Firebird and Db2 LUW → PreventDatabaseUnload
   - A `Best` that would select PreventDatabaseUnload falls back to Standard when the configured maximum pool size is below 2 (the sentinel needs a second pooled connection)
   - LocalDb → PreventDatabaseUnload
-  - SQLite/DuckDB `:memory:` → SingleConnection
+  - isolated SQLite/DuckDB `:memory:` → SingleConnection
   - SQLite/DuckDB file-based (and shared in-memory), Access, pengdows.flatfile → SingleWriter
   - Unknown product → Standard
 
@@ -3756,7 +3758,7 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 
 ### Always forced (cannot override):
 
-- SQLite/DuckDB `:memory:` → SingleConnection
+- isolated SQLite/DuckDB `:memory:` → SingleConnection
 
 ### Allowed for SQLite/DuckDB file-based:
 
@@ -3841,14 +3843,14 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 ## 4. Session Settings & Read-Only
 
-- SessionSettingsPreamble is applied once per *logical* connection open (each `TrackedConnection`
+- The session settings (`GetBaseSessionSettings()`) are applied once per *logical* connection open (each `TrackedConnection`
   wrapper's first `Open`/`OpenAsync`), not once per *physical* connection. Whether that means
   "once ever" or "every checkout" depends entirely on the mode's wrapper lifetime:
   - **SingleConnection**: the one pinned `TrackedConnection` wrapper lives for the whole context
-    lifetime, so the preamble genuinely executes exactly once. (The `PreventDatabaseUnload`
+    lifetime, so the session settings genuinely run exactly once. (The `PreventDatabaseUnload`
     sentinel is also long-lived, but it never runs work, so no session settings are applied to it.)
   - **Ephemeral modes** (Standard, SingleWriter): a fresh `TrackedConnection` wrapper is created
-    per operation/checkout, so the preamble **is reapplied on every single checkout** — even when
+    per operation/checkout, so the session settings **are reapplied on every single checkout** — even when
     the underlying ADO.NET provider pool hands back an already-open physical connection. This is
     deliberate, not a missed optimization: a connection previously used for an unrelated operation
     could have drifted session state (e.g. a stale isolation override, or — for SQL Server —
@@ -3900,7 +3902,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 ## 7. Heuristics & Tests
 
 - Explicit Standard on embedded (never throw):
-  - SQLite/DuckDB `:memory:` → SingleConnection
+  - isolated SQLite/DuckDB `:memory:` → SingleConnection
   - SQLite file-based → SingleWriter
   - DuckDB/Access file-based → honored, with a risk warning
   - pengdows.flatfile → SingleWriter
@@ -3910,9 +3912,9 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 ## 8. Metrics & Limits
 
-- Connection counting is handled by `TrackedConnection`.
-- Counts increment on physical open, decrement on close.
-- Includes pinned and ephemeral connections, including transaction connections.
+- Connection counts are pengdows **leases**, not provider events: `ConnectionsOpened`/`ConnectionsClosed` count leases acquired and released by the context's `PoolGovernor`s, and `NumberOfOpenConnections` is the leases handed out and not yet disposed.
+- Those leases cover pinned and ephemeral connections, transaction connections, and each PreventDatabaseUnload sentinel or SingleConnection's shared connection.
+- `TrackedConnection` measures open and close durations; it does not count connections. See the Metrics section of `docs/release-notes-2.0.6.md`.
 - Limits:
   - `MaxParameterLimit`, `MaxOutputParameters`, `ParameterNameMaxLength` come from `DataSourceInformation`.
   - Mode-independent.
@@ -3936,7 +3938,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 **Best practices:**
 - `Standard`, `PreventDatabaseUnload`, and `SingleWriter` are production-supported modes for the deployment shapes where their lifecycle and concurrency policies fit. This includes durable Firebird deployments, subject to the provider's connection and concurrency constraints.
-- `SingleConnection` against SQLite/DuckDB `:memory:` is **not a persistence or recovery mode** — it is intended there for tests and ephemeral scratch data. The limitation is structural: the database exists only inside that connection and cannot survive a process restart or dropped connection. Durable Firebird gets `PreventDatabaseUnload` from `Best`; `SingleConnection` remains a separate, explicit specialized deployment shape.
+- `SingleConnection` against isolated SQLite/DuckDB `:memory:` is **not a persistence or recovery mode** — it is intended there for tests and ephemeral scratch data. The limitation is structural: the database exists only inside that connection and cannot survive a process restart or dropped connection. Durable Firebird gets `PreventDatabaseUnload` from `Best`; `SingleConnection` remains a separate, explicit specialized deployment shape.
 - Each `DatabaseContext` can be safely used as a singleton (via DI or subclassing).
 
 **Timeouts:**
@@ -3944,7 +3946,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - Because ephemeral modes reconnect for every call, long timeouts are unnecessary.
 
 **Observability:**
-- `TrackedConnection` tracks current and max open connections with thread-safe `Interlocked` counters — useful for tuning pool sizes and spotting load issues.
+- The context tracks current and peak open leases (`NumberOfOpenConnections`, `PeakOpenConnections`) with thread-safe `Interlocked` counters — useful for tuning pool sizes and spotting load issues.
 - Monitor `ModeContentionStats` through logs/metrics to see which operations are queuing on the mode lock.
 
 ---
@@ -8179,14 +8181,13 @@ the second (and, on `ON DUPLICATE KEY` dialects, checks `UpsertFragmentHasUnreli
 operation* you're generating, not a single flag as a stand-in for "which dialect family is this."
 
 ```csharp
-// Wrong: assumes SupportsMerge and SupportsInsertOnConflict are mutually exclusive.
-var sql = dialect.SupportsMerge ? BuildMergeUpsert() : BuildOnConflictUpsert();
+// Callers never choose a statement shape. The gateway chooses it from every flag that shape depends on,
+// and the only public entry points are BuildUpsert and BuildBatchUpsert:
+var single = gateway.BuildUpsert(entity, ctx);        // MERGE, ON CONFLICT or ON DUPLICATE KEY
+var batch  = gateway.BuildBatchUpsert(entities, ctx); // ON CONFLICT, ON DUPLICATE KEY, or one BuildUpsert per entity
 
-// Right: each operation checks the flag it actually depends on.
-var singleRowSql = dialect.SupportsMerge ? BuildMergeUpsert() : BuildOnConflictOrOnDuplicateUpsert();
-var batchSql = dialect.SupportsInsertOnConflict || dialect.SupportsOnDuplicateKey
-    ? BuildBatchOnConflictUpsert()
-    : BuildPerEntityUpsertLoop(); // e.g. SQL Server/Oracle/Firebird — see docs/batch-operations.md
+// Internally the single-row choice is made once, in BaseTableGateway.SelectSingleRowUpsertShape
+// (MERGE, then ON CONFLICT, then ON DUPLICATE KEY); each gateway's private builder for that shape does the SQL.
 ```
 
 ## Stability contract
@@ -10673,7 +10674,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** — SQLite/DuckDB `:memory:` = SingleConnection, file SQLite/DuckDB/Access/pengdows.flatfile = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload; unsafe explicit modes are coerced where required (e.g., SQLite and pengdows.flatfile `Standard` → `SingleWriter`; DuckDB and Access honor an explicit `Standard` with a risk warning)
+8. **DbMode.Best auto-selects** — isolated SQLite/DuckDB `:memory:` = SingleConnection, file SQLite/DuckDB/Access/pengdows.flatfile = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload; unsafe explicit modes are coerced where required (e.g., SQLite and pengdows.flatfile `Standard` → `SingleWriter`; DuckDB and Access honor an explicit `Standard` with a risk warning)
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL. Get a mapped column's name with `ColumnName(nameof(Order.CustomerId))` on a gateway, or `ctx.ColumnName<Customer>(nameof(Customer.Name))` for any entity, instead of hard-coding it
 10. **NEVER use TransactionScope** — incompatible with connection management, use `context.BeginTransaction()`
 11. **Execution methods return ValueTask** — not Task, for reduced allocations

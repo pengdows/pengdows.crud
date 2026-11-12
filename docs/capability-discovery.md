@@ -144,14 +144,13 @@ the second (and, on `ON DUPLICATE KEY` dialects, checks `UpsertFragmentHasUnreli
 operation* you're generating, not a single flag as a stand-in for "which dialect family is this."
 
 ```csharp
-// Wrong: assumes SupportsMerge and SupportsInsertOnConflict are mutually exclusive.
-var sql = dialect.SupportsMerge ? BuildMergeUpsert() : BuildOnConflictUpsert();
+// Callers never choose a statement shape. The gateway chooses it from every flag that shape depends on,
+// and the only public entry points are BuildUpsert and BuildBatchUpsert:
+var single = gateway.BuildUpsert(entity, ctx);        // MERGE, ON CONFLICT or ON DUPLICATE KEY
+var batch  = gateway.BuildBatchUpsert(entities, ctx); // ON CONFLICT, ON DUPLICATE KEY, or one BuildUpsert per entity
 
-// Right: each operation checks the flag it actually depends on.
-var singleRowSql = dialect.SupportsMerge ? BuildMergeUpsert() : BuildOnConflictOrOnDuplicateUpsert();
-var batchSql = dialect.SupportsInsertOnConflict || dialect.SupportsOnDuplicateKey
-    ? BuildBatchOnConflictUpsert()
-    : BuildPerEntityUpsertLoop(); // e.g. SQL Server/Oracle/Firebird — see docs/batch-operations.md
+// Internally the single-row choice is made once, in BaseTableGateway.SelectSingleRowUpsertShape
+// (MERGE, then ON CONFLICT, then ON DUPLICATE KEY); each gateway's private builder for that shape does the SQL.
 ```
 
 ## Stability contract

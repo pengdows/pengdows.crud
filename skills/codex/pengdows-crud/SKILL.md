@@ -818,7 +818,7 @@ Tests are required. Coverage minimums are enforced in CI.
 5. **TenantContextRegistry is SINGLETON** - manages per-tenant contexts
 6. **Transactions are operation-scoped** - create inside methods, never store as fields
 7. **ITrackedReader is a lease** - pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** - SQLite/DuckDB `:memory:` = SingleConnection; file-based SQLite/DuckDB/Access/FlatFile = SingleWriter; SQL Server LocalDB, Firebird and Db2 LUW = PreventDatabaseUnload; all others = Standard (explicit `Standard` always honored)
+8. **DbMode.Best auto-selects** - isolated SQLite/DuckDB `:memory:` = SingleConnection; file-based SQLite/DuckDB/Access/FlatFile = SingleWriter; SQL Server LocalDB, Firebird and Db2 LUW = PreventDatabaseUnload; all others = Standard (explicit `Standard` always honored)
 9. **Always use WrapObjectName()** - for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** - incompatible with connection management, use Context.BeginTransaction()
 11. **Execution methods return ValueTask** - not Task, for reduced allocations
