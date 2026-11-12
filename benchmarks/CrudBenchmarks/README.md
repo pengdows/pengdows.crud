@@ -359,7 +359,7 @@ Benchmark results are saved to `BenchmarkDotNet.Artifacts/results/` with multipl
 - `.md` - Markdown tables
 - `.html` - HTML reports
 - `.csv` - CSV data for analysis
-- `-cross-framework-ratios.md` - Derived cross-framework ratios (`P÷D`, `EF÷P`) computed from Mean values
+- `-cross-framework-ratios.md` - Derived cross-framework ratios (`P÷D`, and per EF tier: `EF raw SQL ÷P` for the equal-footing raw-SQL arm, `EF LINQ ÷P` for normal EF, `EF compiled ÷P` for `EF.CompileAsyncQuery`) computed from Mean values
 
 Notes on ratios:
 - BenchmarkDotNet `Ratio` is baseline-relative within each benchmark group.
