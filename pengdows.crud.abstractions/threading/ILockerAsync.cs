@@ -14,7 +14,7 @@ namespace pengdows.crud.threading;
 /// to avoid potential deadlocks in contexts with a SynchronizationContext.
 /// </para>
 /// </remarks>
-[Obsolete("ILockerAsync is an internal connection-locking mechanism retained for 2.x compatibility.", false)]
+[Obsolete("ILockerAsync is an internal connection-locking mechanism, retained for 2.x compatibility and removed in 3.0.", false)]
 public interface ILockerAsync : IDisposable, IAsyncDisposable
 {
     /// <summary>

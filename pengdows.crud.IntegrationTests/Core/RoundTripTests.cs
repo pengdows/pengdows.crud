@@ -1,3 +1,4 @@
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
@@ -61,7 +62,7 @@ public class RoundTripTests : DatabaseTestBase
             // Capability: a dialect whose storage or provider drops trailing blanks
             // (PreservesTrailingWhitespace = false: Sybase ASE, Informix) must still keep the leading ones.
             Assert.Equal(
-                context.Dialect.PreservesTrailingWhitespace ? original.TextValue : original.TextValue.TrimEnd(),
+                context.Dialect.PreservesTrailingWhitespace() ? original.TextValue : original.TextValue.TrimEnd(),
                 retrieved.TextValue);
             Assert.Equal(original.TextUnicode, retrieved.TextUnicode);
             Assert.Equal(original.IntValue, retrieved.IntValue);
@@ -138,7 +139,7 @@ public class RoundTripTests : DatabaseTestBase
                 Assert.True(string.IsNullOrEmpty(retrieved.TextUnicode));
                 Assert.Null(retrieved.TextNullable);
             }
-            else if (!context.Dialect.PreservesTrailingWhitespace)
+            else if (!context.Dialect.PreservesTrailingWhitespace())
             {
                 // Capability: Sybase ASE stores '' in a varchar as a single blank, which differs from
                 // '' only in trailing whitespace (PreservesTrailingWhitespace = false).

@@ -80,22 +80,13 @@ public partial class PrimaryKeyTableGateway<TEntity>
             }
         }
 
-        if (ctx.DataSourceInfo.SupportsMerge && !GetDialect(ctx).UpsertPrefersOnConflict())
+        return SelectSingleRowUpsertShape(ctx) switch
         {
-            return BuildPkUpsertMerge(entity, ctx);
-        }
-
-        if (ctx.DataSourceInfo.SupportsInsertOnConflict)
-        {
-            return BuildPkUpsertOnConflict(entity, ctx);
-        }
-
-        if (ctx.DataSourceInfo.SupportsOnDuplicateKey)
-        {
-            return BuildPkUpsertOnDuplicate(entity, ctx);
-        }
-
-        throw new NotSupportedException($"Upsert not supported for {ctx.Product}");
+            SingleRowUpsertShape.Merge => BuildPkUpsertMerge(entity, ctx),
+            SingleRowUpsertShape.OnConflict => BuildPkUpsertOnConflict(entity, ctx),
+            SingleRowUpsertShape.OnDuplicate => BuildPkUpsertOnDuplicate(entity, ctx),
+            _ => throw new NotSupportedException($"Upsert not supported for {ctx.Product}"),
+        };
     }
 
     /// <inheritdoc/>
@@ -391,7 +382,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
             sc.Query.Append(")");
 
-            if (dialect.RequiresMergeStatementTerminator)
+            if (dialect.RequiresMergeStatementTerminator())
             {
                 sc.Query.Append(';');
             }

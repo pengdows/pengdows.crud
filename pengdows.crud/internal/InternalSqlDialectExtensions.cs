@@ -381,6 +381,27 @@ internal static class InternalSqlDialectExtensions
     internal static int? MaxInListExpressions(this ISqlDialect dialect) =>
         dialect is SqlDialect sqlDialect ? sqlDialect.MaxInListExpressions : null;
 
+    // Dialect plumbing lives on IInternalSqlDialect, not on the public ISqlDialect. These are methods because C# has
+    // no extension properties. A dialect that is not an internal one (a consumer's own ISqlDialect, which 2.0.5
+    // implementers still are) gets the same defaults the interface used to supply, so nothing changes for them.
+    internal static bool PreservesTrailingWhitespace(this ISqlDialect dialect) =>
+        dialect is IInternalSqlDialect internalDialect ? internalDialect.PreservesTrailingWhitespace : true;
+
+    internal static bool RequiresMergeStatementTerminator(this ISqlDialect dialect) =>
+        dialect is IInternalSqlDialect internalDialect ? internalDialect.RequiresMergeStatementTerminator : true;
+
+    internal static string CurrentUtcTimestampExpression(this ISqlDialect dialect) =>
+        dialect is IInternalSqlDialect internalDialect ? internalDialect.CurrentUtcTimestampExpression : "CURRENT_TIMESTAMP";
+
+    internal static string SelectWithoutTableSuffix(this ISqlDialect dialect) =>
+        dialect is IInternalSqlDialect internalDialect ? internalDialect.SelectWithoutTableSuffix : string.Empty;
+
+    internal static string? SkipLockedClause(this ISqlDialect dialect) =>
+        dialect is IInternalSqlDialect internalDialect ? internalDialect.SkipLockedClause : null;
+
+    internal static string? SkipLockedTableHint(this ISqlDialect dialect) =>
+        dialect is IInternalSqlDialect internalDialect ? internalDialect.SkipLockedTableHint : null;
+
     private static IInternalSqlDialect GetInternal(ISqlDialect dialect)
     {
         if (dialect is not IInternalSqlDialect internalDialect)

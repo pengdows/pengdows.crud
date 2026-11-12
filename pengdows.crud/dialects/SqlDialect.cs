@@ -1321,7 +1321,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <summary>
     /// The highest SQL standard level this database/version supports
     /// </summary>
-    [Obsolete("MaxSupportedStandard is a coarse heuristic; query the specific Supports* capability instead.", false)]
+    [Obsolete("MaxSupportedStandard is a coarse heuristic, removed in 3.0; query the specific Supports* capability instead.", false)]
     public virtual SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? ProductInfo.StandardCompliance : SqlStandardLevel.Sql92;
 
@@ -2644,8 +2644,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
         // Then validate using the pre-resolved type to avoid boxing T into object?.
         var runtimeType = valueIsNull ? null : ResolveClrType(value);
 
-        // An application type with a registered converter is validated by its converted value, not by its CLR type.
-        if (!valueIsNull && !(runtimeType is not null && ProviderValueConverters.IsRegistered(runtimeType)))
+        if (!valueIsNull)
         {
             // Validate CLR type compatibility with DbType before setting the value.
             // Catches mismatches early with clear messages instead of deferring to

@@ -26,6 +26,7 @@ using Microsoft.Extensions.Logging;
 
 namespace pengdows.crud.configuration;
 
+[Obsolete("DbProviderLoader is constructed only by AddDbProviderLoading; it becomes internal and is removed from the public surface in 3.0.", false)]
 public class DbProviderLoader : IDbProviderLoader
 {
     private const string DatabaseProvidersSection = "DatabaseProviders";
@@ -41,6 +42,7 @@ public class DbProviderLoader : IDbProviderLoader
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    [Obsolete("Called only by AddDbProviderLoading; removed from the public surface in 3.0 with DbProviderLoader.", false)]
     public void LoadAndRegisterProviders(IServiceCollection services)
     {
         var providers = new Dictionary<string, DatabaseProviderConfig>();

@@ -251,7 +251,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     public ReadWriteMode ReadWriteMode
     {
         get => _readWriteMode;
-        [Obsolete("ReadWriteMode is fixed at construction; set DatabaseContextConfiguration.ReadWriteMode instead. Assigning it after construction has no effect.", false)]
+        [Obsolete("ReadWriteMode is fixed at construction; set DatabaseContextConfiguration.ReadWriteMode instead. Assigning it after construction has no effect; removed in 3.0.", false)]
         [EditorBrowsable(EditorBrowsableState.Never)]
         set
         {
@@ -419,7 +419,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     public ProcWrappingStyle ProcWrappingStyle
     {
         get => _procWrappingStyle;
-        [Obsolete("ProcWrappingStyle is detected from the database at construction. Assigning it after construction has no effect.", false)]
+        [Obsolete("ProcWrappingStyle is detected from the database at construction. Assigning it after construction has no effect; removed in 3.0.", false)]
         [EditorBrowsable(EditorBrowsableState.Never)]
         set
         {

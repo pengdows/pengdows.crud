@@ -32,6 +32,7 @@ public static class DbProviderLoaderServiceCollectionExtensions
     /// never available here; defaults to <see cref="NullLogger{T}.Instance"/> when omitted.
     /// </param>
     /// <returns><paramref name="services"/>, for chaining.</returns>
+#pragma warning disable CS0618 // DbProviderLoader is deprecated and internal in 3.0; this method is its only caller.
     public static IServiceCollection AddDbProviderLoading(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -52,4 +53,5 @@ public static class DbProviderLoaderServiceCollectionExtensions
 
         return services;
     }
+#pragma warning restore CS0618
 }

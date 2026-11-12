@@ -1,5 +1,6 @@
 using System.Data;
 using pengdows.crud.attributes;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
@@ -118,7 +119,7 @@ public class TypeHydrationTests : DatabaseTestBase
             var retrieved = await gateway.RetrieveOneAsync(row.Id, context);
 
             Assert.NotNull(retrieved);
-            AssertZeroRow(retrieved!, provider, context.Dialect.PreservesTrailingWhitespace);
+            AssertZeroRow(retrieved!, provider, context.Dialect.PreservesTrailingWhitespace());
         });
     }
 
@@ -138,7 +139,7 @@ public class TypeHydrationTests : DatabaseTestBase
             var retrieved = await gateway.RetrieveOneAsync(row.Id, context);
 
             Assert.NotNull(retrieved);
-            AssertBoundaryRow(retrieved!, provider, context.Dialect.PreservesTrailingWhitespace);
+            AssertBoundaryRow(retrieved!, provider, context.Dialect.PreservesTrailingWhitespace());
         });
     }
 

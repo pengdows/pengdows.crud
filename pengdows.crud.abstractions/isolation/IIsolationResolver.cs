@@ -18,6 +18,7 @@ public interface IIsolationResolver
     /// Maps an <see cref="IsolationProfile"/> to a concrete <see cref="IsolationLevel"/> and
     /// surfaces whether the mapping had to be degraded for the current database capabilities.
     /// </summary>
+    [Obsolete("Undocumented and not supported application API; removed in 3.0.", false)]
     IsolationResolution ResolveWithDetail(IsolationProfile profile);
 
     /// <summary>
@@ -28,5 +29,6 @@ public interface IIsolationResolver
     /// <summary>
     /// Returns the set of isolation levels supported by this resolver.
     /// </summary>
+    [Obsolete("Undocumented and not supported application API; removed in 3.0.", false)]
     IReadOnlySet<IsolationLevel> GetSupportedLevels();
 }

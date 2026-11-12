@@ -88,7 +88,7 @@ public enum DbMode
     /// <summary>
     /// Compatibility alias for <see cref="PreventDatabaseUnload"/>.
     /// </summary>
-    [System.Obsolete("Use PreventDatabaseUnload.")]
+    [System.Obsolete("Use PreventDatabaseUnload; removed in 3.0.")]
     KeepAlive = PreventDatabaseUnload,
 
     /// <summary>

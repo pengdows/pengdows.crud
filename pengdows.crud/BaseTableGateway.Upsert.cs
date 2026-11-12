@@ -17,10 +17,53 @@ using pengdows.crud.@internal;
 namespace pengdows.crud;
 
 /// <summary>
+/// The single-row upsert statement shape a database can run. Internal: callers use BuildUpsert.
+/// </summary>
+internal enum SingleRowUpsertShape
+{
+    /// <summary>The database has no upsert statement.</summary>
+    None,
+
+    /// <summary>MERGE ... WHEN MATCHED / NOT MATCHED.</summary>
+    Merge,
+
+    /// <summary>INSERT ... ON CONFLICT ... DO UPDATE.</summary>
+    OnConflict,
+
+    /// <summary>INSERT ... ON DUPLICATE KEY UPDATE.</summary>
+    OnDuplicate,
+}
+
+/// <summary>
 /// BaseTableGateway partial: insert/upsert SQL shared by both gateways.
 /// </summary>
 public abstract partial class BaseTableGateway<TEntity>
 {
+    /// <summary>
+    /// The one place that chooses the single-row upsert shape: MERGE where the dialect supports it and does not prefer
+    /// ON CONFLICT, else ON CONFLICT, else ON DUPLICATE KEY. Each gateway's BuildUpsert branches on this result and calls
+    /// its own private builder for the shape, so the choice is never repeated.
+    /// </summary>
+    private protected static SingleRowUpsertShape SelectSingleRowUpsertShape(IDatabaseContext ctx)
+    {
+        if (ctx.DataSourceInfo.SupportsMerge && !GetDialect(ctx).UpsertPrefersOnConflict())
+        {
+            return SingleRowUpsertShape.Merge;
+        }
+
+        if (ctx.DataSourceInfo.SupportsInsertOnConflict)
+        {
+            return SingleRowUpsertShape.OnConflict;
+        }
+
+        if (ctx.DataSourceInfo.SupportsOnDuplicateKey)
+        {
+            return SingleRowUpsertShape.OnDuplicate;
+        }
+
+        return SingleRowUpsertShape.None;
+    }
+
     /// <summary>
     /// Refuses an upsert whose conflict key has a NULL component. A NULL never matches in the key, whichever form the
     /// database uses (MERGE's ON t.k = s.k, ON CONFLICT, ON DUPLICATE KEY), so the row would be inserted again: a silent

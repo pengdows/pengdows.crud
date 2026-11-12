@@ -1102,7 +1102,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     }
 
     // Overload without defaults to avoid ambiguity with the 3-arg version
-    [Obsolete("Use an ExecuteScalarAsync or ExecuteNonQueryAsync overload with CommandType.StoredProcedure instead.", false)]
+    [Obsolete("Use an ExecuteScalarAsync or ExecuteNonQueryAsync overload with CommandType.StoredProcedure instead; removed in 3.0.", false)]
     public string WrapForStoredProc(ExecutionType executionType, bool includeParameters)
     {
         return WrapForStoredProc(executionType, includeParameters, false);

@@ -21,13 +21,7 @@ pengdows.crud.configuration.IDatabaseContextConfiguration.ResourceConnectionHead
 pengdows.crud.configuration.IDatabaseContextConfiguration.ResourceConnectionHeadroom.set -> void
 pengdows.crud.configuration.IDatabaseContextConfiguration.SessionInitializationFailureMode.get -> pengdows.crud.enums.SessionInitializationFailureMode?
 pengdows.crud.configuration.IDatabaseContextConfiguration.SessionInitializationFailureMode.set -> void
-pengdows.crud.dialects.ISqlDialect.PreservesTrailingWhitespace.get -> bool
-pengdows.crud.dialects.ISqlDialect.RequiresMergeStatementTerminator.get -> bool
 pengdows.crud.dialects.ISqlDialect.SavepointCapabilities.get -> pengdows.crud.enums.SavepointCapabilities
-pengdows.crud.dialects.ISqlDialect.CurrentUtcTimestampExpression.get -> string!
-pengdows.crud.dialects.ISqlDialect.SelectWithoutTableSuffix.get -> string!
-pengdows.crud.dialects.ISqlDialect.SkipLockedClause.get -> string?
-pengdows.crud.dialects.ISqlDialect.SkipLockedTableHint.get -> string?
 pengdows.crud.enums.AuditCreationPolicy
 pengdows.crud.enums.AuditCreationPolicy.Authoritative = 1 -> pengdows.crud.enums.AuditCreationPolicy
 pengdows.crud.enums.AuditCreationPolicy.PreserveExplicitValues = 0 -> pengdows.crud.enums.AuditCreationPolicy
@@ -100,6 +94,3 @@ pengdows.crud.configuration.IDatabaseContextConfiguration.SessionSettingsMode.se
 pengdows.crud.enums.SessionSettingsMode
 pengdows.crud.enums.SessionSettingsMode.Normal = 0 -> pengdows.crud.enums.SessionSettingsMode
 pengdows.crud.enums.SessionSettingsMode.Paranoid = 1 -> pengdows.crud.enums.SessionSettingsMode
-pengdows.crud.IProviderValueConverter<T>
-pengdows.crud.IProviderValueConverter<T>.FromProvider(object! value, pengdows.crud.enums.SupportedDatabase provider) -> T
-pengdows.crud.IProviderValueConverter<T>.ToProvider(T value, pengdows.crud.enums.SupportedDatabase provider) -> object?

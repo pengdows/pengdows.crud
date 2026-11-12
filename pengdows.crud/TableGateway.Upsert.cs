@@ -110,22 +110,13 @@ public partial class TableGateway<TEntity, TRowID>
             throw new NotSupportedException($"Upsert not supported for {ctx.Product}");
         }
 
-        if (ctx.DataSourceInfo.SupportsMerge && !GetDialect(ctx).UpsertPrefersOnConflict())
+        return SelectSingleRowUpsertShape(ctx) switch
         {
-            return BuildUpsertMerge(entity, ctx);
-        }
-
-        if (ctx.DataSourceInfo.SupportsInsertOnConflict)
-        {
-            return BuildUpsertOnConflict(entity, ctx);
-        }
-
-        if (ctx.DataSourceInfo.SupportsOnDuplicateKey)
-        {
-            return BuildUpsertOnDuplicate(entity, ctx);
-        }
-
-        throw new NotSupportedException($"Upsert not supported for {ctx.Product}");
+            SingleRowUpsertShape.Merge => BuildUpsertMerge(entity, ctx),
+            SingleRowUpsertShape.OnConflict => BuildUpsertOnConflict(entity, ctx),
+            SingleRowUpsertShape.OnDuplicate => BuildUpsertOnDuplicate(entity, ctx),
+            _ => throw new NotSupportedException($"Upsert not supported for {ctx.Product}"),
+        };
     }
 
     private IReadOnlyList<IColumnInfo> ResolveUpsertKey()
@@ -406,7 +397,7 @@ public partial class TableGateway<TEntity, TRowID>
 
             sc.Query.Append(")");
 
-            if (dialect.RequiresMergeStatementTerminator)
+            if (dialect.RequiresMergeStatementTerminator())
             {
                 sc.Query.Append(';');
             }

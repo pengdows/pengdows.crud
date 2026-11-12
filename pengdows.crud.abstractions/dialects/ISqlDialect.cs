@@ -38,6 +38,7 @@ public interface ISqlDialect
     /// </summary>
     /// <param name="ordinal">Position of the parameter in the command.</param>
     /// <returns>Properly formatted parameter marker.</returns>
+    [Obsolete("Undocumented plumbing; removed in 3.0. Use ISqlContainer.MakeParameterName for a bound parameter.", false)]
     string ParameterMarkerAt(int ordinal);
 
     /// <summary>
@@ -127,7 +128,7 @@ public interface ISqlDialect
     /// <summary>
     /// The highest SQL standard level this database/version supports.
     /// </summary>
-    [Obsolete("MaxSupportedStandard is a coarse heuristic; query the specific Supports* capability instead.", false)]
+    [Obsolete("MaxSupportedStandard is a coarse heuristic, removed in 3.0; query the specific Supports* capability instead.", false)]
     SqlStandardLevel MaxSupportedStandard { get; }
 
     /// <summary>
@@ -372,17 +373,6 @@ public interface ISqlDialect
     /// PostgreSQL: false (requires `UPDATE SET col = value`, will error with alias prefix)
     /// </summary>
     bool MergeUpdateRequiresTargetAlias { get; }
-
-    /// <summary>
-    /// True when a MERGE statement in this dialect must end with a trailing semicolon. Only
-    /// meaningful when <see cref="SupportsMerge"/> is true. Defaults to true (the ANSI-standard
-    /// terminator every other MERGE-capable dialect expects); Oracle overrides this to false
-    /// because ODP.NET executes a single MERGE as one bare SQL statement (not inside a PL/SQL
-    /// block), and a trailing semicolon there is rejected as an invalid character. Sybase ASE
-    /// also overrides this to false — verified live, a trailing semicolon after MERGE is
-    /// rejected with "Incorrect syntax near ';'".
-    /// </summary>
-    bool RequiresMergeStatementTerminator => true;
 
     /// <summary>
     /// True when the dialect supports namespaces or schemas.
@@ -716,15 +706,6 @@ public interface ISqlDialect
     bool SupportsLimitOffset { get; }
 
     /// <summary>
-    /// True when a string value's trailing whitespace survives a write and read-back. False for
-    /// Sybase ASE, whose engine strips trailing blanks from VARCHAR values on storage, and for
-    /// Informix, where the server stores them but the Informix .NET provider trims them from every
-    /// VARCHAR/LVARCHAR value it returns with no option to stop (IBM APAR IC63704).
-    /// </summary>
-    // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
-    bool PreservesTrailingWhitespace => true;
-
-    /// <summary>
     /// Appends dialect-appropriate paging SQL to the supplied query builder.
     /// By default uses <c>OFFSET n ROWS FETCH NEXT m ROWS ONLY</c> when <see cref="SupportsOffsetFetch"/>
     /// is true, otherwise <c>LIMIT m OFFSET n</c>; some dialects override this with their own syntax.
@@ -872,33 +853,4 @@ public interface ISqlDialect
             providerErrorCode,
             sqlState);
     }
-
-    /// <summary>
-    /// A SQL expression evaluating to the server's current UTC date and time, for SQL written by hand
-    /// (e.g. <c>SYSUTCDATETIME()</c> on SQL Server, <c>UTC_TIMESTAMP(6)</c> on MySQL). Defaults to
-    /// <c>CURRENT_TIMESTAMP</c>, which is UTC only where the server's time zone is.
-    /// </summary>
-    string CurrentUtcTimestampExpression => "CURRENT_TIMESTAMP";
-
-    /// <summary>
-    /// What a <c>SELECT</c> with no table needs after its select list (<c>" FROM DUAL"</c> on Oracle,
-    /// <c>" FROM RDB$DATABASE"</c> on Firebird), with its leading space; empty where none is needed.
-    /// </summary>
-    string SelectWithoutTableSuffix => string.Empty;
-
-    /// <summary>
-    /// The table hint, placed right after the table name, that locks the rows a <c>SELECT</c> reads for
-    /// update and skips rows other sessions have locked (SQL Server:
-    /// <c>" WITH (UPDLOCK, READPAST, ROWLOCK)"</c>); null where the database uses
-    /// <see cref="SkipLockedClause"/> instead or pengdows.crud has not verified it.
-    /// </summary>
-    string? SkipLockedTableHint => null;
-
-    /// <summary>
-    /// The clause, placed after <c>ORDER BY</c> and before paging, that locks the rows a <c>SELECT</c>
-    /// reads for update and skips rows other sessions have locked (PostgreSQL:
-    /// <c>" FOR UPDATE SKIP LOCKED"</c>); null where the database uses <see cref="SkipLockedTableHint"/>
-    /// instead or pengdows.crud has not verified it.
-    /// </summary>
-    string? SkipLockedClause => null;
 }

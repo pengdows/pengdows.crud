@@ -32,7 +32,7 @@ public sealed class PortableSqlFragmentTests
     [InlineData(SupportedDatabase.Firebird, "CAST(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AS TIMESTAMP)")]
     public void CurrentUtcTimestampExpression_IsTheDatabases(SupportedDatabase database, string expected)
     {
-        Assert.Equal(expected, Dialect(database).CurrentUtcTimestampExpression);
+        Assert.Equal(expected, Dialect(database).CurrentUtcTimestampExpression());
     }
 
     [Theory]
@@ -44,7 +44,7 @@ public sealed class PortableSqlFragmentTests
     [InlineData(SupportedDatabase.Sqlite, "")]
     public void SelectWithoutTableSuffix_IsTheDatabases(SupportedDatabase database, string expected)
     {
-        Assert.Equal(expected, Dialect(database).SelectWithoutTableSuffix);
+        Assert.Equal(expected, Dialect(database).SelectWithoutTableSuffix());
     }
 
     [Theory]
@@ -61,8 +61,8 @@ public sealed class PortableSqlFragmentTests
     {
         var dialect = Dialect(database);
 
-        Assert.Equal(tableHint, dialect.SkipLockedTableHint);
-        Assert.Equal(clause, dialect.SkipLockedClause);
+        Assert.Equal(tableHint, dialect.SkipLockedTableHint());
+        Assert.Equal(clause, dialect.SkipLockedClause());
     }
 
     // Added after 2.0.5: an ISqlDialect implemented against 2.0.5 keeps working with these defaults.
@@ -71,9 +71,9 @@ public sealed class PortableSqlFragmentTests
     {
         var dialect = new Mock<ISqlDialect> { CallBase = true }.Object;
 
-        Assert.Equal("CURRENT_TIMESTAMP", dialect.CurrentUtcTimestampExpression);
-        Assert.Equal(string.Empty, dialect.SelectWithoutTableSuffix);
-        Assert.Null(dialect.SkipLockedTableHint);
-        Assert.Null(dialect.SkipLockedClause);
+        Assert.Equal("CURRENT_TIMESTAMP", dialect.CurrentUtcTimestampExpression());
+        Assert.Equal(string.Empty, dialect.SelectWithoutTableSuffix());
+        Assert.Null(dialect.SkipLockedTableHint());
+        Assert.Null(dialect.SkipLockedClause());
     }
 }

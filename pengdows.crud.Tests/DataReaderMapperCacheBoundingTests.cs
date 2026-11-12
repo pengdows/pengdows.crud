@@ -6,6 +6,7 @@ using System.Data.Common;
 using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.fakeDb;
+using pengdows.crud.@internal;
 using Xunit;
 
 #endregion
@@ -19,54 +20,24 @@ namespace pengdows.crud.Tests;
 [Collection("TypeRegistry")]
 public class DataReaderMapperCacheBoundingTests
 {
+    // The mapper's plan cache is one static instance shared by every test in the run, so its count depends on what
+    // other tests have cached. The bound is a property of the cache itself, so it is tested on a private instance.
+    // Eviction runs after an insert, so the count is only guaranteed to stay within capacity when nothing else is
+    // inserting at the same time: a private single-threaded instance is the place to assert it exactly.
     [Fact]
-    public async Task PlanCache_EvictsOldEntries_WhenCapacityExceeded()
+    public void BoundedCache_EvictsLeastRecentlyUsed_WhenCapacityExceeded()
     {
-        // Get the plan cache via reflection to check its behavior
-        var planCacheField =
-            typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic);
-        Assert.NotNull(planCacheField);
+        var cache = new BoundedCache<int, int>(4);
 
-        var planCache = planCacheField!.GetValue(null);
-        Assert.NotNull(planCache);
-
-        // The cache should have a Clear method if it's a BoundedCache
-        var clearMethod = planCache!.GetType().GetMethod("Clear");
-        Assert.NotNull(
-            clearMethod); // This will fail if using ConcurrentDictionary (no Clear method with this signature pattern)
-
-        // Clear the cache to start fresh
-        clearMethod!.Invoke(planCache, null);
-
-        var initialCount = GetPlanCacheCount();
-        Assert.Equal(0, initialCount);
-
-        // Generate many different schema shapes to fill the cache
-        // Each unique column set creates a new plan entry
-        const int numSchemas = 150; // More than any reasonable cache limit
-        for (var i = 0; i < numSchemas; i++)
+        for (var i = 0; i < 10; i++)
         {
-            var columnName = $"Column{i}";
-            var reader = new fakeDbDataReader(new[]
-            {
-                new Dictionary<string, object>
-                {
-                    [columnName] = $"Value{i}"
-                }
-            });
-
-            await DataReaderMapper.LoadAsync<DynamicEntity>(reader, MapperOptions.Default);
+            cache.GetOrAdd(i, key => key);
+            Assert.True(cache.Count <= cache.Capacity);
         }
 
-        var finalCount = GetPlanCacheCount();
-
-        // The cache should be bounded - it should NOT have all 150 entries
-        // A reasonable bound would be something like 64-128 entries
-        Assert.True(finalCount < numSchemas,
-            $"Plan cache should be bounded but has {finalCount} entries after {numSchemas} unique schemas");
-
-        // It should have at least some entries (proving caching works)
-        Assert.True(finalCount > 0, "Plan cache should have some entries");
+        Assert.Equal(4, cache.Count);
+        Assert.False(cache.TryGet(0, out _), "the oldest entry should have been evicted");
+        Assert.True(cache.TryGet(9, out _), "the newest entry should be kept");
     }
 
     [Fact]

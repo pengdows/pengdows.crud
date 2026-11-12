@@ -75,6 +75,7 @@ public interface IDataSourceInformation
     /// <summary>
     /// Whether cmd.Prepare() is recommended for this product and should be used by default.
     /// </summary>
+    [Obsolete("Undocumented and not supported application API; removed in 3.0.", false)]
     bool DefaultPrepareStatements { get; }
 
     /// <summary>
@@ -136,12 +137,13 @@ public interface IDataSourceInformation
     /// This is NOT a measure of ISO SQL standard conformance.
     /// </para>
     /// </summary>
-    [Obsolete("StandardCompliance is a coarse heuristic; query the specific Supports* capability instead.", false)]
+    [Obsolete("StandardCompliance is a coarse heuristic, removed in 3.0; query the specific Supports* capability instead.", false)]
     SqlStandardLevel StandardCompliance { get; }
 
     /// <summary>
     /// Indicates whether the SQL-92 fallback dialect is in use.
     /// </summary>
+    [Obsolete("Undocumented and not supported application API; removed in 3.0.", false)]
     bool IsUsingFallbackDialect { get; }
 
     /// <summary>

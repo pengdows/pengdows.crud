@@ -5,7 +5,7 @@ namespace pengdows.crud.connection;
 /// <summary>
 /// Per-connection state for tracking prepare behavior and caching.
 /// </summary>
-[Obsolete("IConnectionLocalState is internal connection bookkeeping retained for 2.x compatibility.", false)]
+[Obsolete("IConnectionLocalState is internal connection bookkeeping, retained for 2.x compatibility and removed in 3.0.", false)]
 public interface IConnectionLocalState
 {
     /// <summary>

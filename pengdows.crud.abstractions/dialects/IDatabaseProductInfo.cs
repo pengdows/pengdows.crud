@@ -15,11 +15,13 @@ public interface IDatabaseProductInfo
     /// <summary>
     /// Friendly name of the database product.
     /// </summary>
+    [Obsolete("Undocumented and not supported application API; removed in 3.0. Use IDatabaseContext.Product.", false)]
     string ProductName { get; set; }
 
     /// <summary>
     /// Raw version string reported by the database.
     /// </summary>
+    [Obsolete("Undocumented and not supported application API; removed in 3.0.", false)]
     string ProductVersion { get; set; }
 
     /// <summary>
@@ -39,6 +41,6 @@ public interface IDatabaseProductInfo
     /// for estimating feature availability based on database version.
     /// </para>
     /// </summary>
-    [Obsolete("StandardCompliance is a coarse heuristic; query the specific Supports* capability instead.", false)]
+    [Obsolete("StandardCompliance is a coarse heuristic, removed in 3.0; query the specific Supports* capability instead.", false)]
     SqlStandardLevel StandardCompliance { get; set; }
 }

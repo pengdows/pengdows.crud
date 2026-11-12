@@ -21,7 +21,6 @@ public class SemVerCompatibilityDefaultMemberTests
     public static TheoryData<Type, string> MembersAddedAfter205 => new()
     {
         { typeof(ISqlDialect), "get_" + nameof(ISqlDialect.SavepointCapabilities) },
-        { typeof(ISqlDialect), "get_" + nameof(ISqlDialect.PreservesTrailingWhitespace) },
         { typeof(IDatabaseContextConfiguration), "get_" + nameof(IDatabaseContextConfiguration.SessionInitializationFailureMode) },
         { typeof(IDatabaseContextConfiguration), "set_" + nameof(IDatabaseContextConfiguration.SessionInitializationFailureMode) },
         { typeof(IDatabaseContextConfiguration), "get_" + nameof(IDatabaseContextConfiguration.MaxQueuedReads) },
@@ -31,10 +30,6 @@ public class SemVerCompatibilityDefaultMemberTests
         { typeof(ITableGateway<SemVerEntity, int>), "get_AuditCreationPolicy" },
         { typeof(IPrimaryKeyTableGateway<SemVerEntity>), "get_AuditCreationPolicy" },
         { typeof(ITableGateway<SemVerEntity, int>), "ColumnName" },
-        { typeof(pengdows.crud.dialects.ISqlDialect), "get_CurrentUtcTimestampExpression" },
-        { typeof(pengdows.crud.dialects.ISqlDialect), "get_SelectWithoutTableSuffix" },
-        { typeof(pengdows.crud.dialects.ISqlDialect), "get_SkipLockedTableHint" },
-        { typeof(pengdows.crud.dialects.ISqlDialect), "get_SkipLockedClause" },
         { typeof(IPrimaryKeyTableGateway<SemVerEntity>), "ColumnName" },
         { typeof(ITransactionContext), nameof(ITransactionContext.ReleaseSavepointAsync) },
         { typeof(IDataSourceInformation), "get_" + nameof(IDataSourceInformation.ParsedVersion) },
@@ -66,7 +61,7 @@ public class SemVerCompatibilityDefaultMemberTests
         Assert.False(dialect.Object.IsEmbeddedSingleWriterEngine());
         Assert.Equal(InMemoryKind.None, dialect.Object.DetectInMemoryKind("Data Source=:memory:"));
         Assert.True(dialect.Object.SupportsSemicolonStatementSeparator());
-        Assert.True(dialect.Object.PreservesTrailingWhitespace);
+        Assert.True(dialect.Object.PreservesTrailingWhitespace());
         Assert.Equal("RELEASE SAVEPOINT \"sp1\"", dialect.Object.GetReleaseSavepointSql("sp1"));
     }
 

@@ -122,5 +122,6 @@ internal interface ITrackedConnection : IDbConnection
     /// <summary>
     /// Per-connection state for prepare behavior tracking
     /// </summary>
+    [Obsolete("Per-connection prepare bookkeeping, not supported application API; removed in 3.0.", false)]
     IConnectionLocalState LocalState { get; }
 }

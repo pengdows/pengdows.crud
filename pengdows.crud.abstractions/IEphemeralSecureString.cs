@@ -3,7 +3,7 @@ namespace pengdows.crud;
 /// <summary>
 /// Provides access to a secure string that is revealed only for the duration of an operation.
 /// </summary>
-[Obsolete("IEphemeralSecureString is retained for 2.x compatibility and is not supported application API.", false)]
+[Obsolete("IEphemeralSecureString is retained for 2.x compatibility, is not supported application API, and is removed in 3.0.", false)]
 public interface IEphemeralSecureString : IDisposable
 {
     /// <summary>

@@ -12,7 +12,7 @@ namespace pengdows.crud.tenant;
 /// <summary>
 /// Marker interface for tenant configuration types.
 /// </summary>
-[Obsolete("ITenantConfiguration is an unused marker retained for 2.x compatibility and is not supported application API.", false)]
+[Obsolete("ITenantConfiguration is an unused marker, retained for 2.x compatibility, not supported application API, and removed in 3.0.", false)]
 public interface ITenantConfiguration
 {
 }
