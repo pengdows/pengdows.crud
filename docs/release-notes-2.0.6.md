@@ -9,6 +9,11 @@ changes a 2.0.5 user can notice.
 These changes are in the 2.0.6 branch and are not yet released. Each one changes what a caller
 observes, so each is listed here with its reason.
 
+- **Duplicate-connection warning ignores a disposed context.** A context logs the always-on duplicate-connection-string
+  warning only for an earlier context that is still live. A context disposed while a lease is still out no longer
+  triggers it, because it cannot use its connection string again. Enforcement (`EnforceUniqueConnectionString`) is
+  unchanged: the claim is still held until the lease returns.
+
 * **Boolean text.** A string or single character is read as a boolean only if `bool.TryParse` accepts it,
   or it is one of `0`, `0.0`, `f`, `n`, `no`, `NaN` or `-NaN` (any case), which read as false. Anything
   else fails the read with `InvalidCastException`. Previously `"1"`, `"t"`, `"yes"` and any other non-blank

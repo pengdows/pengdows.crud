@@ -276,6 +276,29 @@ public class EnforceUniqueConnectionStringTests
         Assert.DoesNotContain(loggerFactory.Entries, IsDuplicateConnectionStringWarning);
     }
 
+    // A disposed context can no longer use its connection string, so a new context on the same string must not be
+    // warned about, even when the first context's disposal was deferred because a lease is still out. The warning
+    // must not depend on when the drain finishes (the flake: the deferred unregistration raced the second context).
+    [Fact]
+    public void DuplicateConnectionString_FirstDisposedWithLeaseOut_NotEnforced_DoesNotLogWarning()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connectionString = $"Data Source=warn-test-5;EmulatedProduct={SupportedDatabase.Sqlite}";
+        var loggerFactory = new RecordingLoggerFactory();
+        var config = BuildConfig(connectionString, enforce: false);
+        config.PoolAcquireTimeout = TimeSpan.FromMilliseconds(50);
+
+        var first = new DatabaseContext(config, factory, loggerFactory);
+        var outstanding = first.GetConnection(ExecutionType.Write);
+        first.Dispose();
+
+        loggerFactory.Entries.Clear();
+        using var second = new DatabaseContext(BuildConfig(connectionString, enforce: false), factory, loggerFactory);
+
+        outstanding.Dispose();
+        Assert.DoesNotContain(loggerFactory.Entries, IsDuplicateConnectionStringWarning);
+    }
+
     [Fact]
     public void DuplicateConnectionString_AfterFirstDisposed_NotEnforced_DoesNotLogWarning()
     {

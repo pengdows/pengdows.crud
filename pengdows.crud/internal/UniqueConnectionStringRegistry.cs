@@ -139,8 +139,10 @@ internal static class UniqueConnectionStringRegistry
     {
         foreach (var key in keys)
         {
+            // A disposed owner can no longer use the connection string, so it is not warned about even when its
+            // registration is still present (its removal can be deferred while a lease is out).
             if (Registrations.TryGetValue(key, out var existingEntry) && IsLive(existingEntry, out var existingOwner) &&
-                !ReferenceEquals(existingOwner, owner))
+                !ReferenceEquals(existingOwner, owner) && !existingOwner!.IsDisposed)
             {
                 try
                 {
