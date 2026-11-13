@@ -35,10 +35,46 @@ internal enum SingleRowUpsertShape
 }
 
 /// <summary>
+/// The multi-row upsert statement shape for a batch. Internal: callers use BuildBatchUpsert.
+/// </summary>
+internal enum BatchUpsertShape
+{
+    /// <summary>INSERT ... ON CONFLICT, one statement for the batch.</summary>
+    OnConflict,
+
+    /// <summary>INSERT ... ON DUPLICATE KEY UPDATE, one statement for the batch.</summary>
+    OnDuplicate,
+
+    /// <summary>One single-row upsert per entity (MERGE dialects, and unreliable incoming values).</summary>
+    PerEntity,
+}
+
+/// <summary>
 /// BaseTableGateway partial: insert/upsert SQL shared by both gateways.
 /// </summary>
 public abstract partial class BaseTableGateway<TEntity>
 {
+    /// <summary>
+    /// The one place that chooses the batch upsert shape for both gateways: ON CONFLICT where the dialect supports it,
+    /// else ON DUPLICATE KEY when the incoming values are reliable, else one single-row upsert per entity.
+    /// <paramref name="fragmentIsReliable"/> is false when the ON DUPLICATE KEY form would read an untrustworthy incoming
+    /// value (DEC-012); the caller computes it because it owns the update fragment.
+    /// </summary>
+    private protected static BatchUpsertShape SelectBatchUpsertShape(IDatabaseContext ctx, bool fragmentIsReliable)
+    {
+        if (ctx.DataSourceInfo.SupportsInsertOnConflict)
+        {
+            return BatchUpsertShape.OnConflict;
+        }
+
+        if (ctx.DataSourceInfo.SupportsOnDuplicateKey && fragmentIsReliable)
+        {
+            return BatchUpsertShape.OnDuplicate;
+        }
+
+        return BatchUpsertShape.PerEntity;
+    }
+
     /// <summary>
     /// The one place that chooses the single-row upsert shape: MERGE where the dialect supports it and does not prefer
     /// ON CONFLICT, else ON CONFLICT, else ON DUPLICATE KEY. Each gateway's BuildUpsert branches on this result and calls

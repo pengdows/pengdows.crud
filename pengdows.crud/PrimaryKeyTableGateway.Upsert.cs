@@ -172,14 +172,15 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         var pkTemplate = GetPkTemplatesForDialect(GetDialect(ctx));
-        if (ctx.DataSourceInfo.SupportsInsertOnConflict)
+        var shape = SelectBatchUpsertShape(ctx,
+            !UpsertFragmentHasUnreliableIncoming(GetDialect(ctx), pkTemplate.UpsertUpdateFragmentOnConflict, _tableInfo.Columns.Values));
+        if (shape == BatchUpsertShape.OnConflict)
         {
             return BuildBatchUpsertOnConflict(entities, ctx, _tableInfo.PrimaryKeys, pkTemplate.UpsertUpdateFragmentOnConflict,
                 pkTemplate.UpsertOnConflictVersionWhere, overridesSystemIdentity: false);
         }
 
-        if (ctx.DataSourceInfo.SupportsOnDuplicateKey &&
-            !UpsertFragmentHasUnreliableIncoming(GetDialect(ctx), pkTemplate.UpsertUpdateFragmentOnConflict, _tableInfo.Columns.Values))
+        if (shape == BatchUpsertShape.OnDuplicate)
         {
             return BuildBatchUpsertOnDuplicate(entities, ctx, pkTemplate.UpsertUpdateFragmentOnConflict);
         }

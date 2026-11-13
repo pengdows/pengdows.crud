@@ -352,14 +352,15 @@ public partial class TableGateway<TEntity, TRowID>
         // For databases that support multi-row upsert via ON CONFLICT or ON DUPLICATE KEY
         var dialect = GetDialect(ctx);
         var template = GetTemplatesForDialect(dialect);
-        if (ctx.DataSourceInfo.SupportsInsertOnConflict)
+        var shape = SelectBatchUpsertShape(ctx,
+            !UpsertFragmentHasUnreliableIncoming(dialect, template.UpsertUpdateFragmentOnConflict, _tableInfo.Columns.Values));
+        if (shape == BatchUpsertShape.OnConflict)
         {
             return BuildBatchUpsertOnConflict(entities, ctx, ResolveUpsertKey(), template.UpsertUpdateFragmentOnConflict,
                 template.UpsertOnConflictVersionWhere, OverridesSystemIdentity(dialect));
         }
 
-        if (ctx.DataSourceInfo.SupportsOnDuplicateKey &&
-            !UpsertFragmentHasUnreliableIncoming(dialect, template.UpsertUpdateFragmentOnConflict, _tableInfo.Columns.Values))
+        if (shape == BatchUpsertShape.OnDuplicate)
         {
             return BuildBatchUpsertOnDuplicate(entities, ctx, template.UpsertUpdateFragmentOnConflict);
         }
