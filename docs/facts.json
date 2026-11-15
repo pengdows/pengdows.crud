@@ -168,17 +168,17 @@
         "pass": 156,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-13 10:09Z",
-        "commit": "015a4059",
-        "dirtyTree": true
+        "runUtc": "2026-11-15 18:48Z",
+        "commit": "fe3538fb",
+        "dirtyTree": false
       },
       "net8.0": {
         "pass": 156,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-13 10:09Z",
-        "commit": "015a4059",
-        "dirtyTree": true
+        "runUtc": "2026-11-15 18:47Z",
+        "commit": "fe3538fb",
+        "dirtyTree": false
       }
     },
     "MariaDb": {
