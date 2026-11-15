@@ -338,7 +338,9 @@ fi
 # The testbed is started through the dotnet host (`dotnet testbed.dll`), not `dotnet run`, which starts testbed.exe, the
 # apphost. On Windows the Access worker (ACE/OLE DB) then intermittently never exited after reporting success, and
 # the whole script waited on it: about a third of apphost runs hung (8 of 30 through `dotnet run`, 16 of 30 with
-# --no-build), against 0 of 50 through the host. The cause is not found; this is the launch that does not trigger it.
+# --no-build), against 0 of 50 through the host. Part of the cause was the testbed never disposing the DatabaseContext it
+# created (disposing it cut the apphost rate to 2 of 30 through `dotnet run`, 5 of 40 run directly); the rest is not
+# found, and the host launch is the one that has not hung.
 for tfm in ${TESTBED_FRAMEWORKS:-net8.0 net10.0}; do
   dotnet build "${root}/testbed/testbed.csproj" -c Release -f "${tfm}"
   TESTBED_ONLY="${TESTBED_ONLY:-${INTEGRATION_ONLY:-}}" \
