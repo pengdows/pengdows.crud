@@ -165,6 +165,7 @@ public class ParallelTestOrchestrator
             ConfiguredStartupWeightSeconds = config.StartupWeightSeconds
         };
 
+        IDatabaseContext? dbContext = null;
         try
         {
             Console.WriteLine($"[{config.ContainerName}] Starting container...");
@@ -191,7 +192,7 @@ public class ParallelTestOrchestrator
             Console.WriteLine(
                 $"[{config.ContainerName}] Container ready in {result.ContainerStartTime.TotalSeconds:F2}s, starting tests...");
 
-            var dbContext = await config.Container.GetDatabaseContextAsync(_services);
+            dbContext = await config.Container.GetDatabaseContextAsync(_services);
             var testProvider = config.TestProviderFactory(dbContext, _services);
 
             var testSw = System.Diagnostics.Stopwatch.StartNew();
@@ -216,6 +217,20 @@ public class ParallelTestOrchestrator
         }
         finally
         {
+            // The context goes before its container: the container removes the database (Access deletes its file), and a
+            // context left alive still holds its connections and governor until the process ends.
+            if (dbContext is IAsyncDisposable disposableContext)
+            {
+                try
+                {
+                    await disposableContext.DisposeAsync();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[{config.ContainerName}] Warning: Failed to dispose the database context: {ex.Message}");
+                }
+            }
+
             try
             {
                 var keep = string.Equals(Environment.GetEnvironmentVariable("TESTBED_KEEP_CONTAINERS"), "true",

@@ -42,7 +42,29 @@ public class AccessTestContainer : TestContainer
             Type.GetTypeFromProgID("ADOX.Catalog")
                 ?? throw new InvalidOperationException(
                     "ADOX.Catalog COM type not found — the Microsoft Access Database Engine Redistributable does not appear to be installed on this host."))!;
-        catalog.Create(_connectionString);
+        try
+        {
+            catalog.Create(_connectionString);
+
+            // Create leaves the new file open through the catalog's ActiveConnection. Close it and release both COM
+            // objects now. Measured over repeated testbed runs: left to the finalizer, every run leaked its .accdb
+            // (DisposeAsyncCore's delete failed on the open file); with the release no file leaked in 460 runs.
+            // This does NOT stop the separate intermittent hang of the worker process at exit: that still happened
+            // about a third of the time (testbed.exe, as `dotnet run` starts it) with this release in place.
+            dynamic connection = catalog.ActiveConnection;
+            try
+            {
+                connection.Close();
+            }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(connection);
+            }
+        }
+        finally
+        {
+            System.Runtime.InteropServices.Marshal.FinalReleaseComObject(catalog);
+        }
 
         return Task.CompletedTask;
     }
