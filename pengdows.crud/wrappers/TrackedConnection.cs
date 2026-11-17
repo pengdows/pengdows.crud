@@ -120,8 +120,18 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
     private readonly DbMode _mode;
     private readonly TimeSpan? _modeLockTimeout;
     private PoolSlot _slot;
-    private int _slotAttached;
-    private int _slotReleased;
+
+    // G4: the connection's slot moves through one lifecycle, forward only.
+    //   None -> Attaching -> Attached -> Released, or None -> Released when no slot was ever attached.
+    // Attaching exists so a release racing an attach can never miss the slot being stored.
+    private const int SlotNone = 0;
+    private const int SlotAttaching = 1;
+    private const int SlotAttached = 2;
+    private const int SlotReleased = 3;
+    private int _slotState;
+
+    // Test-only hook (see AttachSlot): null in every production path.
+    internal Action? TestOnlyAfterSlotFieldSetBeforeAttachedCas { get; set; }
 
     // IConnectionLocalState — inlined to eliminate one heap allocation per connection checkout
 
@@ -700,16 +710,44 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         }
     }
 
+    /// <summary>
+    /// Attaches the governor slot this connection will return when it is disposed. Takes ownership of
+    /// <paramref name="slot"/> in every case: a connection holds at most one slot for its life, so a second
+    /// attach, or an attach after the slot was released, returns the incoming slot to its governor and throws
+    /// <see cref="InvalidOperationException"/> instead of leaking it (G4).
+    /// </summary>
     internal void AttachSlot(PoolSlot slot)
     {
+        var previous = Interlocked.CompareExchange(ref _slotState, SlotAttaching, SlotNone);
+        if (previous != SlotNone)
+        {
+            slot.Dispose();
+            throw new InvalidOperationException(previous == SlotReleased
+                ? "A pool slot cannot be attached after this connection has released its slot."
+                : "A pool slot is already attached to this connection.");
+        }
+
         _slot = slot;
-        Interlocked.Exchange(ref _slotAttached, 1);
+
+        // G4 (CONCURRENCY.md): lets a test force the exact interleaving a real race would only
+        // produce by luck -- a release landing after the slot field is set but before the second
+        // CAS below observes it. Null in production; never invoked outside tests.
+        TestOnlyAfterSlotFieldSetBeforeAttachedCas?.Invoke();
+
+        if (Interlocked.CompareExchange(ref _slotState, SlotAttached, SlotAttaching) == SlotReleased)
+        {
+            // A release ran while this attach was in progress. It saw Attaching and left the slot to us.
+            slot.Dispose();
+            throw new InvalidOperationException(
+                "A pool slot cannot be attached after this connection has released its slot.");
+        }
     }
 
     private void ReleaseSlot()
     {
-        if (Interlocked.Exchange(ref _slotReleased, 1) == 0 &&
-            Interlocked.CompareExchange(ref _slotAttached, 0, 0) == 1)
+        // Exactly once: only the transition out of Attached releases. None and Attaching leave nothing to
+        // release here (an in-progress attach releases its own slot when it sees Released).
+        if (Interlocked.Exchange(ref _slotState, SlotReleased) == SlotAttached)
         {
             _slot.Dispose();
         }
