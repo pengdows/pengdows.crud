@@ -279,10 +279,39 @@ public class fakeDbCommand : DbCommand
                 {
                     conn.ExecutedNonQueryTexts.Add(CommandText);
                     conn.ExecutedNonQueryCommands.Add(CaptureCommand());
+
+                    // G7b/CONCURRENCY.md's session-SQL providers (MySQL-family, Oracle, Informix,
+                    // SAP HANA) mark a connection read-only by sending exactly this kind of SET/
+                    // transaction statement rather than a connection-string marker. Tracking it
+                    // here -- not just under the read-only-violation check below, which this SET
+                    // statement itself never reaches -- is what lets conn.IsReadOnly reflect it.
+                    if (conn.EnforceReadOnlySessionSql)
+                    {
+                        if (FakeDbReadOnlyEnforcement.IsReadOnlySessionEntrySql(CommandText, conn.EmulatedProduct))
+                        {
+                            conn.SessionMarkedReadOnly = true;
+                        }
+                        else if (FakeDbReadOnlyEnforcement.IsReadOnlySessionResetSql(CommandText, conn.EmulatedProduct))
+                        {
+                            conn.SessionMarkedReadOnly = false;
+                        }
+                    }
                 }
 
                 return 0;
             }
+        }
+
+        // A DML write (not a session-setting command, filtered above) on a connection whose
+        // connection string carries the dialect's own read-only marker (G7b/CONCURRENCY.md) fails
+        // exactly the way the real engine does -- the same per-product classified error shape
+        // FakeDbConstraintErrors.UniqueViolation uses, so pengdows.crud's own dialect translators
+        // classify it into ReadOnlyViolationException end to end, not a generic exception a
+        // translator would ignore.
+        if (conn != null && conn.IsReadOnly &&
+            FakeDbReadOnlyEnforcement.WriteVerbOrNull(CommandText) is { } nonQueryWriteVerb)
+        {
+            throw FakeDbConstraintErrors.ReadOnlyViolation(conn.EmulatedProduct, nonQueryWriteVerb);
         }
 
         if (conn != null && conn.TryDequeueNonQueryExecuteException(out var exTransient))
@@ -602,6 +631,19 @@ public class fakeDbCommand : DbCommand
             throw exReader!;
         }
 
+        // A write sent through ExecuteReader (SqlContainer.ExecuteReaderAsync is the default,
+        // read-intent overload callers reach for generically — G6's "forgot ExecutionType.Write"
+        // scenario) is rejected by a read-only connection exactly like one sent through
+        // ExecuteNonQuery: the real engine's rejection depends on what the statement is, not
+        // which ADO.NET method ran it. See ExecuteNonQueryCore's matching check and
+        // FakeDbReadOnlyEnforcement.WriteVerbOrNull's doc comment for why the SQL-shape gate
+        // exists (so an ordinary SELECT on a read-only connection still works).
+        if (conn != null && conn.IsReadOnly &&
+            FakeDbReadOnlyEnforcement.WriteVerbOrNull(CommandText) is { } readerWriteVerb)
+        {
+            throw FakeDbConstraintErrors.ReadOnlyViolation(conn.EmulatedProduct, readerWriteVerb);
+        }
+
         // Propagate persistent scalar exception through the reader path as well,
         // since SqlContainer's scalar methods (ExecuteScalarCore) execute via ExecuteReaderAsync.
         if (conn?.PersistentScalarException != null)
@@ -677,7 +719,8 @@ public class fakeDbCommand : DbCommand
         if (gate != null)
         {
             FakeConnection!.SignalExecuteGateEntered();
-            return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteNonQueryCore() : _log.Unlogged(ExecuteNonQuery));
+            return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteNonQueryCore() : _log.Unlogged(ExecuteNonQuery),
+                FakeConnection!.CancellationThrowsAs);
         }
 
         try
@@ -723,7 +766,7 @@ public class fakeDbCommand : DbCommand
         if (gate != null)
         {
             FakeConnection!.SignalExecuteGateEntered();
-            return ExecuteWithGateAsync(gate, ct, RunScalar);
+            return ExecuteWithGateAsync(gate, ct, RunScalar, FakeConnection!.CancellationThrowsAs);
         }
 
         try
@@ -756,7 +799,8 @@ public class fakeDbCommand : DbCommand
         if (gate != null)
         {
             FakeConnection!.SignalExecuteGateEntered();
-            return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : _log.Unlogged(() => ExecuteDbDataReader(behavior)));
+            return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : _log.Unlogged(() => ExecuteDbDataReader(behavior)),
+                FakeConnection!.CancellationThrowsAs);
         }
 
         try
@@ -772,10 +816,24 @@ public class fakeDbCommand : DbCommand
     /// <summary>
     /// Shared implementation behind every gated async execute path: awaits the test-controlled
     /// gate (see <see cref="fakeDbConnection.SetExecuteGate"/>), then runs <paramref name="execute"/>.
+    /// A genuine cancellation during the wait normally propagates as the real
+    /// OperationCanceledException WaitAsync(ct) throws; when the connection's
+    /// <see cref="fakeDbConnection.CancellationThrowsAs"/> is set, that is thrown instead,
+    /// simulating a provider (observed live with Microsoft.Data.SqlClient) that reports a
+    /// cancelled command as its own DbException rather than the CLR type ADO.NET callers rely on.
     /// </summary>
-    private static async Task<T> ExecuteWithGateAsync<T>(TaskCompletionSource<bool> gate, CancellationToken ct, Func<T> execute)
+    private static async Task<T> ExecuteWithGateAsync<T>(TaskCompletionSource<bool> gate, CancellationToken ct,
+        Func<T> execute, Exception? cancellationThrowsAs = null)
     {
-        await gate.Task.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await gate.Task.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationThrowsAs != null && ct.IsCancellationRequested)
+        {
+            throw cancellationThrowsAs;
+        }
+
         return execute();
     }
 

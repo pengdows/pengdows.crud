@@ -88,11 +88,21 @@ public class PoolGovernorTimeoutConversionTests
         Assert.Equal(1L, Convert(TimeSpan.Zero));
     }
 
-    [Fact]
-    public void Convert_NegativeTimeout_ReturnsOne()
+    // Negative TimeSpan is the .NET convention for "no bound" (Timeout.InfiniteTimeSpan is
+    // TimeSpan.FromMilliseconds(-1)); it must be treated the same as TimeSpan.MaxValue, not
+    // collapsed to a near-zero budget. A prior version of this test asserted the opposite
+    // (Convert_NegativeTimeout_ReturnsOne, expecting 1L) -- that pinned a real bug (see
+    // CONCURRENCY.md's former "infinity removes the time bound" Assumption) rather than the
+    // intended contract.
+    [Theory]
+    [InlineData(-1)] // Timeout.InfiniteTimeSpan
+    [InlineData(-100)]
+    public void Convert_NegativeTimeout_IsTreatedAsNoBound_ReturnsMaxTimeoutStopwatchTicks(int milliseconds)
     {
-        // Negative timeouts are guarded — must not return 0 or negative
-        Assert.Equal(1L, Convert(TimeSpan.FromMilliseconds(-100)));
+        var maxTicks = (long)typeof(PoolGovernor)
+            .GetField("MaxTimeoutStopwatchTicks", BindingFlags.NonPublic | BindingFlags.Static)!
+            .GetValue(null)!;
+        Assert.Equal(maxTicks, Convert(TimeSpan.FromMilliseconds(milliseconds)));
     }
 
     [Fact]
