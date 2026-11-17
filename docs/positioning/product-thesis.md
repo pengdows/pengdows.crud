@@ -365,6 +365,12 @@ documents `ApplicationIntent=ReadOnly` as "a routing hint for Availability Group
 NOT enforce server-side read-only state," and has no transaction-level override either — a
 SQL Server write, transactional or not, is caught only by layer 1. Firebird, Db2, Sybase ASE, InterBase, DuckDB, Snowflake, Spanner, TiDB and SingleStore are in the same position for a read-intent transaction (live-verified 2026-10-03; the per-database list is in [`read-only-enforcement.md`](../read-only-enforcement.md)): Firebird's dialect issues `SET TRANSACTION READ ONLY` as its session setting, but the database does not then refuse a write through a later transaction, so only layer 1 protects it.
 
+Every database named across both layers above — including every "only layer 1 protects
+it" exception — now has its own regression test confirming which layer actually fires, not
+just the connection-string-marker databases: see
+[`implementation-evidence.md`](./implementation-evidence.md) for the full per-database test
+table.
+
 ## 5. Connections are ephemeral and governed by design
 
 Philosophy: open late, close early. `DbMode` (`Standard`, `PreventDatabaseUnload`, `SingleWriter`,
@@ -468,6 +474,19 @@ the original provider exception is always preserved as `InnerException`.
 `ISqlDialect.AnalyzeException` additionally returns a provider-neutral `DbExceptionInfo`
 (category, constraint kind, transience, retryability, provider error code, SQLSTATE) for
 control flow that doesn't need typed catches.
+
+One portability guarantee is absolute rather than best-effort: a caller's own cancellation
+always surfaces as `OperationCanceledException`, never masked as a generic provider failure
+— *even when the provider's own driver gets this wrong*. `Microsoft.Data.SqlClient` reports a
+server-cancelled SQL Server command as its own `SqlException`, not `OperationCanceledException`;
+pengdows.crud detects that shape (gated on the caller's own token actually being canceled, so
+an unrelated exception is never misreported) and rethrows the real exception type, with the
+original preserved as `InnerException`. This was found by running the identical cancellation
+test against two live providers and discovering the second one's driver violated the contract
+the first one honored — not a hypothetical edge case written in anticipation of a bug, but a
+real one caught by testing against real databases (principle 10). See
+[`implementation-evidence.md`](./implementation-evidence.md) for the exact mechanism and test
+citations.
 
 Failure semantics extend past native database errors to the mapping boundary itself:
 `EnumParseFailureMode` (`Throw` / `SetNullAndLog` / `SetDefaultValue`, set per-gateway or
@@ -748,3 +767,5 @@ classification, cleanup, observability, and shutdown — the failure and edge-ca
 execution, not only the happy path.
 
 For an in-depth taxonomy breakdown and head-to-head comparison across .NET, Java, Go, Rust, and Python data access layers, see [`docs/positioning/dal-taxonomy-and-comparison.md`](./dal-taxonomy-and-comparison.md).
+
+For the falsifiable, per-guarantee breakdown of connection governance under concurrent load behind principles 2 and 5 — including two real bugs found by adversarial testing and fixed, not just theoretical gaps closed on paper — see [`docs/positioning/concurrency-contract.md`](./concurrency-contract.md).
