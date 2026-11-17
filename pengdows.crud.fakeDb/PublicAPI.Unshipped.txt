@@ -3,6 +3,15 @@
 *REMOVED*override pengdows.crud.fakeDb.fakeDbDataReader.ReadAsync(System.Threading.CancellationToken _) -> System.Threading.Tasks.Task<bool>!
 override pengdows.crud.fakeDb.fakeDbCommand.ExecuteDbDataReader(System.Data.CommandBehavior behavior) -> System.Data.Common.DbDataReader!
 override pengdows.crud.fakeDb.fakeDbConnection.OnStateChange(System.Data.StateChangeEventArgs! stateChange) -> void
+pengdows.crud.fakeDb.fakeDbConnection.IsReadOnly.get -> bool
+pengdows.crud.fakeDb.fakeDbConnection.EnforceReadOnlyFromConnectionString.get -> bool
+pengdows.crud.fakeDb.fakeDbConnection.EnforceReadOnlyFromConnectionString.set -> void
+pengdows.crud.fakeDb.fakeDbConnection.CancellationThrowsAs.get -> System.Exception?
+pengdows.crud.fakeDb.fakeDbConnection.CancellationThrowsAs.set -> void
+pengdows.crud.fakeDb.fakeDbConnection.EnforceReadOnlySessionSql.get -> bool
+pengdows.crud.fakeDb.fakeDbConnection.EnforceReadOnlySessionSql.set -> void
+pengdows.crud.fakeDb.fakeDbConnection.SessionMarkedReadOnly.get -> bool
+pengdows.crud.fakeDb.fakeDbConnection.SessionMarkedReadOnly.set -> void
 override pengdows.crud.fakeDb.fakeDbConnection.StateChange -> System.Data.StateChangeEventHandler?
 override pengdows.crud.fakeDb.fakeDbConnection.EnlistTransaction(System.Transactions.Transaction? transaction) -> void
 override pengdows.crud.fakeDb.fakeDbConnectionStringBuilder.ContainsKey(string! keyword) -> bool

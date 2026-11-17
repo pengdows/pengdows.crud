@@ -201,6 +201,12 @@ internal sealed class PoolGovernor : IDisposable
     internal Action? TestOnlyBeforeInUseDecrement { get; set; }
 
     /// <summary>
+    /// Test-only hook invoked immediately before a reader's touch-and-release turnstile call in
+    /// the async acquire path (G9a-SW, CONCURRENCY.md). Never set outside tests.
+    /// </summary>
+    internal Action? TestOnlyBeforeReaderTurnstileRelease { get; set; }
+
+    /// <summary>
     /// True once <see cref="Close"/> (or <see cref="Dispose"/>) has been called. Every acquire
     /// entry point checks this first and throws <see cref="ObjectDisposedException"/> if set.
     /// </summary>
@@ -460,6 +466,13 @@ internal sealed class PoolGovernor : IDisposable
                 // Readers touch-and-release; writers hold until slot released
                 if (!_holdTurnstile)
                 {
+                    // G9a-SW (CONCURRENCY.md): this is the exact continuation the Assumption is
+                    // about -- it only runs after the await above resumes, on whatever thread the
+                    // scheduler gives it. Under real thread-pool starvation that resumption, and
+                    // so this release, can be delayed; a test can reproduce the consequence
+                    // deterministically by holding here instead of waiting on genuine starvation
+                    // timing. Null in every production path.
+                    TestOnlyBeforeReaderTurnstileRelease?.Invoke();
                     _turnstile.Release();
                     turnstileAcquired = false;
                 }
@@ -811,8 +824,21 @@ internal sealed class PoolGovernor : IDisposable
 
     // Capped so that TimeSpan.MaxValue ("wait as long as it takes") is a long wait and not a cast that overflows,
     // which on some runtimes is a one-tick budget that expires at once.
-    private static long ConvertTimeoutToStopwatchTicks(TimeSpan timeout) =>
-        Math.Max(1L, (long)Math.Min(timeout.TotalSeconds * Stopwatch.Frequency, MaxTimeoutStopwatchTicks));
+    private static long ConvertTimeoutToStopwatchTicks(TimeSpan timeout)
+    {
+        if (timeout < TimeSpan.Zero)
+        {
+            // Timeout.InfiniteTimeSpan (-1ms) and any other negative TimeSpan is the .NET
+            // convention for "no bound" (see e.g. SemaphoreSlim.Wait/WaitAsync). Without this,
+            // a negative TotalSeconds survives Math.Min unchanged and Math.Max(1L, negative)
+            // collapses it to a one-tick budget -- the near-instant-expiry failure mode the
+            // comment above already guards TimeSpan.MaxValue against, landed on by this idiom
+            // instead.
+            return MaxTimeoutStopwatchTicks;
+        }
+
+        return Math.Max(1L, (long)Math.Min(timeout.TotalSeconds * Stopwatch.Frequency, MaxTimeoutStopwatchTicks));
+    }
 
     private bool ShouldUseTurnstileGate(bool writerTurnstileInterestRegistered)
     {

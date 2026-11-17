@@ -238,6 +238,31 @@ internal static partial class DbExceptionTranslationSupport
     }
 
     /// <summary>
+    /// Mirrors <see cref="LooksLikeTimeout"/> for a different provider misbehavior: some drivers
+    /// (confirmed live for Microsoft.Data.SqlClient against a real server, G5/CONCURRENCY.md) do
+    /// not propagate a canceled command as a real <see cref="OperationCanceledException"/> --
+    /// SQL Server genuinely stops the command, but the driver reports it as its own DbException
+    /// whose message says so instead. Callers at <see cref="SqlContainer"/>'s catch sites only
+    /// treat this as cancellation when the caller's own token was actually canceled (checked
+    /// separately, by the caller) -- this method alone only answers "does this exception's shape
+    /// match that known driver behavior," not "was this a genuine cancellation."
+    /// </summary>
+    public static bool LooksLikeCancellation(Exception exception)
+    {
+        for (var current = exception; current != null; current = current.InnerException)
+        {
+            if (current is OperationCanceledException ||
+                (current is DbException &&
+                 current.Message.Contains("cancelled by user", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// The magnitude of a provider error code that is reported negative (Db2 and Informix SQLCODEs),
     /// or null when there is none. Math.Abs threw OverflowException for int.MinValue, inside the error
     /// path (DRY-018).

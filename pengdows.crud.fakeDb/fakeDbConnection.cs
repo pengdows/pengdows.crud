@@ -806,6 +806,67 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     }
 
     /// <summary>
+    /// Opt-in, like every other fakeDb failure injection (<see cref="SetFailOnOpen"/>,
+    /// <see cref="SetFailOnCommand"/>, ...): when true, <see cref="IsReadOnly"/> is computed from
+    /// this connection's own connection string instead of always reading false. Off by default so
+    /// turning this feature on cannot change behavior for existing tests that reuse a bare
+    /// connection string (many unit tests send write-shaped SQL through a default/read-intent
+    /// overload purely as a vehicle to get a RETURNING value back, with no interest in read/write
+    /// routing) -- only a test that explicitly opts in exercises read-only rejection.
+    /// </summary>
+    public bool EnforceReadOnlyFromConnectionString { get; set; }
+
+    /// <summary>
+    /// True when <see cref="EnforceReadOnlyFromConnectionString"/> is set and this connection's own
+    /// connection string carries the real read-only marker the matching <c>SqlDialect</c> would
+    /// have applied for read intent (docs/read-only-enforcement.md, docs/supported-databases.md's
+    /// Read-Only Enforcement Matrix) -- SQLite's <c>Mode=ReadOnly</c>, PostgreSQL-family's
+    /// <c>default_transaction_read_only=on</c> (carried inside <c>Options=</c>), DuckDB's
+    /// <c>access_mode=READ_ONLY</c>, Access's <c>Mode=Read</c>, FlatFile's <c>readonly=true</c>, or
+    /// SQL Server's <c>ApplicationIntent=ReadOnly</c>; AND, separately,
+    /// <see cref="FakeDbReadOnlyEnforcement.ProductEnforcesConnectionStringReadOnly"/> for that
+    /// marker's product -- Spanner and SQL Server apply the same marker their family does but their
+    /// real database does not actually refuse the write for it, so a test can still confirm the
+    /// marker was applied (G7) independently of whether a write is rejected (G7b) for those two.
+    /// Or, true when <see cref="EnforceReadOnlySessionSql"/> is set, <see cref="SessionMarkedReadOnly"/>
+    /// is set, AND <see cref="FakeDbReadOnlyEnforcement.ProductEnforcesSessionReadOnly"/> for that
+    /// product -- the same split, for the session/transaction-SQL providers (SingleStore is the one
+    /// exception there: the SQL is sent, but SingleStore's real server ignores it).
+    /// Recomputed on every read rather than cached, so setting <see cref="ConnectionString"/> to a
+    /// different (writer vs. reader) string before each checkout -- exactly what DatabaseContext
+    /// does -- is reflected immediately.
+    /// </summary>
+    public bool IsReadOnly => (EnforceReadOnlyFromConnectionString &&
+                                FakeDbReadOnlyEnforcement.IsReadOnlyConnectionString(_connectionString, EmulatedProduct) &&
+                                FakeDbReadOnlyEnforcement.ProductEnforcesConnectionStringReadOnly(EmulatedProduct)) ||
+                               (EnforceReadOnlySessionSql && SessionMarkedReadOnly &&
+                                FakeDbReadOnlyEnforcement.ProductEnforcesSessionReadOnly(EmulatedProduct));
+
+    /// <summary>
+    /// Opt-in, same convention as <see cref="EnforceReadOnlyFromConnectionString"/>: when true,
+    /// <see cref="IsReadOnly"/> also reflects <see cref="SessionMarkedReadOnly"/> (further gated by
+    /// <see cref="FakeDbReadOnlyEnforcement.ProductEnforcesSessionReadOnly"/>), which fakeDbCommand
+    /// flips on when this connection executes the exact session/transaction SQL text the real
+    /// dialect sends for MySQL/MariaDB/AuroraMySql/SingleStore/Oracle/Informix/SAP HANA/Firebird's
+    /// read-only enforcement (G7b/CONCURRENCY.md) -- these mark a connection or transaction
+    /// read-only via a SQL statement (<c>SET SESSION transaction_read_only = 1;</c>, MariaDB's own
+    /// <c>tx_read_only</c> variant, or <c>SET TRANSACTION READ ONLY</c>), not a connection-string
+    /// marker, so <see cref="EnforceReadOnlyFromConnectionString"/> cannot represent them.
+    /// </summary>
+    public bool EnforceReadOnlySessionSql { get; set; }
+
+    /// <summary>
+    /// Set by fakeDbCommand when this connection executes the real dialect's read-only
+    /// session/transaction-entry SQL text (see <see cref="EnforceReadOnlySessionSql"/>), and
+    /// cleared for MySQL-family when it executes the matching reset text. Oracle/Informix/SAP
+    /// HANA have no SQL-text reset in production -- their read-only state ends at COMMIT/ROLLBACK,
+    /// not via a statement -- so it is never cleared here for them; a test exercising one of those
+    /// three uses a fresh connection per scenario, same as a real pooled connection tainted
+    /// read-only would need the pool's reader/writer discriminator to keep separate (not a reset).
+    /// </summary>
+    public bool SessionMarkedReadOnly { get; set; }
+
+    /// <summary>
     /// Microsoft.Data.SqlClient ("Invalid min or max pool size values, min pool size cannot be greater
     /// than the max pool size") and IBM.Data.Db2 (ArgumentException "Invalid argument") reject a
     /// connection string whose Min Pool Size exceeds its Max Pool Size when it is assigned (both
@@ -1176,6 +1237,18 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     internal TaskCompletionSource<bool>? ExecuteGate => _executeGate;
 
     internal void SignalExecuteGateEntered() => _executeGateEntered.TrySetResult(true);
+
+    /// <summary>
+    /// When set, a genuine mid-flight cancellation on this connection's <see cref="SetExecuteGate"/>
+    /// throws this exception instead of letting the real <see cref="OperationCanceledException"/>
+    /// WaitAsync(ct) raises propagate. Simulates a provider that reports a cancelled command as
+    /// its own DbException instead of the CLR type ADO.NET callers are expected to be able to rely
+    /// on — confirmed live for Microsoft.Data.SqlClient against a real server (G5,
+    /// CONCURRENCY.md): a cancelled command there surfaces as a SqlException whose message is
+    /// "...Operation cancelled by user.", not an OperationCanceledException. Null (the default)
+    /// keeps the normal, well-behaved cancellation path every other fakeDb test relies on.
+    /// </summary>
+    public Exception? CancellationThrowsAs { get; set; }
 
     public override Task OpenAsync(CancellationToken cancellationToken)
     {

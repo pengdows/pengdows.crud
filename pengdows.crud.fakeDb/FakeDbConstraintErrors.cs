@@ -34,6 +34,59 @@ internal static class FakeDbConstraintErrors
     }
 
     /// <summary>
+    /// The read-only-refusal error the emulated product's provider raises for a write attempted on
+    /// a connection fakeDb detected as read-only (fakeDbConnection.IsReadOnly,
+    /// FakeDbReadOnlyEnforcement). Codes from docs/read-only-enforcement.md's
+    /// ReadOnlyViolationException table (checked live 2026-10-03) -- the same codes pengdows.crud's
+    /// own dialect translators classify into ReadOnlyViolationException, so this exercises that
+    /// classification path end to end instead of a generic exception a translator would ignore.
+    /// </summary>
+    internal static DbException ReadOnlyViolation(SupportedDatabase product, string verb = "WRITE")
+    {
+        var (message, number, sqlState) = product switch
+        {
+            SupportedDatabase.Sqlite => ("attempt to write a readonly database", 8, null),
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
+                or SupportedDatabase.AuroraPostgreSql
+                => ($"cannot execute {verb} in a read-only transaction", 0, "25006"),
+            SupportedDatabase.DuckDB => ($"Cannot execute statement of type \"{verb}\" on database \"main\" which is attached in read-only mode!", 0, null),
+            // MySqlDialect.TryClassifyProviderException checks error code 1792 (shared by
+            // MariaDb/TiDb/AuroraMySql, which inherit MySQL's error-number space).
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.AuroraMySql =>
+                ("Cannot execute statement in a READ ONLY transaction.", 1792, null),
+            // OracleDialect.TryClassifyProviderException checks error code 1456 (ORA-01456).
+            SupportedDatabase.Oracle => ("ORA-01456: may not perform insert/delete/update operation inside a READ ONLY transaction", 1456, null),
+            // InformixDialect.TryClassifyProviderException checks error code -878 exclusively.
+            SupportedDatabase.Informix => ("Invalid operation for a READ-ONLY transaction.", -878, null),
+            // HanaDialect.TryClassifyProviderException checks error code 129 AND that the message
+            // contains "read-only" (129 alone is HANA's generic internal-error code, reused for
+            // unrelated failures too).
+            SupportedDatabase.SapHana =>
+                ($"cannot change this transaction's access mode from read-only to update directly ({verb})", 129, null),
+            // FirebirdDialect.TryClassifyProviderException CAN classify error code 335544361
+            // (isc_read_only_trans) into ReadOnlyViolationException, but live verification
+            // (docs/read-only-enforcement.md, 2026-10-03) found a read-only transaction's session
+            // SQL does not actually make Firebird raise it -- FakeDbReadOnlyEnforcement.
+            // ProductEnforcesSessionReadOnly returns false for Firebird, so this branch is never
+            // reached through that mechanism. Kept for a test that wants to simulate the error
+            // shape directly (e.g. a genuinely read-only-opened database file), not as a claim
+            // that BeginTransaction(ExecutionType.Read) triggers it.
+            SupportedDatabase.Firebird =>
+                ("attempted update during read-only transaction", 335544361, null),
+            // AccessDialect.TryClassifyProviderException checks this exact substring, not a
+            // SqlState or error code -- the message is the only signal ACE gives.
+            SupportedDatabase.Access => ("Operation must use an updateable query.", 0, null),
+            // FlatFileDialect.TryClassifyProviderException checks SqlState "25006" exclusively
+            // (the FlatFile provider's own read-only SQLSTATE), not message text.
+            SupportedDatabase.FlatFile => ($"cannot execute {verb} on a read-only connection", 0, "25006"),
+            _ => ("attempt to write on a read-only connection", 0, null)
+        };
+
+        return new ProviderShapedException(message, number, sqlState, product == SupportedDatabase.Sqlite ? 8 : 0);
+    }
+
+    /// <summary>
     /// The syntax error the emulated product's provider raises for text that is not a statement (FakeDataStore.StrictMode).
     /// </summary>
     internal static DbException SyntaxError(SupportedDatabase product, string token)

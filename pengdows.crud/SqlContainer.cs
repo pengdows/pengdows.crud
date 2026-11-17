@@ -1320,6 +1320,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             activity?.SetStatus(ActivityStatusCode.Error, "Canceled");
             throw;
         }
+        catch (Exception ex) when (ex is not DatabaseException && IsCancellation(ex, cancellationToken))
+        {
+            commandFailed = true;
+            throw CommandCanceled(ex, metrics, startTimestamp, activity, cancellationToken);
+        }
         catch (Exception ex) when (ex is not DatabaseException && IsTimeout(ex))
         {
             commandFailed = true;
@@ -1783,6 +1788,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             activity?.SetStatus(ActivityStatusCode.Error, "Canceled");
             throw;
         }
+        catch (Exception ex) when (ex is not DatabaseException && IsCancellation(ex, cancellationToken))
+        {
+            commandFailed = true;
+            throw CommandCanceled(ex, metrics, startTimestamp, activity, cancellationToken);
+        }
         catch (Exception ex) when (ex is not DatabaseException && IsTimeout(ex))
         {
             commandFailed = true;
@@ -2110,6 +2120,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         exception is not (PoolSaturatedException or ModeContentionException) &&
         pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.LooksLikeTimeout(exception);
 
+    // G5 (CONCURRENCY.md): confirmed live against a real SQL Server container that cancelling a
+    // command genuinely stops it on the server, but Microsoft.Data.SqlClient reports that as its
+    // own SqlException ("...Operation cancelled by user.") rather than a real
+    // OperationCanceledException -- silently breaking the documented contract that cancellation
+    // is never wrapped. Gated on the caller's own token actually being canceled (not just the
+    // exception's wording) so a provider exception that happens to use similar phrasing for an
+    // unrelated reason is never misreported as this caller's own cancellation.
+    private static bool IsCancellation(Exception exception, CancellationToken cancellationToken) =>
+        cancellationToken.IsCancellationRequested &&
+        pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.LooksLikeCancellation(exception);
+
     /// <summary>
     /// Known non-<see cref="DbException"/> provider exception types that must still be routed
     /// through translation. Checked by full type name rather than a hard type reference so this
@@ -2159,6 +2180,21 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var translated = TranslateDatabaseException(ex, operationKind);
         AddSanitizedExceptionEvent(activity, translated);
         return translated;
+    }
+
+    // Mirrors CommandTimedOut, but produces the real OperationCanceledException the documented
+    // contract promises (see IsCancellation above) instead of a DatabaseException -- the provider
+    // exception becomes the InnerException, so nothing about the original error is lost.
+    private OperationCanceledException CommandCanceled(Exception ex, MetricsCollector? metrics,
+        long startTimestamp, Activity? activity, CancellationToken cancellationToken)
+    {
+        metrics?.CommandCancelled(startTimestamp);
+        activity?.SetStatus(ActivityStatusCode.Error, "Canceled");
+        var canceled = new OperationCanceledException(
+            "The operation was canceled; the provider reported it as a non-cancellation exception (see InnerException).",
+            ex, cancellationToken);
+        AddSanitizedExceptionEvent(activity, canceled);
+        return canceled;
     }
 
     // The translated provider failure, or null for an exception that isn't the provider's, which

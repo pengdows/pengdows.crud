@@ -6,7 +6,9 @@ volatile *current status* — exact numeric limits, package versions, publish st
 instrument names, and internal wiring details — that changes independently of the
 architecture and would otherwise make the thesis go stale every time an implementation
 detail shifts. Treat everything here as a snapshot verified against source as of the date
-below; re-verify against current code before quoting it externally.
+below; re-verify against current code before quoting it externally. For the deeper,
+per-guarantee concurrency contract behind principles 2 and 5, see
+[`concurrency-contract.md`](./concurrency-contract.md).
 
 Last verified: 2026-10-13, against branch `2.0.6` — a source-level re-check of every API
 name, value, file path, and test citation below (the 2026-09-24 pass, with the analyzer list, the named-parameter
@@ -61,6 +63,25 @@ Per `MariaDbDialect.cs`'s own version-history comment: MariaDB never adopted MyS
 `transaction_read_only` alias, and MySQL 8.0.3 removed the older `tx_read_only` name — so
 the two forks need distinct SQL, not a shared implementation, even though one dialect class
 inherits from the other.
+
+**Verified 2026-11-17: every database in the read-only enforcement matrix now has a
+regression test pinning which layer actually protects it**, not just the databases already
+named in principle 4's three-layer explanation. The precision that explanation already
+drew between "the library sent the right thing" and "the database acted on it" is what the
+tests below enforce at the unit level, so that distinction can't quietly erode as the code
+changes — `pengdows.crud.Tests/ReadOnlyConnectionRejectsWriteTests.cs`,
+`ReadOnlySessionSqlProvidersRejectWriteTests.cs`, and
+`ReadOnlyEnforcementRemainingProvidersTests.cs`:
+
+| Database(s) | Layer 2/3 result | Pinned by |
+|---|---|---|
+| PostgreSQL, CockroachDB, YugabyteDB, AuroraPostgreSql | Enforced (connection string) | `ReadOnlyConnectionRejectsWriteTests.cs`, `ReadOnlyEnforcementRemainingProvidersTests.cs` |
+| SQLite, Access, FlatFile | Enforced (connection string) | `ReadOnlyConnectionRejectsWriteTests.cs` |
+| MySQL, AuroraMySql, MariaDB, Oracle, Informix, SAP HANA | Enforced (session/transaction SQL) | `ReadOnlySessionSqlProvidersRejectWriteTests.cs` |
+| Spanner, SQL Server, SingleStore | Marker/SQL genuinely sent, database does not act on it — layer 1 only | `ReadOnlyEnforcementRemainingProvidersTests.cs` |
+| Firebird | SQL genuinely sent (folded into the connection's first-open session-settings batch, not a standalone statement), database does not act on it — layer 1 only. This one needed a correction mid-pass: the first version of this test assumed Firebird enforces, reasoning from `FirebirdDialect.TryClassifyProviderException`'s *ability* to classify error 335544361 rather than checking whether this specific mechanism actually triggers it; `docs/read-only-enforcement.md`'s already-recorded live result said otherwise | `ReadOnlyEnforcementRemainingProvidersTests.cs` |
+| TiDB | No session SQL sent at all (`TiDbDialect.ReadOnlyTransactionSql => null`) — layer 1 only | `ReadOnlyEnforcementRemainingProvidersTests.cs` |
+| Snowflake, Db2, Sybase ASE, InterBase | No mechanism defined at all — layer 1 only | `ReadOnlyEnforcementRemainingProvidersTests.cs` |
 
 ## Complete analyzer rule list (principle 9)
 
@@ -138,6 +159,8 @@ the tests will always exist under these names.
 | `PreventDatabaseUnload` sentinel repair (reconnecting a broken sentinel) does not leak the replacement connection when the context is disposed mid-repair, and a healthy sentinel is not needlessly reconnected (principle 5) | `pengdows.crud.Tests/PreventDatabaseUnloadSentinelReconnectTests.cs` — `GetConnection_ContextDisposedWhileSentinelRepairIsInFlight_DoesNotLeakTheReplacementConnection`, `GetConnection_SentinelHealthy_DoesNotReconnect` |
 | A generated id is read on the connection that ran the INSERT: `CreateAsync` pins one connection for the INSERT and the session-scoped id query (and every plan's fallback id query), released exactly once, and only Informix, SAP HANA and Access use `SessionScopedFunction` (principle 5) | `pengdows.crud.Tests/GeneratedKeySameConnectionTests.cs` (Standard, SingleConnection, a caller's transaction, a failing INSERT); `pengdows.crud.Tests/GeneratedIdConnectionAffinityTests.cs` — `CreateAsync_GeneratedIdFallback_UsesTheSamePhysicalConnectionAsTheInsert` (CompoundStatement, ReaderInsertedId, Returning); `pengdows.crud.Tests/dialects/GeneratedKeyPlanReachabilityTests.cs` over every `SupportedDatabase`; live: `InsertReturningTests.CreateAsync_NonReturningProviders_InsertsSuccessfully` on Informix |
 | Concurrent commit/rollback on one transaction has exactly one winner, and `Dispose` racing a held lock neither throws nor breaks the later release (principle 2) | `pengdows.crud.Tests/TransactionContextTests.cs` — `CommitAndRollback_RaceOnlyOneSucceeds`; `pengdows.crud.Tests/TransactionContextDisposeRaceTests.cs` |
+| `OperationCanceledException` is never wrapped, even when a provider's own driver gets this wrong (principle 8) | **A real bug, found live and fixed, not a hypothetical.** `Microsoft.Data.SqlClient` reports a server-cancelled SQL Server command as its own `SqlException` ("...Operation cancelled by user."), not `OperationCanceledException` — confirmed against a real SQL Server container (`WAITFOR DELAY`, verified stopped server-side via `sys.dm_exec_requests`). PostgreSQL's equivalent (`pg_sleep`, verified via `pg_stat_activity`) was unaffected. Fixed in `SqlContainer.cs` (`IsCancellation`/`DbExceptionTranslationSupport.LooksLikeCancellation`, mirroring the existing timeout-shaped-but-mistyped-exception handling), gated on the caller's own token actually being canceled so an unrelated exception with similar wording is never misreported. `pengdows.crud.IntegrationTests/ErrorHandling/CommandCancellationStopsServerExecutionTests.cs` and `...SqlServerTests.cs` (real containers); `pengdows.crud.Tests/ProviderReportedCancellationTranslationTests.cs` pins the fix at the unit level via `fakeDbConnection.CancellationThrowsAs` so the regression doesn't need Docker to catch again |
+| A pool acquire timeout expressed as "wait as long as it takes" (`TimeSpan.MaxValue` or `Timeout.InfiniteTimeSpan`) behaves as advertised rather than failing almost instantly (principle 5) | **Another real bug, found via deliberately adversarial input, not a hypothetical.** `PoolGovernor`'s internal tick-conversion math handled `TimeSpan.MaxValue` correctly but collapsed `Timeout.InfiniteTimeSpan` (.NET's other "no timeout" idiom) to a roughly one-tick budget — a caller asking to wait forever would instead time out in about a microsecond. A pre-existing unit test had pinned that exact behavior as intended; it was wrong and has been corrected along with the fix. `pengdows.crud.Tests/PoolGovernorInfiniteTimeoutTests.cs`, `PoolGovernorTimeoutConversionTests.cs` |
 | A context whose construction was still in flight when `ITenantContextRegistry` was disposed is still disposed once construction completes — never an orphaned, untracked instance (principle 3) | `pengdows.crud.Tests/TenantTests.cs` — `Dispose_RacingWithInFlightCreate_DisposesTheOrphanedContextOnceConstructionCompletes`; lease/invalidate exactly-once disposal in `pengdows.crud.Tests/TenantContextLeaseTests.cs` — `AcquireLease_ConcurrentReleaseAndInvalidateHammer_DisposesExactlyOnce` (the bare-reference `GetContext`-vs-`Invalidate` race remains open by design — see `docs/connection/multitenancy-architecture.md`) |
 
 ## Provider/version evidence
