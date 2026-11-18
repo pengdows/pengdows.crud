@@ -5,7 +5,11 @@ using Xunit;
 namespace NpgsqlTypes
 {
     public struct NpgsqlInet { }
-    public struct NpgsqlCidr { }
+    public struct NpgsqlCidr
+    {
+        public System.Net.IPAddress? Address { get; set; }
+        public int Netmask { get; set; }
+    }
 }
 
 namespace pengdows.crud.Tests.ProviderTypeFakes

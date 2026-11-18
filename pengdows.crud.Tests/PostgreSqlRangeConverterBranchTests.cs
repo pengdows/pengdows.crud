@@ -83,5 +83,6 @@ namespace NpgsqlTypes
         public bool UpperBoundIsInclusive { get; set; }
         public bool LowerBoundInfinite { get; set; }
         public bool UpperBoundInfinite { get; set; }
+        public bool IsEmpty { get; set; }
     }
 }
