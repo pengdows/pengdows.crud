@@ -289,9 +289,16 @@ internal static class ProviderValueFieldReader
     {
         array = null!;
         var reader = record as DbDataReader ?? (record as IInternalTrackedReader)?.InnerReader;
-        if (reader == null || !element.IsValueType || Nullable.GetUnderlyingType(element) != null)
+        if (reader == null || !element.IsValueType)
         {
             return false;
+        }
+
+        // A nullable target is already the nullable-element array the provider refuses through GetValue: read it as itself.
+        if (Nullable.GetUnderlyingType(element) != null)
+        {
+            array = GetFieldValueDefinition.MakeGenericMethod(element.MakeArrayType()).Invoke(reader, new object[] { ordinal })!;
+            return true;
         }
 
         var nullableArray = (Array)NullableArrayReaders

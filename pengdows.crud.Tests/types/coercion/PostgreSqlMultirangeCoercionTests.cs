@@ -38,12 +38,14 @@ namespace pengdows.crud.Tests.Multiranges
         }
 
         [Fact]
-        public void TryRead_ArrayWithAnUnparseableElement_ThrowsFormatException()
+        public void TryRead_ArrayWithAnUnparseableElement_ReturnsFalseWithoutEchoingTheValue()
         {
-            // A malformed element is a data error (the range converter throws), not a missing value.
+            // A malformed element is a value the coercion cannot read: TryRead reports false, so the mapper falls back and
+            // names the column, rather than an exception escaping the Try contract.
             var items = new object[] { "[1,5)", "not-a-range" };
 
-            Assert.Throws<FormatException>(() => Coercion.TryRead(new DbValue(items), out _));
+            Assert.False(Coercion.TryRead(new DbValue(items), out var value));
+            Assert.Null(value);
         }
 
         [Fact]

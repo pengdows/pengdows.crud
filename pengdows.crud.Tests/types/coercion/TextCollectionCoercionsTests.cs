@@ -54,14 +54,22 @@ namespace pengdows.crud.Tests.TextCollections
             Assert.True(new JsonObjectCoercion().TryRead(new DbValue(json), out var value));
 
             Assert.Equal("x", value!["s"]);
-            // Known: ToValue's conditional promotes an integer to double, so 1 comes back as 1.0. Pinned here as the
-            // current behavior; see the report on integer precision above 2^53.
-            Assert.Equal(1.0, value["n"]);
+            Assert.Equal(1L, value["n"]);
             Assert.Equal(1.5, value["f"]);
             Assert.Equal(true, value["t"]);
             Assert.Equal(false, value["f2"]);
             Assert.Null(value["z"]);
             Assert.Equal("{\"a\":1}", value["o"]);
+        }
+
+        [Fact]
+        public void JsonObject_LargeIntegerText_KeepsEveryDigit()
+        {
+            // 2^53 + 1 is not representable as a double, so reading it through double loses the last digit.
+            Assert.True(new JsonObjectCoercion().TryRead(new DbValue("{\"n\":9007199254740993,\"f\":1.5}"), out var value));
+
+            Assert.Equal(9007199254740993L, value!["n"]);
+            Assert.Equal(1.5, value["f"]);
         }
 
         [Fact]

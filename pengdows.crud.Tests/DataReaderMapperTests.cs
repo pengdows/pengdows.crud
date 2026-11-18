@@ -564,17 +564,23 @@ public class DataReaderMapperTests
         });
 
         await DataReaderMapper.LoadAsync<SnakeEntity>(readerFactory(), snakeToPascal);
-        var afterFirstLoad = GetPlanCacheCount();
+        var afterFirstLoad = GetPlanCacheCount(typeof(SnakeEntity));
+
+        // An unrelated load in between adds a plan of its own; it must not count against this entity's reuse.
+        await DataReaderMapper.LoadAsync<NoisePlanEntity>(new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object> { ["id"] = 1 }
+        }), new MapperOptions());
 
         // Second load with same policy - should reuse
         await DataReaderMapper.LoadAsync<SnakeEntity>(readerFactory(), snakeToPascal);
-        var afterFirstReuse = GetPlanCacheCount();
+        var afterFirstReuse = GetPlanCacheCount(typeof(SnakeEntity));
         Assert.Equal(afterFirstLoad, afterFirstReuse); // Same policy reuses plan
 
         // Third load with different policy - should NOT reuse (creates new plan)
         var underscoreStrip = new MapperOptions(NamePolicy: name => name.Replace("_", string.Empty));
         await DataReaderMapper.LoadAsync<SnakeEntity>(readerFactory(), underscoreStrip);
-        var afterSecondPolicy = GetPlanCacheCount();
+        var afterSecondPolicy = GetPlanCacheCount(typeof(SnakeEntity));
 
         // Different policies should produce different schema hashes
         // Note: With bounded cache, count may stay same due to eviction, or increase by 1
@@ -622,17 +628,25 @@ public class DataReaderMapperTests
         Assert.False(weakOptions!.IsAlive);
     }
 
-    private static int GetPlanCacheCount()
+    // Counts the cached plans built for one entity type. The cache is process-wide and other tests add plans in
+    // parallel, so a whole-cache count would move with them; the entity's own plans are the only thing this measures.
+    private static int GetPlanCacheCount(Type entity)
     {
-        var cacheField = typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic);
-        var cache = cacheField!.GetValue(null)!;
+        var cache = typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic)!
+            .GetValue(null)!;
+        var map = cache.GetType().GetField("_map", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(cache)!;
 
-        var mapField = cache.GetType().GetField("_map", BindingFlags.Instance | BindingFlags.NonPublic)
-                       ?? throw new InvalidOperationException("_map field not found on BoundedCache");
-        var map = mapField.GetValue(cache)!;
-        var countProp = map.GetType().GetProperty("Count")
-                        ?? throw new InvalidOperationException("Count property not found on _map");
-        return (int)countProp.GetValue(map)!;
+        var count = 0;
+        foreach (var entry in (System.Collections.IEnumerable)map)
+        {
+            var key = entry.GetType().GetProperty("Key")!.GetValue(entry)!;
+            if (key.GetType().GetProperty("Type")!.GetValue(key) as Type == entity)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private static object BuildPlanCacheKey<T>(DbDataReader templateReader, MapperOptions options)
@@ -688,6 +702,11 @@ public class DataReaderMapperTests
     private class SnakeEntity
     {
         public string? FirstName { get; set; }
+    }
+
+    private class NoisePlanEntity
+    {
+        public int Id { get; set; }
     }
 
     private class ColumnsOnlyEntity

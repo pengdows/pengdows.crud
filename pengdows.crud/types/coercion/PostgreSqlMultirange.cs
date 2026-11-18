@@ -67,7 +67,17 @@ internal sealed class PostgreSqlMultirangeCoercion : DbCoercion<Range<int>[]>
                 var result = new Range<int>[items.Length];
                 for (var i = 0; i < items.Length; i++)
                 {
-                    if (!converter.TryConvertFromProvider(items.GetValue(i)!, _provider, out result[i]))
+                    // A malformed element is a value this coercion cannot read: report false (no value, not echoed) so the
+                    // caller falls back and names the column, instead of an exception escaping the Try contract.
+                    try
+                    {
+                        if (!converter.TryConvertFromProvider(items.GetValue(i)!, _provider, out result[i]))
+                        {
+                            value = null;
+                            return false;
+                        }
+                    }
+                    catch (FormatException)
                     {
                         value = null;
                         return false;

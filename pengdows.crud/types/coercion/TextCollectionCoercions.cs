@@ -111,7 +111,8 @@ internal sealed class JsonObjectCoercion : DbCoercion<Dictionary<string, object>
     private static object? ToValue(JsonElement element) => element.ValueKind switch
     {
         JsonValueKind.String => element.GetString() ?? string.Empty,
-        JsonValueKind.Number => element.TryGetInt64(out var integer) ? integer : element.GetDouble(),
+        // Both arms are object: a long and a double in one conditional promote to double and lose integer precision.
+        JsonValueKind.Number => element.TryGetInt64(out var integer) ? (object)integer : element.GetDouble(),
         JsonValueKind.True => true,
         JsonValueKind.False => false,
         JsonValueKind.Null => null,

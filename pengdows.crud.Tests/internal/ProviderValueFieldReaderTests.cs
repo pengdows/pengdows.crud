@@ -54,6 +54,22 @@ public class ProviderValueFieldReaderTests
     }
 
     [Fact]
+    public void ReadArray_NullableElementTarget_ReadsTheNullableArrayWithItsNulls()
+    {
+        var reader = OneRow(new int?[] { 7, null }, nullableElementArray: true);
+
+        Assert.Equal(new int?[] { 7, null }, ProviderValueFieldReader.ReadArray<int?>(reader, 0));
+    }
+
+    [Fact]
+    public void ReadArrayOrNull_NullableElementTarget_ReadsTheNullableArrayWithItsNulls()
+    {
+        var reader = OneRow(new int?[] { null, 8 }, nullableElementArray: true);
+
+        Assert.Equal(new int?[] { null, 8 }, ProviderValueFieldReader.ReadArrayOrNull<int?>(reader, 0));
+    }
+
+    [Fact]
     public void ReadArrayOrNull_NullColumn_ReturnsNull()
     {
         var reader = OneRow(DBNull.Value);
