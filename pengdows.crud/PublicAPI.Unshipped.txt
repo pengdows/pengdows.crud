@@ -1,4 +1,6 @@
 #nullable enable
+pengdows.crud.configuration.DatabaseProviderConfig.AssemblySha256.get -> string!
+pengdows.crud.configuration.DatabaseProviderConfig.AssemblySha256.set -> void
 override pengdows.crud.DatabaseContext.ValidateCanCreateContainer() -> void
 override pengdows.crud.types.valueobjects.HierarchyId.Equals(object? obj) -> bool
 override pengdows.crud.types.valueobjects.HierarchyId.GetHashCode() -> int

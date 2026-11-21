@@ -29,7 +29,7 @@ public class SqlServerRowScalingBenchmarks : IDisposable
     internal const string FilteredQuerySql =
         "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = @IsActive AND age >= @MinAge AND age <= @MaxAge ORDER BY id OFFSET 0 ROWS FETCH NEXT @Limit ROWS ONLY";
 
-    private const string SaPassword = "Benchmark_P@ss1";
+    private static readonly string SaPassword = BenchmarkSecrets.NewPassword();
 
     private IContainer _container = null!;
     private string _connStr = null!;

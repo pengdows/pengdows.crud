@@ -25,6 +25,12 @@ not something known at compile time.
 }
 ```
 
+**Pinning an `AssemblyPath`.** Add `"AssemblySha256"` (64 hexadecimal characters, case-insensitive) to any entry that
+uses `AssemblyPath`. The loader computes the SHA-256 of the file and refuses to load it when the bytes differ,
+throwing `InvalidOperationException` that names the path. A malformed value, or one set without an
+`AssemblyPath`, is refused at startup. An entry with an `AssemblyPath` and no hash still loads, with a warning
+in the log, so existing configurations keep working.
+
 **Entry point.** `DbProviderLoader`'s constructor is `internal`; application code reaches it
 through the public `AddDbProviderLoading` extension on `IServiceCollection`
 (`pengdows.crud/configuration/DbProviderLoaderServiceCollectionExtensions.cs`), which constructs
@@ -71,6 +77,9 @@ this order:
      been compromised — an attacker who can write there already has a materially larger foothold
      than a single configured path.
      A path that passes containment but doesn't exist throws `InvalidOperationException` too.
+     When `AssemblySha256` is set, the file's SHA-256 is checked here, before `LoadFrom`. The check and
+     the load read the file separately, so a writer with access to the directory in between is not excluded;
+     pinning reduces what can be loaded, it does not make the read atomic.
    - `AssemblyName` — loaded via `Assembly.Load` (uses the standard assembly-resolution probing,
      not path-based).
 2. **`FactoryType` static accessor**, once an assembly is loaded: looks up a public static
@@ -212,6 +221,21 @@ attacker can write to (or inject values into) whatever configuration source feed
 `DatabaseProviders`, they can already get pengdows.crud to load and execute arbitrary code in the
 host process — the same blast radius as an attacker who can modify any other part of the
 application's startup configuration.
+
+**Preferred: register the factory in code.** Loading from configuration is the riskiest option, and the
+loader is deprecated for removal in 3.0. A factory you reference directly never reads a path or a type name from
+configuration:
+
+```csharp
+// Pass the provider's factory straight to the context.
+var context = new DatabaseContext(connectionString, NpgsqlFactory.Instance);
+
+// Or register it under a key for dependency injection.
+services.AddKeyedSingleton<DbProviderFactory>("postgres", NpgsqlFactory.Instance);
+```
+
+Configuration-based loading remains available for deployments that need it. Pin each `AssemblyPath` with
+`AssemblySha256` when you use it.
 
 **Supported factory conventions** are exactly the two described in "Factory resolution order"
 above (static `Instance` property or field) plus the legacy `DbProviderFactories.GetFactory`

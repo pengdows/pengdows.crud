@@ -29,6 +29,7 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 2, iterationCount: 3, invocationCount: 10)]
 public class DatabaseFeatureBenchmarks : IAsyncDisposable
 {
+    private static readonly string DbPassword = BenchmarkSecrets.NewPassword();
     private const string ComplexQuerySqlTemplate = """
                                                    SELECT t.transaction_id, t.user_id, t.status::text AS status,
                                                           t.currency::text AS currency, t.amount,
@@ -110,7 +111,7 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
 
         _container = new ContainerBuilder()
             .WithImage("postgres:15-alpine")
-            .WithEnvironment("POSTGRES_PASSWORD", "postgres")
+            .WithEnvironment("POSTGRES_PASSWORD", DbPassword)
             .WithEnvironment("POSTGRES_DB", "dbfeatures_test")
             .WithPortBinding(0, 5432)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(5432))
@@ -120,7 +121,7 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
 
         var mappedPort = _container.GetMappedPublicPort(5432);
         _baseConnStr =
-            $"Host=localhost;Port={mappedPort};Database=dbfeatures_test;Username=postgres;Password=postgres";
+            $"Host=localhost;Port={mappedPort};Database=dbfeatures_test;Username=postgres;Password={DbPassword}";
 
         await WaitForReady();
         await CreateSchemaAndSeedAsync();

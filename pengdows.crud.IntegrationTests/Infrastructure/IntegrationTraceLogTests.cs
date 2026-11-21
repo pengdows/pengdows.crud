@@ -1,40 +1,47 @@
+using System.Text.RegularExpressions;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.IntegrationTests.Infrastructure;
 
+/// <summary>
+/// The trace file is appended to by every run. A fixed name in the shared temp directory lets another local
+/// account create it first (a symlink would redirect the appends), so each process gets its own random name.
+/// </summary>
 public sealed class IntegrationTraceLogTests
 {
-    [Fact]
-    public void IsEnabled_ReturnsTrue_ForSnowflake_WhenSnowflakeDebugEnabled()
-    {
-        var original = Environment.GetEnvironmentVariable("SNOWFLAKE_DEBUG");
-        Environment.SetEnvironmentVariable("SNOWFLAKE_DEBUG", "true");
+    private static readonly Regex RandomNameSuffix = new(@"-[0-9a-f]{32}\.log$", RegexOptions.CultureInvariant);
 
-        try
-        {
-            Assert.True(IntegrationTraceLog.IsEnabled(SupportedDatabase.Snowflake));
-            Assert.False(IntegrationTraceLog.IsEnabled(SupportedDatabase.PostgreSql));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("SNOWFLAKE_DEBUG", original);
-        }
+    [Fact]
+    public void TracePath_IsNotTheFixedSharedName()
+    {
+        var path = IntegrationTraceLog.TracePath(SupportedDatabase.PostgreSql);
+
+        Assert.NotEqual("/tmp/integration-trace.log", path);
+        Assert.DoesNotContain(Path.Combine(Path.GetTempPath(), "integration-trace.log"), path);
     }
 
     [Fact]
-    public void IsEnabled_ReturnsTrue_ForAnyProvider_WhenGeneralTraceEnabled()
+    public void TracePath_CarriesARandomPerProcessSuffix()
     {
-        var original = Environment.GetEnvironmentVariable("INTEGRATION_TRACE");
-        Environment.SetEnvironmentVariable("INTEGRATION_TRACE", "true");
+        var path = IntegrationTraceLog.TracePath(SupportedDatabase.PostgreSql);
 
-        try
-        {
-            Assert.True(IntegrationTraceLog.IsEnabled(SupportedDatabase.Snowflake));
-            Assert.True(IntegrationTraceLog.IsEnabled(SupportedDatabase.PostgreSql));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("INTEGRATION_TRACE", original);
-        }
+        Assert.Matches(RandomNameSuffix, path);
+    }
+
+    [Fact]
+    public void TracePath_IsStableWithinOneProcess_SoARunWritesOneFile()
+    {
+        Assert.Equal(
+            IntegrationTraceLog.TracePath(SupportedDatabase.PostgreSql),
+            IntegrationTraceLog.TracePath(SupportedDatabase.MySql));
+    }
+
+    [Fact]
+    public void SnowflakeTracePath_IsRandomToo_AndDistinctFromTheGeneralTrace()
+    {
+        var snowflake = IntegrationTraceLog.TracePath(SupportedDatabase.Snowflake);
+
+        Assert.Matches(RandomNameSuffix, snowflake);
+        Assert.NotEqual(IntegrationTraceLog.TracePath(SupportedDatabase.PostgreSql), snowflake);
     }
 }

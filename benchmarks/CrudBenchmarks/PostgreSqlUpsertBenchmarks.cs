@@ -22,6 +22,7 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
 public class PostgreSqlUpsertBenchmarks : IDisposable
 {
+    private static readonly string DbPassword = BenchmarkSecrets.NewPassword();
     private const int SeedRows = 1000;
 
     private IContainer _container = null!;
@@ -37,7 +38,7 @@ public class PostgreSqlUpsertBenchmarks : IDisposable
     {
         _container = new ContainerBuilder()
             .WithImage("postgres:16-alpine")
-            .WithEnvironment("POSTGRES_PASSWORD", "bench")
+            .WithEnvironment("POSTGRES_PASSWORD", DbPassword)
             .WithEnvironment("POSTGRES_USER", "bench")
             .WithEnvironment("POSTGRES_DB", "benchmark")
             .WithPortBinding(BenchmarkHostPort.ReserveBelowEphemeralRange(), 5432)
@@ -45,7 +46,7 @@ public class PostgreSqlUpsertBenchmarks : IDisposable
         await _container.StartAsync();
 
         var hostPort = _container.GetMappedPublicPort(5432);
-        _connStr = $"Host=localhost;Port={hostPort};Username=bench;Password=bench;Database=benchmark;" +
+        _connStr = $"Host=localhost;Port={hostPort};Username=bench;Password={DbPassword};Database=benchmark;" +
                    "Pooling=true;Minimum Pool Size=5;Maximum Pool Size=100;Timeout=15;CommandTimeout=30;";
         await WaitForReadyAsync(_connStr);
 

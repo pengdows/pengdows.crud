@@ -45,6 +45,7 @@ namespace CrudBenchmarks;
 [CategoriesColumn]
 public class PostgreSqlMethodologyBenchmarks
 {
+    private static readonly string DbPassword = BenchmarkSecrets.NewPassword();
     private const int Ops = 20;
     private const int ListSize = 10;
     private const int SeedRows = 1000;
@@ -94,7 +95,7 @@ public class PostgreSqlMethodologyBenchmarks
 
         var builder = new ContainerBuilder()
             .WithImage("postgres:16-alpine")
-            .WithEnvironment("POSTGRES_PASSWORD", "bench")
+            .WithEnvironment("POSTGRES_PASSWORD", DbPassword)
             .WithEnvironment("POSTGRES_USER", "bench")
             .WithEnvironment("POSTGRES_DB", "benchmark")
             .WithCommand("-c", "shared_preload_libraries=pg_stat_statements", "-c", "pg_stat_statements.track=top")
@@ -134,7 +135,7 @@ public class PostgreSqlMethodologyBenchmarks
         }
 
         _connStr =
-            $"Host=localhost;Port={_container.GetMappedPublicPort(5432)};Username=bench;Password=bench;Database=benchmark;" +
+            $"Host=localhost;Port={_container.GetMappedPublicPort(5432)};Username=bench;Password={DbPassword};Database=benchmark;" +
             "Pooling=true;Minimum Pool Size=5;Maximum Pool Size=100;Timeout=15;CommandTimeout=30;";
         await WaitForReadyAsync(_connStr);
 

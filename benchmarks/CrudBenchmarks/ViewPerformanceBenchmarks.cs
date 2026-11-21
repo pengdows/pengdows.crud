@@ -25,6 +25,7 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 3, iterationCount: 5, invocationCount: 50)]
 public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
 {
+    private static readonly string DbPassword = BenchmarkSecrets.NewPassword();
     private const string TableScanSqlTemplate = """
                                                 SELECT
                                                     customer_id as customer_id,
@@ -85,7 +86,7 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
 
         _container = new ContainerBuilder()
             .WithImage("postgres:15-alpine")
-            .WithEnvironment("POSTGRES_PASSWORD", "postgres")
+            .WithEnvironment("POSTGRES_PASSWORD", DbPassword)
             .WithEnvironment("POSTGRES_DB", "matview_perf_test")
             .WithPortBinding(0, 5432)
             // Raise max_connections so multiple independent pools (pengdows, Dapper, EF, StormGate)
@@ -98,7 +99,7 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
 
         var mappedPort = _container.GetMappedPublicPort(5432);
         _connStr =
-            $"Host=localhost;Port={mappedPort};Database=matview_perf_test;Username=postgres;Password=postgres";
+            $"Host=localhost;Port={mappedPort};Database=matview_perf_test;Username=postgres;Password={DbPassword}";
 
         // Create the shared data source first so WaitForReady and seeding use the same
         // pool as the Dapper/StormGate benchmarks — no orphan connections in the global pool.

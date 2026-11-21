@@ -21,4 +21,10 @@ public class DatabaseProviderConfig
     public string FactoryType { get; set; } = "";
     public string AssemblyPath { get; set; } = "";
     public string AssemblyName { get; set; } = "";
+
+    /// <summary>
+    /// Optional SHA-256 of the file at <see cref="AssemblyPath"/>, as 64 hexadecimal characters (case-insensitive).
+    /// When set, a file whose bytes don't match is refused before it is loaded. Requires <see cref="AssemblyPath"/>.
+    /// </summary>
+    public string AssemblySha256 { get; set; } = "";
 }

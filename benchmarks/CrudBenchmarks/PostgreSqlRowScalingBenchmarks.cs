@@ -26,6 +26,7 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
 public class PostgreSqlRowScalingBenchmarks : IDisposable
 {
+    private static readonly string DbPassword = BenchmarkSecrets.NewPassword();
     internal const string ReadListSql =
         "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > @Age LIMIT @Limit";
 
@@ -52,7 +53,7 @@ public class PostgreSqlRowScalingBenchmarks : IDisposable
 
         _container = new ContainerBuilder()
             .WithImage("postgres:16-alpine")
-            .WithEnvironment("POSTGRES_PASSWORD", "bench")
+            .WithEnvironment("POSTGRES_PASSWORD", DbPassword)
             .WithEnvironment("POSTGRES_USER", "bench")
             .WithEnvironment("POSTGRES_DB", "benchmark")
             .WithPortBinding(BenchmarkHostPort.ReserveBelowEphemeralRange(), 5432)
@@ -60,7 +61,7 @@ public class PostgreSqlRowScalingBenchmarks : IDisposable
         await _container.StartAsync();
 
         _connStr =
-            $"Host=localhost;Port={_container.GetMappedPublicPort(5432)};Username=bench;Password=bench;Database=benchmark;" +
+            $"Host=localhost;Port={_container.GetMappedPublicPort(5432)};Username=bench;Password={DbPassword};Database=benchmark;" +
             "Pooling=true;Minimum Pool Size=5;Maximum Pool Size=100;Timeout=15;CommandTimeout=30;";
         await WaitForReadyAsync(_connStr);
 

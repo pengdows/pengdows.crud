@@ -27,6 +27,7 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 5, iterationCount: 10, invocationCount: 100)]
 public class ServerExecutionTimeBenchmarks : IAsyncDisposable
 {
+    private static readonly string DbPassword = BenchmarkSecrets.NewPassword();
     // SQL templates with {param} placeholders
     private const string SingleReadSqlTemplate = """
                                                  SELECT film_id, title, length
@@ -101,7 +102,7 @@ public class ServerExecutionTimeBenchmarks : IAsyncDisposable
     {
         _container = new ContainerBuilder()
             .WithImage("postgres:15-alpine")
-            .WithEnvironment("POSTGRES_PASSWORD", "postgres")
+            .WithEnvironment("POSTGRES_PASSWORD", DbPassword)
             .WithEnvironment("POSTGRES_DB", "server_exec_test")
             .WithCommand("-c", "shared_preload_libraries=pg_stat_statements")
             .WithCommand("-c", "pg_stat_statements.track=all")
@@ -114,7 +115,7 @@ public class ServerExecutionTimeBenchmarks : IAsyncDisposable
         var mappedPort = _container.GetMappedPublicPort(5432);
 
         _baseConnStr =
-            $"Host=localhost;Port={mappedPort};Database=server_exec_test;Username=postgres;Password=postgres;";
+            $"Host=localhost;Port={mappedPort};Database=server_exec_test;Username=postgres;Password={DbPassword};";
         _pengdowsConnStr = _baseConnStr + "Application Name=ServerExec_Pengdows;";
         _dapperConnStr = _baseConnStr + "Application Name=ServerExec_Dapper;";
         _efConnStr = _baseConnStr + "Application Name=ServerExec_EntityFramework;";

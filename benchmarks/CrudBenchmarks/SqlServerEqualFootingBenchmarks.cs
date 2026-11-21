@@ -32,6 +32,7 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
 public class SqlServerEqualFootingBenchmarks : IDisposable
 {
+    private static readonly string SaPassword = BenchmarkSecrets.NewPassword();
     private const int SeedRows = 1000;
 
     private IContainer _container = null!;
@@ -81,7 +82,7 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
         _container = new ContainerBuilder()
             .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
             .WithEnvironment("ACCEPT_EULA", "Y")
-            .WithEnvironment("MSSQL_SA_PASSWORD", "Benchmark_P@ss1")
+            .WithEnvironment("MSSQL_SA_PASSWORD", SaPassword)
             .WithEnvironment("MSSQL_PID", "Developer")
             .WithPortBinding(1433, true)
             .Build();
@@ -90,9 +91,9 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
 
         var hostPort = _container.GetMappedPublicPort(1433);
         var masterConnStr =
-            $"Server=localhost,{hostPort};Database=master;User Id=sa;Password=Benchmark_P@ss1;TrustServerCertificate=True;";
+            $"Server=localhost,{hostPort};Database=master;User Id=sa;Password={SaPassword};TrustServerCertificate=True;";
         _connStr =
-            $"Server=localhost,{hostPort};Database=benchmark;User Id=sa;Password=Benchmark_P@ss1;TrustServerCertificate=True;";
+            $"Server=localhost,{hostPort};Database=benchmark;User Id=sa;Password={SaPassword};TrustServerCertificate=True;";
 
         await WaitForReadyAsync(masterConnStr);
 

@@ -189,6 +189,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         };
     }
 
+    // A name is written into SQL text, so it must be a plain identifier: an ASCII letter first, then ASCII letters,
+    // digits or underscores, and no longer than the dialect's ParameterNameMaxLength (63 where the provider states
+    // none). A hand-written loop: the rule is this small, and a regex match per parameter would cost more for no
+    // extra safety.
+    private void ValidateParameterName(string parameterName) =>
+        pengdows.crud.@internal.ParameterNameRule.Validate(parameterName, _context.DataSourceInfo.ParameterNameMaxLength);
+
     private static string NormalizeParameterName(string parameterName)
     {
         if (string.IsNullOrEmpty(parameterName))
@@ -527,6 +534,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             // Strip any dialect prefix (@, :, ?, $) — parameters must be stored without prefix
             parameter.ParameterName = NormalizeParameterName(parameter.ParameterName);
+            ValidateParameterName(parameter.ParameterName);
         }
 
         var isOutput = parameter.Direction switch
@@ -1125,7 +1133,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     private string GenerateParameterName()
     {
-        var maxLength = Math.Max(1, _context.DataSourceInfo.ParameterNameMaxLength);
+        // Generated names are 8 characters: short enough to read in a log, and room for 2^28 counter values per
+        // container. A dialect whose limit is shorter than 8 still wins.
+        const int GeneratedNameLength = 8;
+        var maxLength = Math.Max(1, Math.Min(GeneratedNameLength, _context.DataSourceInfo.ParameterNameMaxLength));
         const string basePrefix = "p";
 
         if (maxLength <= basePrefix.Length)

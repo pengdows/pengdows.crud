@@ -19,7 +19,9 @@
 // =============================================================================
 
 using System.Data.Common;
+using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -76,10 +78,35 @@ public class DbProviderLoader : IDbProviderLoader
         }
     }
 
+    // Returns the configured hash (or null when none is configured), refusing a malformed one, and a hash that has no
+    // AssemblyPath to apply to.
+    private static string? ValidateAssemblySha256(string providerKey, DatabaseProviderConfig config)
+    {
+        if (string.IsNullOrEmpty(config.AssemblySha256))
+        {
+            return null;
+        }
+
+        if (config.AssemblySha256.Length != 64 || !config.AssemblySha256.All(Uri.IsHexDigit))
+        {
+            throw new InvalidOperationException(
+                $"AssemblySha256 for provider '{providerKey}' must be 64 hexadecimal characters.");
+        }
+
+        if (string.IsNullOrEmpty(config.AssemblyPath))
+        {
+            throw new InvalidOperationException(
+                $"AssemblySha256 for provider '{providerKey}' applies to AssemblyPath only; set AssemblyPath or remove AssemblySha256.");
+        }
+
+        return config.AssemblySha256;
+    }
+
     private DbProviderFactory LoadProviderFactory(string providerKey, DatabaseProviderConfig config)
     {
         // Step 1: Load assembly if specified
         Assembly? providerAssembly = null;
+        var expectedSha256 = ValidateAssemblySha256(providerKey, config);
         if (!string.IsNullOrEmpty(config.AssemblyPath))
         {
             var fullPath = ResolveAssemblyPath(config.AssemblyPath, providerKey);
@@ -90,6 +117,27 @@ public class DbProviderLoader : IDbProviderLoader
                 throw new InvalidOperationException(
                     $"Assembly file '{fullPath}' for provider '{providerKey}' does not exist."
                 );
+            }
+
+            if (expectedSha256 != null)
+            {
+                // Checked before LoadFrom, so a file that doesn't match is never loaded. The check and the load read the
+                // file separately, so a writer with access to the directory in between is not excluded.
+                var actualSha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(fullPath)));
+                if (!string.Equals(actualSha256, expectedSha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogError("Assembly file '{FullPath}' for provider '{ProviderKey}' does not match its AssemblySha256",
+                        fullPath, providerKey);
+                    throw new InvalidOperationException(
+                        $"Assembly file '{fullPath}' for provider '{providerKey}' does not match the configured SHA-256; it was not loaded."
+                    );
+                }
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Provider '{ProviderKey}' loads '{FullPath}' without an AssemblySha256 pin; set one to refuse a changed file.",
+                    providerKey, fullPath);
             }
 
             lock (_lock)
@@ -153,6 +201,18 @@ public class DbProviderLoader : IDbProviderLoader
                 );
                 throw new InvalidOperationException(
                     $"Could not find DbProviderFactory type '{config.FactoryType}' in assembly for provider '{providerKey}'."
+                );
+            }
+
+            // Check the type before any of its members run: reading Instance executes the type's static code.
+            if (!typeof(DbProviderFactory).IsAssignableFrom(type))
+            {
+                _logger.LogError(
+                    "Type '{FactoryTypeName}' for provider '{ProviderKey}' is not a DbProviderFactory",
+                    config.FactoryType, providerKey
+                );
+                throw new InvalidOperationException(
+                    $"Type '{config.FactoryType}' for provider '{providerKey}' is not a DbProviderFactory."
                 );
             }
 

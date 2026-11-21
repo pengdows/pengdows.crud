@@ -25,6 +25,7 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 2, iterationCount: 8)]
 public class PostgreSqlSyncPoolStormBenchmarks
 {
+    private static readonly string DbPassword = BenchmarkSecrets.NewPassword();
     private const int Threads = 32;
 
     [Params(2, 8)]
@@ -41,7 +42,7 @@ public class PostgreSqlSyncPoolStormBenchmarks
     {
         _container = new ContainerBuilder()
             .WithImage("postgres:16-alpine")
-            .WithEnvironment("POSTGRES_PASSWORD", "storm")
+            .WithEnvironment("POSTGRES_PASSWORD", DbPassword)
             .WithEnvironment("POSTGRES_DB", "storm")
             .WithCommand("-c", "max_connections=200")
             .WithPortBinding(0, 5432)
@@ -51,7 +52,7 @@ public class PostgreSqlSyncPoolStormBenchmarks
 
         var port = _container.GetMappedPublicPort(5432);
         var connectionString =
-            $"Host=localhost;Port={port};Database=storm;Username=postgres;Password=storm;Pooling=true;Maximum Pool Size=100";
+            $"Host=localhost;Port={port};Database=storm;Username=postgres;Password={DbPassword};Pooling=true;Maximum Pool Size=100";
         _storm = new SyncPoolStorm(new DatabaseContext(new DatabaseContextConfiguration
         {
             ConnectionString = connectionString,

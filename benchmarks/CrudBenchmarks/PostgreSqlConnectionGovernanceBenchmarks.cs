@@ -123,13 +123,7 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
               (workMilliseconds / 1000.0).ToString(System.Globalization.CultureInfo.InvariantCulture) +
               ")) AS work WHERE id = 1";
 
-    private static readonly string PgPassword = GeneratePassword();
-
-    private static string GeneratePassword()
-    {
-        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(18);
-        return Convert.ToBase64String(bytes);
-    }
+    private static readonly string PgPassword = BenchmarkSecrets.NewPassword();
 
     private IContainer? _container;
     private string _connStr = string.Empty;

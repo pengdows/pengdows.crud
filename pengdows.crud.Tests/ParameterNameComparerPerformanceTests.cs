@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Data;
 using Xunit;
 
@@ -75,7 +76,8 @@ public class ParameterNameComparerPerformanceTests : SqlLiteContextTestBase
     {
         using var sc = Context.CreateSqlContainer("SELECT 1");
 
-        var longName = "VeryLongParameterNameWith128Characters_" + new string('X', 85);
+        // The longest name the rule allows: 63 characters.
+        var longName = "A" + new string('X', 62);
         sc.AddParameterWithValue(longName, DbType.String, "test");
 
         // Same name retrieves correctly
@@ -84,6 +86,16 @@ public class ParameterNameComparerPerformanceTests : SqlLiteContextTestBase
         // With marker prefix
         Assert.Equal("test", sc.GetParameterValue("@" + longName));
         Assert.Equal("test", sc.GetParameterValue(":" + longName));
+    }
+
+    [Fact]
+    public void ParameterNameComparer_RefusesNamesLongerThanTheRule()
+    {
+        using var sc = Context.CreateSqlContainer("SELECT 1");
+
+        // Context is SQLite, which states 255: one character past that is refused.
+        var tooLong = "A" + new string('X', 255);
+        Assert.Throws<ArgumentException>(() => sc.AddParameterWithValue(tooLong, DbType.String, "test"));
     }
 
     [Fact]

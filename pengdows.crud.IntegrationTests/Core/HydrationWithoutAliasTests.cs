@@ -12,8 +12,15 @@ namespace pengdows.crud.IntegrationTests.Core;
 /// </summary>
 public sealed class HydrationWithoutAliasTests : IAsyncLifetime
 {
-    private readonly string _file = Path.Combine(Directory.CreateTempSubdirectory("pengdows-hyd-").FullName, "h.sqlite");
+    // A random directory per test instance, removed in DisposeAsync.
+    private readonly string _dir = Directory.CreateTempSubdirectory("pengdows-hyd-").FullName;
+    private readonly string _file;
     private DatabaseContext? _ctx;
+
+    public HydrationWithoutAliasTests()
+    {
+        _file = Path.Combine(_dir, "h.sqlite");
+    }
 
     [Table("hyd_orders")]
     public class OrderRow
@@ -39,7 +46,9 @@ public sealed class HydrationWithoutAliasTests : IAsyncLifetime
 
     public Task DisposeAsync()
     {
+        // Release the context (and the SQLite file it holds) before the directory is removed.
         _ctx?.Dispose();
+        Directory.Delete(_dir, recursive: true);
         return Task.CompletedTask;
     }
 

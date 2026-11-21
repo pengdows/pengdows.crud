@@ -64,8 +64,7 @@ public class PostgreSqlMixedGovernanceBenchmarks : IAsyncDisposable
             poolAcquireTimeout: StormGateAcquireTimeout, reads: size, writes: size);
     }
 
-    private static readonly string PgPassword =
-        Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(18));
+    private static readonly string PgPassword = BenchmarkSecrets.NewPassword();
 
     private IContainer? _container;
     private string _connStr = string.Empty;

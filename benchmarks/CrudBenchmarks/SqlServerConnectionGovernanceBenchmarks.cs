@@ -37,7 +37,7 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
     private const string ScenarioUncontrolled = "Uncontrolled";
     private const string ScenarioGoverned = "Governed";
     private const string ScenarioGovernedEf = "GovernedEf";
-    private const string SaPassword = "Benchmark_P@ss1";
+    private static readonly string SaPassword = BenchmarkSecrets.NewPassword();
 
     internal const int StormParallelism = PostgreSqlConnectionGovernanceBenchmarks.StormParallelism;
     internal const int StormOperationsPerRun = PostgreSqlConnectionGovernanceBenchmarks.StormOperationsPerRun;

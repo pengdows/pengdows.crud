@@ -2488,6 +2488,14 @@ public partial class DatabaseContext
     // string confirm password guesses offline (REV-065). The digest is stable within a process.
     private static readonly byte[] PoolKeySecretSalt = RandomNumberGenerator.GetBytes(32);
 
+    // One definition of a secret-bearing connection-string key, used by both redaction and pool-key hashing. "key" and
+    // "signature" cover account, API, private and shared-access keys; "credential" covers credential-valued settings.
+    // Kept broad on purpose: over-redacting costs less than leaking.
+    private static bool IsSensitiveConnectionKey(string lowerKey) =>
+        lowerKey.Contains("password") || lowerKey == "pwd" || lowerKey.Contains("user id") || lowerKey == "uid" ||
+        lowerKey.Contains("token") || lowerKey.Contains("secret") || lowerKey.Contains("access") ||
+        lowerKey.Contains("key") || lowerKey.Contains("signature") || lowerKey.Contains("credential");
+
     private static string HashSensitiveConnectionStringValues(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -2502,8 +2510,7 @@ public partial class DatabaseContext
             foreach (var key in keys)
             {
                 var lower = key.ToLowerInvariant();
-                if (lower.Contains("password") || lower == "pwd" || lower.Contains("user id") || lower == "uid" ||
-                    lower.Contains("token") || lower.Contains("secret") || lower.Contains("access"))
+                if (IsSensitiveConnectionKey(lower))
                 {
                     var value = builder[key]?.ToString() ?? string.Empty;
                     var valueBytes = HMACSHA256.HashData(PoolKeySecretSalt, Encoding.UTF8.GetBytes(value));
@@ -2576,8 +2583,7 @@ public partial class DatabaseContext
             foreach (var key in keys)
             {
                 var lower = key.ToLowerInvariant();
-                if (lower.Contains("password") || lower == "pwd" || lower.Contains("user id") || lower == "uid" ||
-                    lower.Contains("token") || lower.Contains("secret") || lower.Contains("access"))
+                if (IsSensitiveConnectionKey(lower))
                 {
                     builder[key] = "REDACTED";
                 }

@@ -7,6 +7,7 @@ namespace pengdows.crud.IntegrationTests.Infrastructure;
 internal static class IntegrationTraceLog
 {
     private static readonly object TraceGate = new();
+    private static readonly HashSet<SupportedDatabase> Announced = new();
 
     public static bool IsEnabled(SupportedDatabase provider)
     {
@@ -41,7 +42,13 @@ internal static class IntegrationTraceLog
         {
             lock (TraceGate)
             {
-                File.AppendAllText(GetTracePath(provider), line + Environment.NewLine);
+                if (!Announced.Contains(provider))
+                {
+                    Announced.Add(provider);
+                    Console.WriteLine($"[trace] {provider} lines are also appended to {TracePath(provider)}");
+                }
+
+                File.AppendAllText(TracePath(provider), line + Environment.NewLine);
             }
         }
         catch
@@ -63,10 +70,13 @@ internal static class IntegrationTraceLog
                    StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string GetTracePath(SupportedDatabase provider)
-    {
-        return provider == SupportedDatabase.Snowflake
-            ? "/tmp/snowflake-debug.log"
-            : "/tmp/integration-trace.log";
-    }
+    // One random suffix per process, so a run appends to one file that no other local account could have created.
+    private static readonly string ProcessId = Guid.NewGuid().ToString("N");
+    private static readonly string GeneralTracePath =
+        Path.Combine(Path.GetTempPath(), "pengdows-integration-trace-" + ProcessId + ".log");
+    private static readonly string SnowflakeTracePath =
+        Path.Combine(Path.GetTempPath(), "pengdows-snowflake-debug-" + ProcessId + ".log");
+
+    internal static string TracePath(SupportedDatabase provider) =>
+        provider == SupportedDatabase.Snowflake ? SnowflakeTracePath : GeneralTracePath;
 }

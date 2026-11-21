@@ -730,8 +730,7 @@ public class BenchmarkFairnessTests
 
         AssertAllPresent(fileName, text, new[]
         {
-            "RandomNumberGenerator.GetBytes",
-            "GeneratePassword()"
+            "BenchmarkSecrets.NewPassword()"
         });
     }
 

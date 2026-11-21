@@ -1315,7 +1315,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
     }
 
     public virtual int MaxOutputParameters => 0;
-    public virtual int ParameterNameMaxLength => 128;
+    // The fallback for a provider that states no limit. A dialect that knows its provider's limit overrides this.
+    public virtual int ParameterNameMaxLength => 63;
     public virtual ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
     /// <summary>
@@ -2189,6 +2190,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
         parameterName = parameterName.Replace("@", string.Empty)
             .Replace(":", string.Empty)
             .Replace("?", string.Empty);
+
+        // The name is written into SQL text, so it gets the same rule AddParameter applies.
+        pengdows.crud.@internal.ParameterNameRule.Validate(parameterName, ParameterNameMaxLength);
 
         return string.Concat(ParameterMarker, parameterName);
     }

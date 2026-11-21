@@ -80,8 +80,9 @@ public class SqlDialectDefaultsTests
         Assert.Equal(2000, dialect.MaxParameterLimit);
         Assert.NotEqual(2001, dialect.MaxParameterLimit);
 
-        Assert.Equal(128, dialect.ParameterNameMaxLength);
-        Assert.NotEqual(129, dialect.ParameterNameMaxLength);
+        // The fallback for a provider that states no parameter-name limit.
+        Assert.Equal(63, dialect.ParameterNameMaxLength);
+        Assert.NotEqual(64, dialect.ParameterNameMaxLength);
 
         Assert.Equal(ProcWrappingStyle.None, dialect.ProcWrappingStyle);
         Assert.NotEqual(ProcWrappingStyle.Call, dialect.ProcWrappingStyle);

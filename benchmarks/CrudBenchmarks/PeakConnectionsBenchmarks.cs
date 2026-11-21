@@ -55,7 +55,7 @@ public class PeakConnectionsBenchmarks : IAsyncDisposable
     [GlobalSetup]
     public async Task GlobalSetup()
     {
-        var password = Guid.NewGuid().ToString("N");
+        var password = BenchmarkSecrets.NewPassword();
         _container = new ContainerBuilder()
             .WithImage("postgres:16-alpine")
             .WithEnvironment("POSTGRES_PASSWORD", password)

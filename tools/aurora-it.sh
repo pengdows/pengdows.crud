@@ -13,9 +13,24 @@
 set -uo pipefail
 
 REGION="${AURORA_IT_REGION:-us-east-1}"
-STATE_DIR="${AURORA_IT_STATE_DIR:-${TMPDIR:-/tmp}/pengdows-aurora-it}"
-STATE="${STATE_DIR}/state.env"
-ENVFILE="${STATE_DIR}/aurora.env"
+# The state directory is random (mktemp -d: created atomically, mode 0700, never a name that already exists), so no
+# other local account can pre-create it. Its path is recorded in a pointer file under the user's home directory, which
+# is how `down` and `env` find it later. AURORA_IT_STATE_DIR overrides both, for a state directory the caller owns.
+POINTER_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/pengdows-aurora-it"
+POINTER="${POINTER_DIR}/current"
+
+set_paths() {
+  if [[ -n "${AURORA_IT_STATE_DIR:-}" ]]; then
+    STATE_DIR="${AURORA_IT_STATE_DIR}"
+  elif [[ -s "${POINTER}" ]]; then
+    STATE_DIR="$(<"${POINTER}")"
+  else
+    STATE_DIR=""
+  fi
+  STATE="${STATE_DIR}/state.env"
+  ENVFILE="${STATE_DIR}/aurora.env"
+}
+set_paths
 
 aws_() { aws --region "${REGION}" "$@"; }
 save() { echo "$1=$2" >> "${STATE}"; }
@@ -24,6 +39,11 @@ log() { echo "[aurora-it] $*" >&2; }
 up() {
   command -v aws >/dev/null || { log "the AWS CLI is not installed"; return 1; }
   aws_ sts get-caller-identity >/dev/null 2>&1 || { log "the AWS CLI is not signed in (run: aws login)"; return 1; }
+  if [[ -z "${STATE_DIR}" ]]; then
+    STATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pengdows-aurora-it.XXXXXXXX")" || { log "could not create a state directory"; return 1; }
+    ( umask 077; mkdir -p "${POINTER_DIR}" && printf '%s\n' "${STATE_DIR}" > "${POINTER}" ) || { log "could not write ${POINTER}"; return 1; }
+    STATE="${STATE_DIR}/state.env"; ENVFILE="${STATE_DIR}/aurora.env"
+  fi
   mkdir -p "${STATE_DIR}"; chmod 700 "${STATE_DIR}"
   if [[ -s "${STATE}" ]]; then log "a run is already recorded in ${STATE}; run '$0 down' first"; return 1; fi
   : > "${STATE}"; chmod 600 "${STATE}"
@@ -135,12 +155,14 @@ down() {
     return 1
   fi
   rm -f "${STATE}" "${ENVFILE}"
+  rmdir "${STATE_DIR}" 2>/dev/null
+  [[ -z "${AURORA_IT_STATE_DIR:-}" ]] && rm -f "${POINTER}"
   log "torn down: nothing tagged ${RUN} remains"
 }
 
 case "${1:-}" in
   up) up; rc=$?; (( rc != 0 )) && log "up failed; run '$0 down' to remove what was created"; exit "${rc}" ;;
   down) down ;;
-  env) echo "${ENVFILE}" ;;
+  env) [[ -n "${STATE_DIR}" ]] && echo "${ENVFILE}" || { log "no run is recorded"; exit 1; } ;;
   *) echo "usage: $0 up|down|env" >&2; exit 2 ;;
 esac

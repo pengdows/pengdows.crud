@@ -61,7 +61,7 @@ public class PostgreSqlBackpressureBenchmarks : IAsyncDisposable
     internal static double CapacityPerSecond => Concurrency * 1000.0 / ServiceMilliseconds;
     internal static double OfferedRatePerSecond => CapacityPerSecond * OverloadFactor;
 
-    private const string Password = "backpressure_pw";
+    private static readonly string Password = BenchmarkSecrets.NewPassword();
     private const string WorkSql = "SELECT 1 FROM pg_sleep(0.3)";
     private const string ProbeSql = "SELECT 1";
 
