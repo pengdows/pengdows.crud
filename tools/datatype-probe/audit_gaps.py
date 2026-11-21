@@ -107,9 +107,14 @@ def parse_declarations():
             mode = db = None
             continue
         if mode:
+            if mode == "decl":
+                d = re.match(r'\s+\["([^"]+)"\] = \("([^"]*)",\s*"([^"]*)"\)', line)
+                if d:
+                    declared[db][d.group(1)] = (d.group(2), d.group(3))  # (declaration, provider type or "(widened)")
+                continue
             e = re.match(r'\s+\["([^"]+)"\] = (.*)', line)
             if e:
-                (declared if mode == "decl" else refused)[db][e.group(1)] = e.group(2).strip().rstrip(",")
+                refused[db][e.group(1)] = e.group(2).strip().rstrip(",")
     return declared, refused
 
 
@@ -159,7 +164,13 @@ def main():
                 # The probe knows the type but the fidelity test has no cell for it: nothing tests it.
                 r["gapB"].append((cid, category, concept, status))
             elif semantic in declared.get(db, {}):
-                r["tested"] += 1
+                declaration, provider_type = declared[db][semantic]
+                if provider_type == "(widened)":
+                    # The .NET type round-trips, but through a wider native column: the database's own type is untested.
+                    r["gapA"].append((cid, category, concept, status, semantic + f" (tested only through a wider column, {declaration})"
+                                      + (" [override]" if overridden else "")))
+                else:
+                    r["tested"] += 1
             elif semantic in refused.get(db, {}):
                 verdict = classify_refusal(refused[db][semantic])
                 if verdict == "probe":
@@ -176,8 +187,8 @@ def main():
     out.append("`tools/datatype-probe/reconciliation.csv` (concept to probe type) and `TypeFidelityDeclarations.cs` (what is tested or refused).")
     out.append("Do not edit by hand: change the sources and re-run it.")
     out.append("")
-    out.append("**Supported** is a cell the workbook marks N (native) or A (alias). **Tested**: the database declares a column for the concept's")
-    out.append("probe type, so the fidelity test round-trips it. **Recorded**: a refusal with a stated verdict (by design, server, upstream, or a probe refusal validated against the vendor's documentation).")
+    out.append("**Supported** is a cell the workbook marks N (native) or A (alias). **Tested**: the database declares a native column for the concept's")
+    out.append("probe type, so the fidelity test round-trips it (a type that round-trips only through a wider column is Gap A). **Recorded**: a refusal with a stated verdict (by design, server, upstream, or a probe refusal validated against the vendor's documentation).")
     out.append("**Gap A**: supported, but the only record is `refused: <server text>`, meaning the probe found no accepted spelling; the type may be")
     out.append("untested because its working spelling was never a candidate. **Gap B**: supported, but the concept has no probe type or no fidelity cell, so nothing tests it.")
     out.append("V, E, R and ? cells are counted, not listed. A probe type marked *[override]* is this audit's judgement of which cell covers a")
