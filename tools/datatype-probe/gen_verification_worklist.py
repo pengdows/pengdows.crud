@@ -46,9 +46,6 @@ KNOWN_OPEN = [
      "with a typed DataMappingException. Cannot be made to pass; re-check if a newer ACE build is installed."),
     ("Access", "AutoNumber as Replication ID",
      "DAO refuses the AutoNumber attribute on a GUID field. Tested as a GUID column with a GenGUID() default; the true attribute is untested."),
-    ("Access", "B13 identity column, B77 Hyperlink / Attachment / Calculated / OLE",
-     "Listed under category 1 because no fidelity cell covers them, but dedicated live tests do: the COUNTER key round trip (InsertReturningTests) and "
-     "AccessComplexTypeTests (hyperlink, attachment, calculated fields, multi-value, lookup, memo variants, limit values)."),
     ("All", "Dedicated tests outside the fidelity cells",
      "Some category 1 rows are covered by live tests that are not fidelity cells. Check these before writing a new test: "
      "PostgreSqlAdvancedTypeRoundTripTests, PostgreSqlIntervalRoundTripTests, PostgreSqlRangeRoundTripTests, DuckDbWideAndListTypeRoundTripTests, "
@@ -77,6 +74,24 @@ KNOWN_OPEN = [
 ]
 
 
+# Rows closed with evidence: (database, concept id) -> (state, evidence). A closed row leaves its work category and is listed under
+# "Verified". State is "covered" (a dedicated test exercises it), "verified" (checked live on the test host, and pinned where it can
+# be) or "substitute only" (the cell tests a stand-in, because the native type is not available on the test host).
+VERIFIED = {
+    ("Sqlite", "B13"): ("covered", "AUTOINCREMENT identity: InsertReturningTests.CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders (INSERT ... RETURNING)."),
+    ("Sqlite", "B49"): ("substitute only", "rowid is a pseudo-column that is always the INTEGER PRIMARY KEY; the cell declares a column labelled ROWID. SqliteDeclaredTypeNameTests.Rowid_IsAPseudoColumn_ThatIsTheIntegerPrimaryKey."),
+    ("Sqlite", "B53"): ("substitute only", "JSON is text with the json_* functions; the cell declares a column labelled JSON. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven."),
+    ("Sqlite", "B54"): ("verified", "JSONB is built in from SQLite 3.45 (this host: 3.50.4) and is a blob. SqliteDeclaredTypeNameTests.Jsonb_IsBuiltInFromSqlite345_AndIsABlob."),
+    ("Sqlite", "B57"): ("substitute only", "Manifest typing: a value keeps the type it is given, whatever the declared name. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven."),
+    ("Sqlite", "B68"): ("substitute only", "SpatiaLite is an extension and is not installed on this host (load_extension: module not found, live 2026-11-21); the cell round-trips text under the label POINT. The native extension type is untested."),
+    ("Sqlite", "B71"): ("substitute only", "sqlite-vec is an extension and is not installed on this host (load_extension: module not found, live 2026-11-21); the cell round-trips text under the label VECTOR(3). The native extension type is untested."),
+    ("Access", "B13"): ("covered", "COUNTER identity through SELECT @@IDENTITY: InsertReturningTests.CreateAsync_NonReturningProviders_InsertsSuccessfully."),
+    ("Access", "B77"): ("covered", "AccessComplexTypeTests: hyperlink, attachment (name through SQL, bytes through DAO), calculated fields of every result type, OLE object (LONGBINARY in the catalog)."),
+    ("Access", "B08"): ("verified", "Large Number needs a current ACE build (16.0.5320 refused it, this host accepts it): AccessComplexTypeTests.NativeLargeNumber_CanBeCreatedWithTheInstalledAceProvider, and the catalog's BIGINT full-range entry."),
+    ("Access", "B63"): ("covered", "Multi-value fields of every element type: AccessComplexTypeTests.MultiValue_* (Byte, Integer, Long, Single, Double, Decimal, Text, GUID)."),
+}
+
+
 def main():
     matrix = ag.parse_status_matrix()
     to_semantic = ag.parse_concept_to_semantic()
@@ -85,6 +100,7 @@ def main():
     databases = sorted(set(ag.ABBREV.values()))
 
     items = defaultdict(lambda: defaultdict(list))  # db -> category -> rows
+    verified = defaultdict(list)  # db -> closed rows
     for cid, (category, concept, statuses) in sorted(matrix.items()):
         semantic = to_semantic.get(cid) or ag.OVERRIDES.get(cid)
         overridden = cid in ag.OVERRIDES and cid not in to_semantic
@@ -102,6 +118,10 @@ def main():
             label = semantic + (" [override]" if overridden else "") if semantic else "none"
 
             def add(cat, note):
+                if (db, cid) in VERIFIED:
+                    if not any(v[0] == cid for v in verified[db]):
+                        verified[db].append((cid, category, concept, status) + VERIFIED[(db, cid)])
+                    return
                 items[db][cat].append((cid, category, concept, status, label, note))
 
             if status == "X":
@@ -183,6 +203,19 @@ def main():
     out.append("|---|---|---|")
     for db, item, state in KNOWN_OPEN:
         out.append(f"| {db} | {item} | {state} |")
+    out.append("")
+
+    closed = sum(len(rows) for rows in verified.values())
+    out.append("## Verified (closed with evidence)")
+    out.append("")
+    out.append(f"{closed} rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a")
+    out.append("substitute because the native type is not available here (the native type is then still untested). They are not counted above.")
+    out.append("")
+    out.append("| Database | ID | Concept | State | Evidence |")
+    out.append("|---|---|---|---|---|")
+    for db in databases:
+        for cid, category, concept, status, state, evidence in verified.get(db, []):
+            out.append(f"| {db} | {cid} | {category}: {concept} | {state} | {evidence} |")
     out.append("")
 
     out.append("## Type conversions")
