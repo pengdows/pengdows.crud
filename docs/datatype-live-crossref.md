@@ -541,4 +541,4 @@ wrong date or a crash through. A result set holding such a column (provider type
 `DBTYPE_DATE`) is refused when its reader opens, before any value is read, with a `DataMappingException` that names the column and says
 to use `DATETIME` or to select `Year()`, `Month()`, `Day()`, `Hour()`, `Minute()` and `Second()` of it (`SqlDialect.UnreadableColumnTypes`;
 unit tests in `AccessExtendedDateTimeRefusalTests`, live test `DateTimeExtended_IsStoredCorrectly_AndRefusedByNameOnRead`). A write
-through the gateway is stored correctly, to the second. Reading only the column through `ExecuteScalar` is not guarded (no reader opens).
+through the gateway is stored correctly, to the second. A scalar read is refused too: every scalar execution reads through a (forward-only, read-only) reader, never the provider's `ExecuteScalar`, so `ExecuteScalarRequiredAsync`, `ExecuteScalarOrNullAsync` and `TryExecuteScalarAsync` hit the same check.

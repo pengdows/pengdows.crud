@@ -495,6 +495,14 @@ public class AccessComplexTypeTests : IDisposable
         Assert.Contains("Date/Time Extended", ex.Message);
         Assert.Equal(0, context.NumberOfOpenConnections);
 
+        // A scalar read goes through a reader too, so it is refused the same way.
+        await using (var scalar = context.CreateSqlContainer("SELECT v FROM t_dtx WHERE id = 1"))
+        {
+            await Assert.ThrowsAsync<DataMappingException>(async () => await scalar.ExecuteScalarRequiredAsync<DateTime>());
+        }
+
+        Assert.Equal(0, context.NumberOfOpenConnections);
+
         // The context still works, and the engine's own date parts read what was stored.
         const string parts = "Year(v) & '-' & Month(v) & '-' & Day(v) & ' ' & Hour(v) & ':' & Minute(v) & ':' & Second(v)";
         await using (var first = context.CreateSqlContainer($"SELECT {parts} FROM t_dtx WHERE id = 1"))

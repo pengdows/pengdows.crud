@@ -54,6 +54,29 @@ public class AccessExtendedDateTimeRefusalTests
         Assert.Contains("Date/Time Extended", ex.Message);
     }
 
+    // Every scalar execution reads through a reader (SqlContainer.ExecuteScalarCore never calls the provider's ExecuteScalar), so a
+    // scalar read of the column is refused too, by all four entry points.
+    [Fact]
+    public async Task AccessScalarReadsOfAnExtendedDateTimeColumn_AreRefused()
+    {
+        async Task AssertRefused(Func<ISqlContainer, Task> read)
+        {
+            var (context, _) = ContextReturning(SupportedDatabase.Access, "stamped_at", "DBTYPE_DBTIMESTAMP");
+            await using var _ = context;
+            await using var sc = context.CreateSqlContainer("SELECT stamped_at FROM events");
+
+            var ex = await Assert.ThrowsAsync<DataMappingException>(() => read(sc));
+
+            Assert.Contains("stamped_at", ex.Message);
+            Assert.Equal(0, context.NumberOfOpenConnections);
+        }
+
+        await AssertRefused(async sc => await sc.ExecuteScalarRequiredAsync<DateTime>());
+        await AssertRefused(async sc => await sc.ExecuteScalarOrNullAsync<DateTime?>());
+        await AssertRefused(async sc => await sc.TryExecuteScalarAsync<DateTime>());
+        await AssertRefused(async sc => await sc.ExecuteScalarRequiredAsync<object>());
+    }
+
     [Fact]
     public async Task AccessRefusal_ReleasesTheConnection()
     {
