@@ -267,7 +267,7 @@ public class CapabilityProbeTests : DatabaseTestBase
     {
         await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
         {
-            Skip.IfNot(context.Dialect.SupportsArrayTypes, "PostgreSQL dialect does not claim SupportsArrayTypes");
+            Skip.IfNot(context.Dialect.SupportsArrayTypes, "[SKIP:PostgreSql] PostgreSQL dialect does not claim SupportsArrayTypes");
 
             await DropTableIfExistsAsync(context, "array_capability_probe");
             var table = IntegrationObjectNameHelper.Table(context, "array_capability_probe");

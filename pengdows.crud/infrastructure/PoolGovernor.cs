@@ -61,17 +61,17 @@ internal sealed class PoolGovernor : IDisposable
     private readonly bool _trackMetrics;
     private readonly TimeProvider _timeProvider;
     private readonly bool _ownsTurnstile;
-    // Made by WaitForDrainAsync only while it waits, and completed by the release that drops _inUse
-    // to zero. Acquire and release touch it with no lock and no allocation (PERF-024): a waiter
-    // publishes it and then re-reads _inUse, a release decrements _inUse and then reads it, both
-    // through full fences, so a release can't miss a waiter that saw a slot in use.
+    // Made by WaitForDrainAsync only while it waits, and completed by the release that leaves drain complete (no
+    // holder and no release in flight). Acquire and release touch it with no lock and no allocation (PERF-024): a
+    // waiter publishes it and then re-checks DrainComplete, a release decrements its in-flight count and then checks
+    // it, both through full fences, so a release can't miss a waiter that saw work in progress.
     private TaskCompletionSource<bool>? _drainSignal;
 
     // CORE-027: admission-closed state. 0 = open, 1 = closed. Checked first in every acquire
     // entry point so a caller racing a concurrent Close()/Dispose() gets a clear
     // ObjectDisposedException instead of either silently succeeding past intended shutdown or
     // throwing from deep inside semaphore machinery that was torn down underneath it. Also lets
-    // WaitForDrainAsync provide a real guarantee: once closed, _inUse can only decrease.
+    // WaitForDrainAsync provide a real guarantee: once closed, the holder count can only decrease.
     private int _closed;
 
     // Turnstile fairness support: prevents writer starvation under reader pressure
@@ -79,7 +79,17 @@ internal sealed class PoolGovernor : IDisposable
     private readonly TurnstileState? _turnstileState;
     private readonly bool _holdTurnstile;
 
-    private long _inUse;
+    // Holder count (low 32 bits) and in-flight release count (high 32 bits) in one word, so each change is a single
+    // atomic add and drain reads a consistent pair. A release moves one holder out and one release in with one add,
+    // so the pair is never both zero while a release is pending (see ReleaseToken).
+    private const long HolderOne = 1L;
+    private const long InFlightOne = 1L << 32;
+    private const long HolderMask = 0xFFFFFFFFL;
+    private long _holdState;
+
+    private static long HoldersOf(long state) => state & HolderMask;
+
+    private static long InFlightOf(long state) => state >> 32;
     private long _peakInUse;
     private long _queued;
     private long _peakQueued;
@@ -189,22 +199,26 @@ internal sealed class PoolGovernor : IDisposable
     /// <summary>
     /// Current number of immediately-acquirable semaphore permits. Test-only diagnostic used to
     /// verify <see cref="ReleaseToken"/>'s release ordering (permits must become available before
-    /// <c>_inUse</c> reflects the release, not after).
+    /// the holder count reflects the release, not after).
     /// </summary>
     internal int AvailablePermits => _concurrencyGate?.AvailableCount ?? 0;
 
     /// <summary>
-    /// Test-only hook invoked immediately before <see cref="ReleaseToken"/> decrements
-    /// <c>_inUse</c> — lets a test observe/assert state at that exact instant. Never set outside
-    /// tests.
+    /// Test-only hook invoked by <see cref="ReleaseToken"/> once the permit is back in the gate and the exact
+    /// holder count has dropped, before the release is recorded as complete. Lets a test observe state at that
+    /// instant. Never set outside tests.
     /// </summary>
+#if PENGDOWS_CRUD_TEST_HOOKS
     internal Action? TestOnlyBeforeInUseDecrement { get; set; }
+    #endif
 
     /// <summary>
     /// Test-only hook invoked immediately before a reader's touch-and-release turnstile call in
     /// the async acquire path (G9a-SW, CONCURRENCY.md). Never set outside tests.
     /// </summary>
+#if PENGDOWS_CRUD_TEST_HOOKS
     internal Action? TestOnlyBeforeReaderTurnstileRelease { get; set; }
+    #endif
 
     /// <summary>
     /// True once <see cref="Close"/> (or <see cref="Dispose"/>) has been called. Every acquire
@@ -302,6 +316,8 @@ internal sealed class PoolGovernor : IDisposable
     }
 
     // A disabled governor has no gate: its slots are counted but admit without one.
+    // Gives the permit back to the gate. The gate's release does not throw for a permit it issued (a release with nothing
+    // active is a no-op), so the holder and in-flight counts need no compensation on this path.
     private void ReleaseAdmission() => _concurrencyGate?.Release(0);
 
     private PoolSlot DisabledSlot()
@@ -472,7 +488,9 @@ internal sealed class PoolGovernor : IDisposable
                     // so this release, can be delayed; a test can reproduce the consequence
                     // deterministically by holding here instead of waiting on genuine starvation
                     // timing. Null in every production path.
+#if PENGDOWS_CRUD_TEST_HOOKS
                     TestOnlyBeforeReaderTurnstileRelease?.Invoke();
+                    #endif
                     _turnstile.Release();
                     turnstileAcquired = false;
                 }
@@ -725,7 +743,7 @@ internal sealed class PoolGovernor : IDisposable
             return;
         }
 
-        if (Interlocked.Read(ref _inUse) == 0)
+        if (DrainComplete())
         {
             return;
         }
@@ -739,7 +757,7 @@ internal sealed class PoolGovernor : IDisposable
         timeoutCts?.CancelAfter(timeout!.Value);
         var effectiveToken = timeoutCts?.Token ?? cancellationToken;
 
-        while (Interlocked.Read(ref _inUse) > 0)
+        while (!DrainComplete())
         {
             var signal = Volatile.Read(ref _drainSignal);
             if (signal == null || signal.Task.IsCompleted)
@@ -755,9 +773,9 @@ internal sealed class PoolGovernor : IDisposable
                 }
             }
 
-            // A release that dropped _inUse to zero before the signal was published saw no signal
-            // to complete; re-read _inUse after publishing.
-            if (Interlocked.Read(ref _inUse) == 0)
+            // A release that completed before the signal was published saw no signal to complete; re-check the
+            // drain condition after publishing.
+            if (DrainComplete())
             {
                 break;
             }
@@ -779,7 +797,7 @@ internal sealed class PoolGovernor : IDisposable
                 // callers see a consistent exception regardless of runtime version.
                 throw new OperationCanceledException(cancellationToken);
             }
-            // Signal fired (or was reset and re-signalled) — loop to re-check _inUse.
+            // Signal fired (or was reset and re-signalled) — loop to re-check the drain condition.
         }
     }
 
@@ -894,7 +912,7 @@ internal sealed class PoolGovernor : IDisposable
             // work. A concurrent Close() landing after that check but before a slow-path Wait()
             // completes lets this straggler still reach here with a real permit in hand — give it
             // back and reject exactly as ThrowIfClosed() would have a few instructions earlier,
-            // so "once closed, _inUse can only decrease" (WaitForDrainAsync's contract) actually
+            // so "once closed, the holder count can only decrease" (WaitForDrainAsync's contract) actually
             // holds.
             //
             // Only the semaphore permit is released here — the turnstile permit (if any writer is
@@ -914,7 +932,7 @@ internal sealed class PoolGovernor : IDisposable
             throw new ObjectDisposedException(nameof(PoolGovernor));
         }
 
-        var inUse = Interlocked.Increment(ref _inUse);
+        var inUse = HoldersOf(Interlocked.Add(ref _holdState, HolderOne));
         UpdatePeak(ref _peakInUse, inUse);
         Interlocked.Increment(ref _totalAcquired);
         _leaseMetrics?.ConnectionOpened();
@@ -926,44 +944,55 @@ internal sealed class PoolGovernor : IDisposable
     {
         RecordWaitAndHold(waitStart, acquiredAt);
 
-        // Release semaphore and turnstile BEFORE decrementing _inUse (and before signaling
-        // drain-waiters below). _inUse dropping to zero is the signal callers rely on — both
-        // WaitForDrainAsync's direct _inUse==0 fast path and the drain-signal machinery further
-        // down — to mean "safe to dispose the governor". If _inUse were decremented first, a
-        // concurrent WaitForDrainAsync could observe zero and let a caller dispose the semaphore/
-        // turnstile while this method is still about to call Release() on them, throwing
-        // ObjectDisposedException on this thread.
-        ReleaseAdmission();
-
-        // Writers release turnstile when slot is released
-        if (_holdTurnstile && _turnstile != null)
+        // A release is in flight until the finally below. Drain waits for in-flight releases as well as for holders, so a
+        // release that has returned its permit but is still touching the semaphore or turnstile blocks disposal.
+        try
         {
-            _turnstile.Release();
-        }
+            // One atomic step: a release starts (in-flight up) and its holder leaves the count (holders down) before the
+            // permit is returned, so a new holder that takes the permit is never counted alongside this one (CONCURRENCY.md §5).
+            Interlocked.Add(ref _holdState, InFlightOne - HolderOne);
 
-        if (releaseWriterTurnstileInterest && _turnstileState != null)
-        {
-            Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
-        }
+            ReleaseAdmission();
 
-        TestOnlyBeforeInUseDecrement?.Invoke();
-        Interlocked.Increment(ref _totalReleased);
-        _leaseMetrics?.ConnectionClosed(acquiredAt > 0
-            ? MetricsCollector.ToMilliseconds(_timeProvider.GetTimestamp() - acquiredAt)
-            : 0d);
-        if (Interlocked.Decrement(ref _inUse) == 0)
-        {
-            // Wake drain waiters. The signal is unpublished before it completes, so a waiter never
-            // finds a completed signal installed; an acquire racing in after the decrement only
-            // makes the wake spurious, and the waiter re-reads _inUse.
-            var waiting = Volatile.Read(ref _drainSignal);
-            if (waiting != null &&
-                ReferenceEquals(Interlocked.CompareExchange(ref _drainSignal, null, waiting), waiting))
+            // Writers release turnstile when slot is released
+            if (_holdTurnstile && _turnstile != null)
             {
-                waiting.TrySetResult(true);
+                _turnstile.Release();
+            }
+
+            if (releaseWriterTurnstileInterest && _turnstileState != null)
+            {
+                Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
+            }
+
+#if PENGDOWS_CRUD_TEST_HOOKS
+            TestOnlyBeforeInUseDecrement?.Invoke();
+            #endif
+            Interlocked.Increment(ref _totalReleased);
+            _leaseMetrics?.ConnectionClosed(acquiredAt > 0
+                ? MetricsCollector.ToMilliseconds(_timeProvider.GetTimestamp() - acquiredAt)
+                : 0d);
+        }
+        finally
+        {
+            var after = Interlocked.Add(ref _holdState, -InFlightOne);
+            if (InFlightOf(after) == 0 && HoldersOf(after) == 0)
+            {
+                // Wake drain waiters. The signal is unpublished before it completes, so a waiter never
+                // finds a completed signal installed; an acquire racing in after the decrement only
+                // makes the wake spurious, and the waiter re-reads the drain condition.
+                var waiting = Volatile.Read(ref _drainSignal);
+                if (waiting != null &&
+                    ReferenceEquals(Interlocked.CompareExchange(ref _drainSignal, null, waiting), waiting))
+                {
+                    waiting.TrySetResult(true);
+                }
             }
         }
     }
+
+    // Drain is complete when no holder is counted and no release is still in flight: the whole state is zero.
+    private bool DrainComplete() => Interlocked.Read(ref _holdState) == 0;
 
     public PoolStatisticsSnapshot GetSnapshot()
     {
@@ -971,7 +1000,7 @@ internal sealed class PoolGovernor : IDisposable
             _label,
             _poolKeyHash,
             _maxSlots,
-            (int)Math.Clamp(Interlocked.Read(ref _inUse), 0L, int.MaxValue),
+            (int)Math.Clamp(HoldersOf(Interlocked.Read(ref _holdState)), 0L, int.MaxValue),
             (int)Math.Clamp(Interlocked.Read(ref _peakInUse), 0L, int.MaxValue),
             (int)Math.Clamp(Interlocked.Read(ref _queued), 0L, int.MaxValue),
             (int)Math.Clamp(Interlocked.Read(ref _peakQueued), 0L, int.MaxValue),

@@ -85,6 +85,27 @@ public partial class DatabaseContext
 
 
     // Convenience overloads for reflection-based tests and ease of use
+    // Opens of the initial connection are retried while the engine refuses them as "cannot be connected to in the mode
+    // requested" (SQLSTATE 57019, Db2 SQL1035N): a deactivated database refuses a connection that arrives during its
+    // activation. Three attempts in all, with a short growing pause, so a database that stays refused still fails promptly.
+    private const int InitOpenAttempts = 4;
+
+    private static TimeSpan InitOpenRetryDelay(int attempt) => TimeSpan.FromMilliseconds(200 * attempt);
+
+    private static bool IsDeactivatedDatabaseRefusal(Exception ex)
+    {
+        for (Exception? current = ex; current != null; current = current.InnerException)
+        {
+            if (current.Message.Contains("SQLSTATE=57019", StringComparison.Ordinal) ||
+                current.Message.Contains("SQL1035N", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public DatabaseContext(string connectionString, DbProviderFactory factory, string? readOnlyConnectionString = null)
         : this(new DatabaseContextConfiguration
         {
@@ -797,24 +818,47 @@ public partial class DatabaseContext
             // 2) Create + open
             var initExecutionType = IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
             initConn = FactoryCreateConnection(initExecutionType, _connectionString, true);
-            try
+            for (var attempt = 1; ; attempt++)
             {
-                if (useAsync)
+                try
                 {
-                    await initConn.OpenAsync(cancellationToken).ConfigureAwait(false);
+                    if (useAsync)
+                    {
+                        await initConn.OpenAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        initConn.Open();
+                    }
+
+                    break;
                 }
-                else
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    initConn.Open();
+                    if (attempt < InitOpenAttempts && IsDeactivatedDatabaseRefusal(ex))
+                    {
+                        // The database was deactivated and is still activating; the next attempt reactivates it.
+                        _logger.LogWarning(ex,
+                            "Initial open refused while the database activates (attempt {Attempt} of {Attempts}); retrying.",
+                            attempt, InitOpenAttempts);
+                        if (useAsync)
+                        {
+                            await Task.Delay(InitOpenRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            Thread.Sleep(InitOpenRetryDelay(attempt));
+                        }
+
+                        continue;
+                    }
+
+                    throw new ConnectionFailedException("Failed to open database connection.", ex)
+                    {
+                        Phase = "InitConnect",
+                        Role = "ReadWrite"
+                    };
                 }
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                throw new ConnectionFailedException("Failed to open database connection.", ex)
-                {
-                    Phase = "InitConnect",
-                    Role = "ReadWrite"
-                };
             }
 
             // 3) Detect product/capabilities once

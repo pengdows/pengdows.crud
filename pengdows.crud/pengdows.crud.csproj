@@ -21,6 +21,10 @@
         <PublicSign>true</PublicSign>
         <AssemblyOriginatorKeyFile>$(SNK_PATH)</AssemblyOriginatorKeyFile>
     </PropertyGroup>
+    <!-- Hooks used only to force deterministic races in the unit suite. -->
+    <PropertyGroup Condition="'$(PENGDOWS_CRUD_TEST_HOOKS)' == 'true'">
+        <DefineConstants>$(DefineConstants);PENGDOWS_CRUD_TEST_HOOKS</DefineConstants>
+    </PropertyGroup>
     <ItemGroup>
         <ProjectReference Include="..\tools\pengdows.crud.analyzers\pengdows.crud.analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     </ItemGroup>

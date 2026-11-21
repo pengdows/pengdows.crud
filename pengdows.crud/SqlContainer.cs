@@ -2158,9 +2158,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// the only known exception is checked explicitly via
     /// <see cref="KnownNonDbExceptionProviderExceptionTypeNames"/>.
     /// </remarks>
-    private static bool LooksLikeProviderException(Exception exception)
+    private static bool LooksLikeProviderException(Exception exception, ISqlDialect dialect)
     {
-        if (exception is DbException)
+        if (exception is DbException || dialect is SqlDialect sqlDialect && sqlDialect.IsProviderValueRefusal(exception))
         {
             return true;
         }
@@ -2204,7 +2204,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     {
         metrics?.CommandFailed(startTimestamp);
         activity?.SetStatus(ActivityStatusCode.Error);
-        if (!LooksLikeProviderException(ex))
+        if (!LooksLikeProviderException(ex, _context.GetDialect()))
         {
             metrics?.RecordDbError(_context.GetDialect().ClassifyException(ex));
             AddSanitizedExceptionEvent(activity, ex);
@@ -2221,7 +2221,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     // translated). Lets the transaction paths, which open and begin outside a command, surface the same types.
     internal static DatabaseException? TranslateProviderFailure(ISqlDialect dialect, Exception exception,
         DbOperationKind operationKind) =>
-        exception is not DatabaseException && LooksLikeProviderException(exception)
+        exception is not DatabaseException && LooksLikeProviderException(exception, dialect)
             ? TranslateDatabaseException(dialect, exception, operationKind)
             : null;
 
@@ -2240,7 +2240,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     // A provider failure while a reader reads becomes the database exception it means; anything else
     // passes through. Depends only on the dialect and kind, so SqlDialect keeps one (PERF-022).
     private static Func<Exception, Exception?> CreateReadFailureTranslator(ISqlDialect dialect, DbOperationKind kind) =>
-        readFailure => readFailure is not DatabaseException && LooksLikeProviderException(readFailure)
+        readFailure => readFailure is not DatabaseException && LooksLikeProviderException(readFailure, dialect)
             ? TranslateDatabaseException(dialect, readFailure, kind)
             : null;
 

@@ -1667,6 +1667,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // for every dialect except Firebird, so no write on any other database pays that cost.
     internal virtual bool RequiresConnectionPoolResetForDdl => false;
 
+    // Internal, not part of ISqlDialect: true when a non-DbException from the provider is a refusal of the value being
+    // written (for example DuckDB.NET 2.0's bind-time "value is out of range"), so it is surfaced as a typed exception
+    // rather than escaping raw. Only the dialect knows the provider's message shape; the default recognizes none.
+    internal virtual bool IsProviderValueRefusal(Exception exception) => false;
+
     // Internal, not part of ISqlDialect: false when the provider mishandles
     // CommandBehavior.CloseConnection, so a per-operation read opens its reader without it and
     // TrackedReader closes the connection itself after disposing the reader and command.

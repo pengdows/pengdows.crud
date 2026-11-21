@@ -1478,8 +1478,8 @@ budget above for the same-server case.
   slot, never before: a caller queued locally must not already hold a server permit, or a read storm would hoard
   permits and starve the writer.
 - **Where it plugs into `PoolGovernor` (checked against the code).** `ReleaseToken` is the only release path, so the
-  server permit is returned there right after `ReleaseAdmission()` and before `_inUse` is decremented, keeping the
-  "zero means safe to dispose" rule. There are five admission sites that reach `OnAcquired` (the immediate path, the
+  holder leaves the count first, then the server permit is returned right after `ReleaseAdmission()`. Drain stays
+  incomplete until that release finishes, so "zero means safe to dispose" still holds. There are five admission sites that reach `OnAcquired` (the immediate path, the
   slow path's immediate probe, the two queued waits, and the `TryAcquire` variant), so the permit step is one shared
   helper called after each; it returns the local slot if the server wait times out or is cancelled, and
   `AcquireProgress` gains a field for it, as for the turnstile. The immediate path computes no deadline, so when the
@@ -1559,7 +1559,7 @@ immediately after the provider's `Open` returns, and before any first-open or se
 `TrackedConnection` tells its slot (`MarkOpened`), which increments `_opened` (an `Interlocked` counter, no lock on
 the open path); the slot's release decrements it if it was marked. A connection whose provider open succeeded but
 whose first-open hook then fails counts as opened, because it occupies a server connection until it is closed.
-`_inUse` is not the right number: it counts permits taken before the open, including refused and not-yet-opened
+The holder count is not the right number: it counts permits taken before the open, including refused and not-yet-opened
 ones. The shrink reads `_opened` as a snapshot, which is all the policy needs because the limit is a hint.
 
 **Recovery.** No timer thread; it is evaluated on successful opens. The window `W` (an internal constant, measured

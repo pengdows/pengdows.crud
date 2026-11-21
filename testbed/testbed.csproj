@@ -10,37 +10,37 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="AdoNetCore.AseClient" Version="0.19.2"/>
-        <PackageReference Include="Net.IBM.Data.Db2-lnx" Version="8.0.0.500"/>
-        <PackageReference Include="Informix.Net.Core-lnx" Version="4.1501.2.2026"/>
-        <PackageReference Include="InterBaseSql.Data.InterBaseClient" Version="10.0.3"/>
-        <PackageReference Include="Sap.Data.Hana.Net.v8.0" Version="2.29.27"/>
+        <PackageReference Include="AdoNetCore.AseClient" Version="0.19.2" />
+        <PackageReference Include="Net.IBM.Data.Db2-lnx" Version="8.0.0.500" />
+        <PackageReference Include="Informix.Net.Core-lnx" Version="4.1501.2.2026" />
+        <PackageReference Include="InterBaseSql.Data.InterBaseClient" Version="10.0.3" />
+        <PackageReference Include="Sap.Data.Hana.Net.v8.0" Version="2.29.27" />
         <PackageReference Include="coverlet.collector" Version="6.0.4">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.6.1"/>
-        <PackageReference Include="FirebirdSql.Data.FirebirdClient" Version="10.3.3"/>
-        <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2"/>
+        <PackageReference Include="DuckDB.NET.Data.Full" Version="2.0.1-preview.1" />
+        <PackageReference Include="FirebirdSql.Data.FirebirdClient" Version="10.3.3" />
+        <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
         <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
         <!-- Transitive via System.Security.Permissions from the Sybase ASE and Informix drivers; 4.7.0 has GHSA-rxg9-xrhp-64gj. -->
         <PackageReference Include="System.Drawing.Common" Version="9.0.21" />
-        <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.5"/>
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.4"/>
-        <PackageReference Include="MySqlConnector" Version="2.6.2"/>
-        <PackageReference Include="SSH.NET" Version="2026.0.0"/>
-        <PackageReference Include="log4net" Version="3.4.0"/>
-        <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3"/>
-        <PackageReference Include="Npgsql" Version="9.0.3"/>
-        <PackageReference Include="System.Data.OleDb" Version="8.0.1"/>
-        <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.8.0"/>
-        <PackageReference Include="Snowflake.Data" Version="5.6.0"/>
-        <PackageReference Include="Testcontainers" Version="4.4.0"/>
+        <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.5" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.4" />
+        <PackageReference Include="MySqlConnector" Version="2.6.2" />
+        <PackageReference Include="SSH.NET" Version="2026.0.0" />
+        <PackageReference Include="log4net" Version="3.4.0" />
+        <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+        <PackageReference Include="Npgsql" Version="9.0.3" />
+        <PackageReference Include="System.Data.OleDb" Version="8.0.1" />
+        <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.8.0" />
+        <PackageReference Include="Snowflake.Data" Version="5.6.0" />
+        <PackageReference Include="Testcontainers" Version="4.4.0" />
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\pengdows.crud\pengdows.crud.csproj"/>
-        <ProjectReference Include="..\pengdows.stormgate\pengdows.stormgate.csproj"/>
+        <ProjectReference Include="..\pengdows.crud\pengdows.crud.csproj" />
+        <ProjectReference Include="..\pengdows.stormgate\pengdows.stormgate.csproj" />
     </ItemGroup>
 
     <!--
@@ -53,7 +53,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="pengdows.flatfile" Version="0.2.1-preview.27"/>
+        <PackageReference Include="pengdows.flatfile" Version="0.2.1-preview.27" />
     </ItemGroup>
 
 

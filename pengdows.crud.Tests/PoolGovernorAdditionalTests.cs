@@ -171,8 +171,8 @@ public class PoolGovernorAdditionalTests
     }
 
     // ── drain-signal race regression ──────────────────────────────────────
-    // Release() decrements _inUse and calls TrySetResult on the drain signal
-    // non-atomically.  A concurrent Acquire that increments _inUse between
+    // Release() decrements the holder count and calls TrySetResult on the drain signal
+    // non-atomically.  A concurrent Acquire that increments the holder count between
     // those two steps can leave the signal completed while a slot is live.
     //
     // Setup (capacity 2):

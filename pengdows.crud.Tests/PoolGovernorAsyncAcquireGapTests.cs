@@ -159,8 +159,8 @@ public sealed class PoolGovernorAsyncAcquireGapTests
 
     /// <summary>
     /// Forces WaitForDrainAsync's own private _drainSignal field into an already-completed state
-    /// while _inUse is still genuinely positive — simulating the documented stale-signal race
-    /// (a concurrent Acquire's Interlocked.Increment(_inUse) landing before its own
+    /// while the holder count is still genuinely positive — simulating the documented stale-signal race
+    /// (a concurrent Acquire's holder-count increment landing before its own
     /// ResetDrainSignalIfNeeded takes the drain lock) deterministically, since arranging the real
     /// race from two independently scheduled threads would mean winning against the exact instant
     /// a lock is taken.
@@ -194,7 +194,7 @@ public sealed class PoolGovernorAsyncAcquireGapTests
         await releaseAfter;
 
         // Must have actually looped (yielding, rechecking) rather than returning immediately off
-        // the stale-but-completed signal without ever re-observing _inUse.
+        // the stale-but-completed signal without ever re-observing the holder count.
         Assert.True(sw.ElapsedMilliseconds >= 100,
             $"Expected WaitForDrainAsync to keep retrying past the stale signal until the real " +
             $"release, but it returned after only {sw.ElapsedMilliseconds}ms.");

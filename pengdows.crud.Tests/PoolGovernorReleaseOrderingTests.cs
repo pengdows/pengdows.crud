@@ -11,7 +11,7 @@ namespace pengdows.crud.Tests;
 /// <summary>
 /// Regression tests for three related PoolGovernor findings from the drain/dispose audit:
 ///
-/// 1. ReleaseToken previously decremented _inUse BEFORE releasing the semaphore/turnstile, so a
+/// 1. ReleaseToken previously decremented the holder count BEFORE releasing the semaphore/turnstile, so a
 ///    concurrent WaitForDrainAsync (or its InUse==0 fast path) could observe "drained" and let a
 ///    caller safely Dispose() the governor while the releasing thread was still about to call
 ///    _semaphore.Release()/_turnstile.Release() on now-disposed objects.
@@ -21,7 +21,7 @@ namespace pengdows.crud.Tests;
 /// 3. Acquire/TryAcquire/AcquireAsync/TryAcquireAsync only checked ThrowIfClosed() once, before
 ///    doing any semaphore/turnstile work — a Close() landing in the narrow window between that
 ///    check and a slow-path Wait() completing let a straggler acquire succeed after close,
-///    breaking WaitForDrainAsync's "once closed, _inUse can only decrease" guarantee.
+///    breaking WaitForDrainAsync's "once closed, the holder count can only decrease" guarantee.
 /// </summary>
 public class PoolGovernorReleaseOrderingTests
 {

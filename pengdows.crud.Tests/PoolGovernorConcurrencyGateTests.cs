@@ -147,7 +147,9 @@ public sealed class PoolGovernorConcurrencyGateTests
             }
         })).ToArray();
 
-        await Task.WhenAll(workers).WaitAsync(TimeSpan.FromSeconds(5));
+        // The bound is for a stall, not for speed: 3,200 operations under a full parallel test run can take longer than
+        // a few seconds with no lost wakeup. A lost wakeup still fails, since the workers would never finish.
+        await Task.WhenAll(workers).WaitAsync(TimeSpan.FromSeconds(60));
 
         Assert.Equal(0, gate.ActiveCount);
         Assert.Equal(0, gate.QueueCount);

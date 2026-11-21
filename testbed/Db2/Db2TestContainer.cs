@@ -9,7 +9,7 @@ public class Db2TestContainer : TestContainer
 {
     private const string _password = "MyStr0ngP@ssw0rd";
     private const string _username = "db2inst1";
-    private const string _securityAdministrator = "secadm1";
+    private const string _securityAdministrator = "lbacadm";
     private const string _database = "testdb";
     private const int _port = 50000;
     private readonly IContainer _container;

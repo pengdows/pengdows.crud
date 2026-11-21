@@ -215,16 +215,16 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
     }
 
     // Db2 LBAC (live 2026-11-11): the instance owner cannot grant SECADM or a label to itself (SQL0554N), so it grants SECADM to
-    // secadm1 (created in the container by Db2TestContainer), which creates the policy POL with two labels and grants db2inst1
+    // lbacadm (created in the container by Db2TestContainer), which creates the policy POL with two labels and grants db2inst1
     // the LOW label. A user holds one label per policy for ALL access, so only LOW is granted. Rerunning in the same container
     // finds the policy and labels already present; those statements are skipped.
-    // The raw connection string: the context's own is redacted, and would carry no password for secadm1.
+    // The raw connection string: the context's own is redacted, and would carry no password for lbacadm.
     private static async Task CreateDb2LbacFixtureAsync(IDatabaseContext context, string rawConnectionString)
     {
-        await TryExecuteAsync(context, "GRANT SECADM ON DATABASE TO USER SECADM1");
+        await TryExecuteAsync(context, "GRANT SECADM ON DATABASE TO USER LBACADM");
 
         await using var admin = new DatabaseContext(
-            rawConnectionString.Replace("UID=db2inst1", "UID=secadm1", StringComparison.Ordinal), IBM.Data.Db2.DB2Factory.Instance);
+            rawConnectionString.Replace("UID=db2inst1", "UID=lbacadm", StringComparison.Ordinal), IBM.Data.Db2.DB2Factory.Instance);
         await TryExecuteAsync(admin, "CREATE SECURITY LABEL COMPONENT LVL ARRAY ['LOW','HIGH']");
         await TryExecuteAsync(admin, "CREATE SECURITY POLICY POL COMPONENTS LVL WITH DB2LBACRULES");
         await TryExecuteAsync(admin, "CREATE SECURITY LABEL POL.LOW_LABEL COMPONENT LVL 'LOW'");

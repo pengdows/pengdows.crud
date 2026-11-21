@@ -49,35 +49,53 @@ public sealed class UnresolvedColumnFieldTypeTests
         new() { ["Id"] = 1, ["Shape"] = new byte[] { 1 } }
     };
 
-    [Fact]
-    public async Task DataReaderMapper_CachedPlanCall_AsksTheRefusedColumnOnce()
+    // The plan cache is a process-wide LRU that parallel tests also fill, so a "warm" call may find its plan evicted and
+    // rebuild it. The invariant is per call, not per cache state: a refused column is asked exactly once whether the plan
+    // was just built or reused (PERF-014 is a second ask on either path). Each test uses its own row type so its first call
+    // is a genuine cold build.
+    public sealed class ColdPlanRow
     {
-        using (var warm = new RefusingReader(Rows()))
+        public int Id { get; set; }
+        public object? Shape { get; set; }
+    }
+
+    public sealed class TrackedColdPlanRow
+    {
+        public int Id { get; set; }
+        public object? Shape { get; set; }
+    }
+
+    [Fact]
+    public async Task DataReaderMapper_EachCall_AsksTheRefusedColumnOnce()
+    {
+        using (var cold = new RefusingReader(Rows()))
         {
-            await DataReaderMapper.LoadAsync<Row>(warm, MapperOptions.Default);
+            await DataReaderMapper.LoadAsync<ColdPlanRow>(cold, MapperOptions.Default);
+            Assert.Equal(1, cold.Refusals);
         }
 
-        using var reader = new RefusingReader(Rows());
-        var result = await DataReaderMapper.LoadAsync<Row>(reader, MapperOptions.Default);
+        using var warm = new RefusingReader(Rows());
+        var result = await DataReaderMapper.LoadAsync<ColdPlanRow>(warm, MapperOptions.Default);
 
         Assert.Single(result);
-        Assert.Equal(1, reader.Refusals);
+        Assert.Equal(1, warm.Refusals);
     }
 
     private static TrackedReader Track(RefusingReader reader) =>
         new(reader, new Mock<ITrackedConnection>().Object, Mock.Of<IAsyncDisposable>(), false);
 
     [Fact]
-    public async Task DataReaderMapper_TrackedReader_CachedPlanCall_AsksTheRefusedColumnOnce()
+    public async Task DataReaderMapper_TrackedReader_EachCall_AsksTheRefusedColumnOnce()
     {
-        var warmInner = new RefusingReader(Rows());
-        await DataReaderMapper.LoadAsync<Row>(Track(warmInner), MapperOptions.Default);
+        var cold = new RefusingReader(Rows());
+        await DataReaderMapper.LoadAsync<TrackedColdPlanRow>(Track(cold), MapperOptions.Default);
+        Assert.Equal(1, cold.Refusals);
 
-        var inner = new RefusingReader(Rows());
-        var result = await DataReaderMapper.LoadAsync<Row>(Track(inner), MapperOptions.Default);
+        var warm = new RefusingReader(Rows());
+        var result = await DataReaderMapper.LoadAsync<TrackedColdPlanRow>(Track(warm), MapperOptions.Default);
 
         Assert.Single(result);
-        Assert.Equal(1, inner.Refusals);
+        Assert.Equal(1, warm.Refusals);
     }
 
     [Table("t")]

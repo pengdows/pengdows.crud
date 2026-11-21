@@ -184,6 +184,76 @@ internal sealed class InterBaseDialect : SqlDialect
     // protects against.
     internal override bool RequiresExplicitRollbackAfterFailedWrite => true;
 
+    // InterBase shares Firebird's DDL-versus-attachment conflict (see FirebirdDialect for the live evidence): a DDL can fail
+    // "object ... is in use" while an idle pooled attachment still holds the object. Same two-part answer: clear the
+    // pools before DDL, and run the DDL in a WAIT transaction so the engine waits for the holder to release it.
+    internal override bool RequiresConnectionPoolResetForDdl => true;
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<System.Data.Common.DbConnection, TimeSpan?, System.Data.Common.DbTransaction>?> DdlTransactionStarters = new();
+
+    internal override System.Data.Common.DbTransaction? BeginDdlTransaction(System.Data.Common.DbConnection connection, TimeSpan? lockWait) =>
+        DdlTransactionStarters.GetOrAdd(connection.GetType(), CreateDdlTransactionStarter) is { } start
+            ? start(connection, lockWait)
+            : null;
+
+    // IBConnection.BeginTransaction(IBTransactionOptions) is the only way to reach a WAIT transaction; the driver's
+    // implicit transactions are NO WAIT. Reached by reflection so pengdows.crud takes no hard driver reference.
+    private static Func<System.Data.Common.DbConnection, TimeSpan?, System.Data.Common.DbTransaction>? CreateDdlTransactionStarter(Type connectionType)
+    {
+        var begin = connectionType.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .FirstOrDefault(m => m.Name == "BeginTransaction" &&
+                                 typeof(System.Data.Common.DbTransaction).IsAssignableFrom(m.ReturnType) &&
+                                 m.GetParameters() is { Length: 1 } p && p[0].ParameterType.Name == "IBTransactionOptions");
+        if (begin == null)
+        {
+            return null;
+        }
+
+        var optionsType = begin.GetParameters()[0].ParameterType;
+        var behaviorProperty = optionsType.GetProperty("TransactionBehavior");
+        var waitTimeoutProperty = optionsType.GetProperty("WaitTimeout");
+        if (behaviorProperty == null || waitTimeoutProperty == null || !behaviorProperty.PropertyType.IsEnum)
+        {
+            return null;
+        }
+
+        var behavior = Enum.Parse(behaviorProperty.PropertyType, "Wait, ReadCommitted, RecVersion");
+        return (connection, lockWait) =>
+        {
+            var options = Activator.CreateInstance(optionsType)!;
+            behaviorProperty.SetValue(options, behavior);
+            waitTimeoutProperty.SetValue(options, lockWait);
+            return (System.Data.Common.DbTransaction)begin.Invoke(connection, new[] { options })!;
+        };
+    }
+
+    // IBConnection.ClearAllPools() clears every InterBase pool in the process, including a different DatabaseContext's
+    // pools; ClearPool(connectionString) reaches only the one pool keyed by that exact string.
+    internal override void ResetConnectionPoolForDdl(string connectionString)
+    {
+        try
+        {
+            using var sampleConnection = Factory.CreateConnection();
+            if (sampleConnection == null)
+            {
+                return;
+            }
+
+            var clearAllPools = sampleConnection.GetType().GetMethod(
+                "ClearAllPools",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
+                null,
+                Type.EmptyTypes,
+                null);
+            clearAllPools?.Invoke(null, null);
+        }
+        catch (Exception ex)
+        {
+            // Best-effort: a missed reset leaves the DDL to report "object ... is in use", as it did before this hook.
+            Logger.LogDebug(ex, "InterBase pool reset before DDL failed; the DDL may report the object is in use.");
+        }
+    }
+
     // CONFIRMED live: SAVEPOINT / ROLLBACK TO SAVEPOINT / RELEASE SAVEPOINT all succeed, via both
     // raw SQL and the typed DbTransaction API, with a verified before/after row-survival check.
     public override bool SupportsSavepoints => true;

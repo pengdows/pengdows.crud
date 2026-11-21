@@ -87,11 +87,19 @@ public class ReadOnlyRefusalTranslationTests : DatabaseTestBase
         });
     }
 
-    // MySQL super_read_only (1290) and TiDB tidb_super_read_only (1836).
-    [SkippableTheory]
-    [InlineData(SupportedDatabase.MySql, "SET GLOBAL super_read_only = ON", "SET GLOBAL super_read_only = OFF")]
-    [InlineData(SupportedDatabase.TiDb, "SET GLOBAL tidb_super_read_only = ON", "SET GLOBAL tidb_super_read_only = OFF")]
-    public async Task ServerInReadOnlyMode_WriteIsReadOnlyViolation(SupportedDatabase provider, string on, string off)
+    // MySQL super_read_only (1290) and TiDB tidb_super_read_only (1836). One fact per database: each runs only in
+    // its own database's process (a row for another database would skip there).
+    [SkippableFact]
+    public Task ServerInReadOnlyMode_MySql_WriteIsReadOnlyViolation() =>
+        ServerInReadOnlyModeWriteIsReadOnlyViolation(SupportedDatabase.MySql,
+            "SET GLOBAL super_read_only = ON", "SET GLOBAL super_read_only = OFF");
+
+    [SkippableFact]
+    public Task ServerInReadOnlyMode_TiDb_WriteIsReadOnlyViolation() =>
+        ServerInReadOnlyModeWriteIsReadOnlyViolation(SupportedDatabase.TiDb,
+            "SET GLOBAL tidb_super_read_only = ON", "SET GLOBAL tidb_super_read_only = OFF");
+
+    private async Task ServerInReadOnlyModeWriteIsReadOnlyViolation(SupportedDatabase provider, string on, string off)
     {
         await RunTestAgainstProviderAsync(provider, async context =>
         {

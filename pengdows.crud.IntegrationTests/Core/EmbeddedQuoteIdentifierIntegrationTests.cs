@@ -83,7 +83,10 @@ CREATE TABLE IF NOT EXISTS {_postgres.WrapObjectName(TableName)} (
     [SkippableFact]
     public async Task SqliteAndPostgres_ColumnNameWithEmbeddedQuote_RoundTripsCorrectly()
     {
-        Skip.If(_sqlite == null && _postgres == null,
+        // Runs in the SQLite process and the PostgreSQL process (each has one of the two). Naming both databases here pins it
+        // to both, so it is excluded from the other databases' processes instead of skipping in them.
+        Skip.If(!IntegrationTestConfiguration.IsEnabled(SupportedDatabase.Sqlite) &&
+                !IntegrationTestConfiguration.IsEnabled(SupportedDatabase.PostgreSql),
             "Neither SQLite nor PostgreSQL is enabled for this test run.");
 
         if (_sqlite != null)

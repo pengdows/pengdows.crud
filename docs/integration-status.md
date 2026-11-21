@@ -13,26 +13,26 @@ that was run for the release is green. Access runs only on Windows.
 
 | Database | net8.0 | net10.0 |
 |---|---|---|
-| Sqlite | 157 pass, 0 fail, 0 skip · 2026-11-13 10:34Z · 63891bba | 157 pass, 0 fail, 0 skip · 2026-11-13 10:55Z · 63891bba |
-| PostgreSql | 173 pass, 0 fail, 0 skip · 2026-11-13 10:34Z · 63891bba | 173 pass, 0 fail, 0 skip · 2026-11-13 10:55Z · 63891bba |
-| SqlServer | 160 pass, 0 fail, 0 skip · 2026-11-13 00:01Z · e9c7d8d8 | 160 pass, 0 fail, 0 skip · 2026-11-13 10:47Z · 63891bba |
-| MySql | 163 pass, 0 fail, 0 skip · 2026-11-13 10:34Z · 63891bba | 163 pass, 0 fail, 0 skip · 2026-11-13 10:53Z · 63891bba |
-| MariaDb | 163 pass, 0 fail, 0 skip · 2026-11-13 10:34Z · 63891bba | 163 pass, 0 fail, 0 skip · 2026-11-13 10:54Z · 63891bba |
-| Firebird | 156 pass, 0 fail, 0 skip · 2026-11-12 23:56Z · e9c7d8d8 | 156 pass, 0 fail, 0 skip · 2026-11-13 10:43Z · 63891bba |
-| CockroachDb | 169 pass, 0 fail, 0 skip · 2026-11-13 00:03Z · e9c7d8d8 | 169 pass, 0 fail, 0 skip · 2026-11-13 10:49Z · 63891bba |
-| DuckDB | 156 pass, 0 fail, 0 skip · 2026-11-13 10:33Z · 63891bba | 156 pass, 0 fail, 0 skip · 2026-11-13 10:53Z · 63891bba |
-| Oracle | 158 pass, 0 fail, 0 skip · 2026-11-13 00:05Z · e9c7d8d8 | 158 pass, 0 fail, 0 skip · 2026-11-13 10:51Z · 63891bba |
-| YugabyteDb | 173 pass, 0 fail, 0 skip · 2026-11-12 23:59Z · e9c7d8d8 | 173 pass, 0 fail, 0 skip · 2026-11-13 10:45Z · 63891bba |
-| TiDb | 163 pass, 0 fail, 0 skip · 2026-11-13 10:35Z · 63891bba | 163 pass, 0 fail, 0 skip · 2026-11-13 10:55Z · 63891bba |
-| FlatFile | 156 pass, 0 fail, 0 skip · 2026-11-13 10:35Z · 63891bba | 156 pass, 0 fail, 0 skip · 2026-11-13 10:56Z · 63891bba |
-| Db2 | 156 pass, 0 fail, 0 skip · 2026-11-12 23:53Z · e9c7d8d8 | 156 pass, 0 fail, 0 skip · 2026-11-13 11:37Z · 63891bba+ |
-| Informix | 156 pass, 0 fail, 0 skip · 2026-11-13 10:35Z · 63891bba | 156 pass, 0 fail, 0 skip · 2026-11-13 10:56Z · 63891bba |
-| SybaseASE | 156 pass, 0 fail, 0 skip · 2026-11-13 00:04Z · e9c7d8d8 | 156 pass, 0 fail, 0 skip · 2026-11-13 10:50Z · 63891bba |
-| Spanner | 156 pass, 0 fail, 0 skip · 2026-11-13 10:33Z · 63891bba | 156 pass, 0 fail, 0 skip · 2026-11-13 10:58Z · 63891bba |
-| SingleStore | 163 pass, 0 fail, 0 skip · 2026-11-13 00:06Z · e9c7d8d8 | 163 pass, 0 fail, 0 skip · 2026-11-13 10:52Z · 63891bba |
+| Sqlite | 157 pass, 0 fail, 0 skip · 2026-11-21 02:17Z · 9e81cc53+ | 157 pass, 0 fail, 0 skip · 2026-11-21 02:38Z · 9e81cc53+ |
+| PostgreSql | 173 pass, 0 fail, 0 skip · 2026-11-21 02:16Z · 9e81cc53+ | 173 pass, 0 fail, 0 skip · 2026-11-21 02:38Z · 9e81cc53+ |
+| SqlServer | 160 pass, 0 fail, 0 skip · 2026-11-21 02:11Z · 9e81cc53+ | 160 pass, 0 fail, 0 skip · 2026-11-21 02:32Z · 9e81cc53+ |
+| MySql | 163 pass, 0 fail, 0 skip · 2026-11-21 02:15Z · 9e81cc53+ | 163 pass, 0 fail, 0 skip · 2026-11-21 02:37Z · 9e81cc53+ |
+| MariaDb | 163 pass, 0 fail, 0 skip · 2026-11-21 02:16Z · 9e81cc53+ | 163 pass, 0 fail, 0 skip · 2026-11-21 02:37Z · 9e81cc53+ |
+| Firebird | 156 pass, 0 fail, 0 skip · 2026-11-21 02:07Z · 9e81cc53+ | 156 pass, 0 fail, 0 skip · 2026-11-21 02:29Z · 9e81cc53+ |
+| CockroachDb | 169 pass, 0 fail, 0 skip · 2026-11-21 02:12Z · 9e81cc53+ | 169 pass, 0 fail, 0 skip · 2026-11-21 02:33Z · 9e81cc53+ |
+| DuckDB | 156 pass, 0 fail, 0 skip · 2026-11-21 02:15Z · 9e81cc53+ | 156 pass, 0 fail, 0 skip · 2026-11-21 02:37Z · 9e81cc53+ |
+| Oracle | 158 pass, 0 fail, 0 skip · 2026-11-21 02:13Z · 9e81cc53+ | 158 pass, 0 fail, 0 skip · 2026-11-21 02:35Z · 9e81cc53+ |
+| YugabyteDb | 173 pass, 0 fail, 0 skip · 2026-11-21 02:09Z · 9e81cc53+ | 173 pass, 0 fail, 0 skip · 2026-11-21 02:31Z · 9e81cc53+ |
+| TiDb | 163 pass, 0 fail, 0 skip · 2026-11-21 02:17Z · 9e81cc53+ | 163 pass, 0 fail, 0 skip · 2026-11-21 02:39Z · 9e81cc53+ |
+| FlatFile | 156 pass, 0 fail, 0 skip · 2026-11-21 02:21Z · 9e81cc53+ | 156 pass, 0 fail, 0 skip · 2026-11-21 02:42Z · 9e81cc53+ |
+| Db2 | 156 pass, 0 fail, 0 skip · 2026-11-21 02:05Z · 9e81cc53+ | 156 pass, 0 fail, 0 skip · 2026-11-21 02:27Z · 9e81cc53+ |
+| Informix | 156 pass, 0 fail, 0 skip · 2026-11-21 02:17Z · 9e81cc53+ | 156 pass, 0 fail, 0 skip · 2026-11-21 02:39Z · 9e81cc53+ |
+| SybaseASE | 156 pass, 0 fail, 0 skip · 2026-11-21 02:12Z · 9e81cc53+ | 156 pass, 0 fail, 0 skip · 2026-11-21 02:34Z · 9e81cc53+ |
+| Spanner | 156 pass, 0 fail, 0 skip · 2026-11-21 02:21Z · 9e81cc53+ | 156 pass, 0 fail, 0 skip · 2026-11-21 02:43Z · 9e81cc53+ |
+| SingleStore | 163 pass, 0 fail, 0 skip · 2026-11-21 02:14Z · 9e81cc53+ | 163 pass, 0 fail, 0 skip · 2026-11-21 02:35Z · 9e81cc53+ |
 | Snowflake | 156 pass, 0 fail, 0 skip · 2026-11-13 16:19Z · e11ef215 | 156 pass, 0 fail, 0 skip · 2026-11-13 16:43Z · e11ef215 |
-| SapHana | 156 pass, 0 fail, 0 skip · 2026-11-13 12:35Z · 63891bba+ | 156 pass, 0 fail, 0 skip · 2026-11-13 12:40Z · 63891bba+ |
-| InterBase | 156 pass, 0 fail, 0 skip · 2026-11-15 18:47Z · fe3538fb | 156 pass, 0 fail, 0 skip · 2026-11-15 18:48Z · fe3538fb |
+| SapHana | 156 pass, 0 fail, 0 skip · 2026-11-21 02:02Z · 9e81cc53+ | 156 pass, 0 fail, 0 skip · 2026-11-21 02:24Z · 9e81cc53+ |
+| InterBase | 156 pass, 0 fail, 0 skip · 2026-11-21 02:20Z · 9e81cc53+ | 156 pass, 0 fail, 0 skip · 2026-11-21 02:42Z · 9e81cc53+ |
 | Access | 154 pass, 0 fail, 0 skip · 2026-11-15 17:15Z · 60cf46f8+ | 154 pass, 0 fail, 0 skip · 2026-11-15 17:17Z · 60cf46f8+ |
 | AuroraPostgreSql | 174 pass, 0 fail, 0 skip · 2026-11-13 16:22Z · e11ef215 | 174 pass, 0 fail, 0 skip · 2026-11-13 16:47Z · e11ef215 |
 | AuroraMySql | 164 pass, 0 fail, 0 skip · 2026-11-13 16:12Z · e11ef215 | 164 pass, 0 fail, 0 skip · 2026-11-13 16:37Z · e11ef215 |

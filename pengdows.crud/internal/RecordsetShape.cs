@@ -33,6 +33,10 @@ internal readonly struct RecordsetShape : IEquatable<RecordsetShape>
         _fieldCount = fieldCount;
     }
 
+    // The field type already resolved for this column when the shape was built, so a plan build reuses it instead of
+    // asking the provider again (a refused column is a thrown exception per ask).
+    internal Type TypeAt(int ordinal) => _types[ordinal];
+
     /// <summary>
     /// Returns a copy safe to store as a cache key — for a caller whose backing arrays are
     /// rented/pooled and returned (and possibly reused) after this call returns.

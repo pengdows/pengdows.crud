@@ -271,17 +271,59 @@ else
   [[ "${INCLUDE_AURORA:-}" == "true" ]] && requested+=(AuroraPostgreSql AuroraMySql)
   [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && requested+=(Access)
 fi
+# Combined entries: a test pinned to "A+B" needs both databases in one process, so when both are requested the combination
+# gets a process of its own.
+manifest_combinations="$(awk -F'\t' '$2 ~ /\+/ { print $2 }' "${root}/pengdows.crud.IntegrationTests/integration-targets.txt" | sort -u)"
+for combo in ${manifest_combinations}; do
+  members=(${combo//+/ })
+  all_requested=1
+  for member in "${members[@]}"; do
+    [[ " ${requested[*]} " == *" ${member} "* ]] || all_requested=0
+  done
+  (( all_requested )) && requested+=("${combo}")
+done
 mapfile -t queue < <(for db in "${requested[@]}"; do echo "${integration_weights[$db]:-10} ${db}"; done |
   sort -k1,1nr -k2,2 | awk '{print $2}')
 parallel="${INTEGRATION_PARALLEL:-2}"
 failed=()
 
+# Test methods pinned to other databases (integration-targets.txt, generated and checked by IntegrationTargetPinTests) are
+# excluded from this database's run, so they never run here only to skip. A method is pinned to the databases its body
+# configures; a method pinned to db is kept. Each excluded method contributes FullyQualifiedName!=Name and
+# FullyQualifiedName!~Name\( (the second excludes its theory rows, whose names carry their arguments; "(" is escaped for
+# the filter grammar), joined with &.
+integration_exclusion_filter() {
+  local db="$1" manifest="${root}/pengdows.crud.IntegrationTests/integration-targets.txt"
+  awk -F'\t' -v db="${db}" '
+    { n = split($2, targets, ","); keep = 0
+      for (i = 1; i <= n; i++) if (targets[i] == db) keep = 1
+      if (!keep) print "FullyQualifiedName!=" $1 "&FullyQualifiedName!~" $1 "\\(" }' "${manifest}" | paste -sd'&' -
+}
+
+# A combined entry ("A+B") runs the methods pinned to exactly that combination (a test whose skips need both databases in one
+# process), in a process where both are enabled. Its filter is positive: only those names run.
+integration_combination_filter() {
+  local combo="$1" manifest="${root}/pengdows.crud.IntegrationTests/integration-targets.txt"
+  awk -F'\t' -v combo="${combo}" '$2 == combo { print "FullyQualifiedName=" $1 }' "${manifest}" | paste -sd'|' -
+}
+
 run_database() {
-  local tfm="$1" db="$2" started=${SECONDS} status=0
-  INTEGRATION_ONLY="${db}" \
+  local tfm="$1" db="$2" started=${SECONDS} status=0 exclusion selection only="${2//+/,}"
+  if [[ "${db}" == *+* ]]; then
+    selection="$(integration_combination_filter "${db}")"
+  else
+    selection="$(integration_exclusion_filter "${db}")"
+  fi
+  local filter_args=()
+  [[ -n "${selection}" ]] && filter_args=(--filter "${selection}")
+  if [[ "${db}" == *+* && -z "${selection}" ]]; then
+    echo "${db} $((SECONDS - started)) 0" >> "${results}/timings-${tfm}.txt"
+    return 0
+  fi
+  INTEGRATION_ONLY="${only}" \
   INFORMIXSQLHOSTS="${INFORMIXSQLHOSTS_BASE:-${TMPDIR:-/tmp}/pengdows-informix-sqlhosts}-${tfm}-${db}" \
     dotnet test "${root}/pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj" \
-      -c Release -f "${tfm}" --no-build \
+      -c Release -f "${tfm}" --no-build "${filter_args[@]}" \
       --results-directory "${results}" \
       --logger "trx;LogFileName=IntegrationTests-${tfm}-${db}.trx" \
       > "${results}/IntegrationTests-${tfm}-${db}.log" 2>&1 || status=$?

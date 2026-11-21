@@ -131,7 +131,9 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
     private int _slotState;
 
     // Test-only hook (see AttachSlot): null in every production path.
+#if PENGDOWS_CRUD_TEST_HOOKS
     internal Action? TestOnlyAfterSlotFieldSetBeforeAttachedCas { get; set; }
+#endif
 
     // IConnectionLocalState — inlined to eliminate one heap allocation per connection checkout
 
@@ -732,7 +734,9 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         // G4 (CONCURRENCY.md): lets a test force the exact interleaving a real race would only
         // produce by luck -- a release landing after the slot field is set but before the second
         // CAS below observes it. Null in production; never invoked outside tests.
+#if PENGDOWS_CRUD_TEST_HOOKS
         TestOnlyAfterSlotFieldSetBeforeAttachedCas?.Invoke();
+#endif
 
         if (Interlocked.CompareExchange(ref _slotState, SlotAttached, SlotAttaching) == SlotReleased)
         {

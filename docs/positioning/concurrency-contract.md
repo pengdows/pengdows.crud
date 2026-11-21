@@ -140,16 +140,16 @@ Firebird, each live-confirmed). See
 for the full per-database table and test citations — kept there rather than duplicated here
 since it is the kind of detail that changes independently of this contract's structure.
 
-## One honest caveat: diagnostic counters are not permit counts
+## Counters are exact holder counts; drain also waits for in-flight releases
 
-`NumberOfOpenConnections`, `PeakInUse`, and the pool-statistics snapshot's `InUse` are
-diagnostic, not part of the admission mechanism — nothing in admission reads them. They are
-deliberately decremented *after* a released permit returns to the gate, so a drain operation
-never observes zero while a release is still in flight — which means these counters can
-transiently read above the configured limit without any admission violation having occurred.
-Treat them as estimates for observability, not as a second source of truth for the admission
-guarantees above; check those against `PoolSaturatedException` behavior itself, which is what
-every falsification test above actually does.
+`NumberOfOpenConnections`, `PeakInUse`, and the pool-statistics snapshot's `InUse` count the permit
+holders. A holder leaves the count before its permit returns to the gate, so a new holder that takes
+the returned permit is never counted alongside the one that gave it back, and these counters do not
+exceed the configured limit from that cause. They are still diagnostic: admission never reads them,
+and the admission guarantees above are checked against `PoolSaturatedException` behavior itself.
+
+Drain is separate. A release that has started but not finished (still touching the semaphore or the
+turnstile) keeps drain incomplete, so a disposal never races a release.
 
 ## What this document does not claim
 

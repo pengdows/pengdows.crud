@@ -577,6 +577,14 @@ internal class DuckDbDialect : SqlDialect
         HasSqlState(ex, "23514") ||
         ex.Message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
 
+    // DuckDB.NET 2.0 refuses a TimeSpan outside a time of day while binding the parameter, with a plain
+    // InvalidCastException. Matched on the binding shape (the parameter name and "out of range"), so an unrelated
+    // cast failure is not taken for a value refusal.
+    internal override bool IsProviderValueRefusal(Exception exception) =>
+        exception is InvalidCastException &&
+        exception.Message.Contains("for parameter", StringComparison.OrdinalIgnoreCase) &&
+        exception.Message.Contains("out of range", StringComparison.OrdinalIgnoreCase);
+
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
         var sqlState = TryGetProviderSqlState(ex);

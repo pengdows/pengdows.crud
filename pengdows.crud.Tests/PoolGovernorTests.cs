@@ -77,7 +77,7 @@ public sealed class PoolGovernorTests
 
     // CORE-027: PoolGovernor previously had no admission-closed state at all. Dispose()
     // unconditionally tore down the semaphore with no guard against a concurrent Acquire, and
-    // WaitForDrainAsync only watched _inUse — nothing stopped new work from being admitted while
+    // WaitForDrainAsync only watched the holder count — nothing stopped new work from being admitted while
     // draining, so a busy pool could never actually finish draining, and Dispose() racing an
     // in-flight Acquire could throw ObjectDisposedException at the acquirer instead of failing
     // predictably. Close() gives the governor an explicit, checked terminal state.
@@ -120,7 +120,7 @@ public sealed class PoolGovernorTests
     [Fact]
     public async Task Close_PreventsNewAdmission_SoWaitForDrainAsyncActuallyCompletes()
     {
-        // Before Close() existed, a steady stream of new acquires could keep _inUse above zero
+        // Before Close() existed, a steady stream of new acquires could keep the holder count above zero
         // forever, so WaitForDrainAsync had no way to guarantee progress toward completion.
         var governor = new PoolGovernor(PoolLabel.Writer, "writer-key", 1, TimeSpan.FromSeconds(5));
         var slot = await governor.AcquireAsync();

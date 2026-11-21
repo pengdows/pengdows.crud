@@ -344,7 +344,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
     private static MapperPlan<T> AddPlan<T>(PlanCacheKey planKey, DbDataReader reader, IMapperOptions options,
         Func<int, Type?>? unresolved, TypeCoercionOptions? coercion,
         Func<IDataRecord, int, Type, object>? unresolvedReader) where T : class, new() =>
-        (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(reader, options, unresolved, coercion, unresolvedReader));
+        (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(reader, planKey.Shape, options, unresolved, coercion, unresolvedReader));
 
     private static MapperPlan<T> GetPlan<T>(PlanCacheKey planKey, DbDataReader reader, IMapperOptions options)
         where T : class, new() =>
@@ -354,7 +354,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private static MapperPlan<T> AddPlan<T>(PlanCacheKey planKey, DbDataReader reader, IMapperOptions options)
         where T : class, new() =>
-        (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(reader, options));
+        (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(reader, planKey.Shape, options));
 
     // new T() in generic code compiles to Activator.CreateInstance<T>(); a compiled constructor call
     // per type is cheaper on the per-row path (PERF-014).
@@ -442,7 +442,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private static readonly MethodInfo _isDbNullMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.IsDBNull))!;
 
-    private static MapperPlan<T> BuildPlan<T>(DbDataReader reader, IMapperOptions options,
+    private static MapperPlan<T> BuildPlan<T>(DbDataReader reader, RecordsetShape shape, IMapperOptions options,
         Func<int, Type?>? unresolved = null, TypeCoercionOptions? coercion = null,
         Func<IDataRecord, int, Type, object>? unresolvedReader = null)
         where T : class, new()
@@ -462,7 +462,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
             if (propertyLookup.TryGetValue(name, out var prop))
             {
-                var fieldType = ResolveFieldType(reader, i, unresolved);
+                var fieldType = shape.TypeAt(i);
                 var requiresCoercion = RequiresCoercion(fieldType, prop.PropertyType);
                 // An Npgsql inet or interval column is read as Npgsql's own type, which the schema says once, here.
                 var npgsqlTyped = ColumnQuirkReads.NpgsqlTypedFor(reader, i, prop.PropertyType);

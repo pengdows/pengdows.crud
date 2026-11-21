@@ -25,11 +25,11 @@ namespace pengdows.crud.Tests;
 /// </para>
 /// <para>
 /// Assertions read gate state (<c>AvailablePermits</c>) and <c>TotalReleased</c>, not the snapshot's <c>InUse</c>:
-/// <c>InUse</c> is a diagnostic counter decremented after the permit is returned.
+/// <c>InUse</c> counts permit holders, decremented before the permit is returned, so it is exact.
 /// </para>
 /// <para>
-/// Not covered: a release racing an in-progress attach (the Attaching -> Released branch). Exercising it
-/// deterministically needs a test hook inside <c>AttachSlot</c>, which this change deliberately does not add.
+/// Release racing an in-progress attach is forced deterministically by a test-build-only hook inside
+/// <c>AttachSlot</c>; the hook is excluded from ordinary library builds.
 /// </para>
 /// </remarks>
 public class TrackedConnectionSlotAttachGuardTests

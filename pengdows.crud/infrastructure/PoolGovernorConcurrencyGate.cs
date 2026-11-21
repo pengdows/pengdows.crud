@@ -326,7 +326,9 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
     private void AbandonInterruptedWait(Waiter waiter)
     {
         var deferral = new InterruptDeferral();
+#if PENGDOWS_CRUD_TEST_HOOKS
         TestOnlyBeforeInterruptedWaitIsAbandoned?.Invoke();
+        #endif
         if (deferral.Run(() => TryClaimForCancel(waiter)))
         {
             deferral.Run(() => FinishCancel(waiter, WaiterFailure.Canceled));
@@ -356,7 +358,9 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
             return; // the gate was disposed: there is nothing to give back to
         }
 
+#if PENGDOWS_CRUD_TEST_HOOKS
         TestOnlyBeforeAGrantIsGivenBack?.Invoke();
+        #endif
         var next = deferral.Run(ReleaseUnderLock);
         deferral.Run(() => Complete(next, null));
     }
@@ -420,29 +424,39 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
         waiter.SetException(failure == WaiterFailure.Timeout
             ? new TimeoutException("The pool governor acquisition timed out.")
             : new OperationCanceledException(waiter.CancellationToken));
+#if PENGDOWS_CRUD_TEST_HOOKS
         TestOnlyAfterCancelCompleted?.Invoke();
+        #endif
     }
 
     /// <summary>
     /// Test-only hook invoked after a cancellation or timeout has completed its waiter and while the cancelling
     /// thread is still running, which lets a test hold a cancellation callback in flight. Never set outside tests.
     /// </summary>
+#if PENGDOWS_CRUD_TEST_HOOKS
     internal Action? TestOnlyAfterCancelCompleted { get; set; }
+    #endif
 
     /// <summary>
     /// Test-only hook invoked on an interrupted thread before it gives up its wait, which lets a test land a grant in
     /// exactly that window. Never set outside tests.
     /// </summary>
+#if PENGDOWS_CRUD_TEST_HOOKS
     internal Action? TestOnlyBeforeInterruptedWaitIsAbandoned { get; set; }
+    #endif
 
     /// <summary>
     /// Test-only hook invoked on an interrupted thread that has found a permit granted to it, just before it gives the
     /// permit back. Never set outside tests.
     /// </summary>
+#if PENGDOWS_CRUD_TEST_HOOKS
     internal Action? TestOnlyBeforeAGrantIsGivenBack { get; set; }
+    #endif
 
     /// <summary>The gate's lock, so a test can hold it and make a thread that needs it block. Never used outside tests.</summary>
+#if PENGDOWS_CRUD_TEST_HOOKS
     internal object TestOnlySyncRoot => _sync;
+    #endif
 
     private static void Complete(Waiter? handedOff, List<Waiter>? released)
     {
