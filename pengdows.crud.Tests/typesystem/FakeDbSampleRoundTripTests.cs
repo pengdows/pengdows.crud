@@ -64,6 +64,18 @@ public class FakeDbSampleRoundTripTests
             foreach (var product in products)
             {
                 var outcome = await RunAsync(sample, product);
+                if (product == SupportedDatabase.DuckDB && sample.Clr == typeof(Geometry))
+                {
+                    // DuckDB.NET names a spatial GEOMETRY column "Geometry" and cannot read it, so the library refuses a result set
+                    // holding one, by column name (DuckDbDialect.UnreadableColumnTypes): the round trip must end in that refusal.
+                    if (outcome == null || !outcome.Contains("DuckDB GEOMETRY column", StringComparison.Ordinal))
+                    {
+                        failures.Add($"{product} {sample.Label} ({sample.DbType}): expected the GEOMETRY refusal, got {outcome ?? "a round trip"}");
+                    }
+
+                    continue;
+                }
+
                 if (outcome != null)
                 {
                     failures.Add($"{product} {sample.Label} ({sample.DbType}): {outcome}");

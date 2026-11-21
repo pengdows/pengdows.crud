@@ -14,10 +14,10 @@ A cell is *tested* when the database declares a column for its probe type and th
 | # | Category | Rows | What closes a row |
 |---|---|---:|---|
 | 1 | New test needed: no fidelity cell covers the concept | 84 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
-| 2 | Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column) | 32 | Find the spelling the server accepts and declare it, or record the refusal as by design, server or upstream. |
+| 2 | Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column) | 29 | Find the spelling the server accepts and declare it, or record the refusal as by design, server or upstream. |
 | 3 | Version, extension or restriction check: documented V, E or R | 96 | Run the cell against another version or with the extension, or record why one version is enough. |
 | 4 | Classify first: the workbook marks it ? (unverified) | 317 | Decide the workbook status (supported, or unsupported with the reason); then test it if supported. |
-| | **Total** | **529** | |
+| | **Total** | **526** | |
 
 ## By database
 
@@ -28,7 +28,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 | AuroraPostgreSql | 8 | 3 | 16 | 5 | 32 |
 | CockroachDb | 4 | 1 | 2 | 11 | 18 |
 | Db2 | 6 | 0 | 5 | 18 | 29 |
-| DuckDB | 2 | 3 | 8 | 11 | 24 |
+| DuckDB | 2 | 0 | 8 | 11 | 21 |
 | Firebird | 2 | 0 | 7 | 16 | 25 |
 | FlatFile | 0 | 0 | 0 | 47 | 47 |
 | Informix | 5 | 3 | 3 | 12 | 23 |
@@ -46,7 +46,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 | SybaseASE | 4 | 1 | 1 | 10 | 16 |
 | TiDb | 3 | 1 | 1 | 12 | 17 |
 | YugabyteDb | 6 | 3 | 4 | 17 | 30 |
-| **All** | 84 | 32 | 96 | 317 | 529 |
+| **All** | 84 | 29 | 96 | 317 | 526 |
 
 ## Known open items (maintained by hand)
 
@@ -59,6 +59,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 | Access | Attachment bytes, append-only memo | ACE refuses a SQL write of attachment bytes and of an append-only memo; both are pinned as typed failures, not stored values. |
 | Snowflake, SapHana, InterBase, AuroraMySql, AuroraPostgreSql | Generated matrix report | They have declarations and run the fidelity test, but are absent from docs/type-representation-matrix.md, the probe's fidelity-matrix TSVs and reconciliation.csv, so their per-type results are not in the generated documents. Needs a probe run per database (opt-in databases: credentials, licence or an AWS account). |
 | FlatFile | Workbook classification | The workbook marks all 47 concepts unverified for pengdows.flatfile, so nothing about it is classified. |
+| All | docs/type-representation-matrix.md is stale | gen_representation_doc.py crashed at HEAD (its database list had grown past the matrix files; fixed: it now covers only databases with a fidelity-matrix TSV). Regenerating it then reports about 37 cells as open, because roughly 40 refusal reasons in gen_fidelity.py's DB_REFUSED do not start with a verdict word (by design, server or upstream): the 'probe:' and 'extension gap:' forms, and the 'native point/polygon is PostgreSQL's ... covered by' notes. Give each a verdict (or teach the generator the new forms), then regenerate. The committed report predates those entries and says 0 open. |
 | All | reconciliation.csv | Covers 14 databases and predates Db2, Informix, Access, Snowflake, SAP HANA, InterBase and the Aurora variants; their concepts are classified only from the unified workbook. Regenerate it. |
 | All | Probe candidate lists | A '-' in docs/type-representation-matrix.md means no candidate spelling was accepted, not that the database lacks the type. Every category 2 row below is such a case: add the spelling that works, or record the server's refusal as by design or server. |
 
@@ -69,6 +70,10 @@ tracks. For conversions, what exists:
 
 - **Unit, provider-independent:** `TypeCoercionCombinatorialMatrixTests` and its siblings convert a runtime value of one type to a target
   type (numeric widening and narrowing, string and numeric, and so on), with no database involved.
+- **fakeDb, every sample on every emulated database:** `FakeDbSampleRoundTripTests` writes each CLR type sample through the library's own
+  write path and reads it back on every `SupportedDatabase` product (about 13,000 cases). It proves the library's write and read are inverses
+  per product; what a real server does with the stored value is the live matrix's job. A database's own unreadable types are asserted as the
+  typed refusal (DuckDB's GEOMETRY).
 - **Live, a fixed set of columns:** `TypeHydrationTests` reads one entity with typical, zero/null and boundary rows on every database;
   `TypeRoundTripMatrixTests` and the fidelity test read each column back as its natural .NET type.
 - **Not found:** a live matrix of each database's column type read as each of the other .NET types it can map to (an INTEGER column as
@@ -105,7 +110,7 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 | ID | Category | Concept | Databases |
 |---|---|---|---|
-| A63 | Collections | list / multiset / set collection | 6: AuroraPostgreSql, CockroachDb, DuckDB, PostgreSql, Spanner, YugabyteDb |
+| A63 | Collections | list / multiset / set collection | 5: AuroraPostgreSql, CockroachDb, PostgreSql, Spanner, YugabyteDb |
 | B43 | Temporal | Instant (UTC-normalized, session-zone rendered) | 5: AuroraMySql, MariaDb, MySql, SingleStore, TiDb |
 | B66 | User-defined | Domain / distinct type | 4: AuroraPostgreSql, Informix, InterBase, YugabyteDb |
 | A57 | Spatial | line / linestring geometry | 2: PostgreSql, SingleStore |
@@ -116,11 +121,9 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 | A58 | Spatial | polygon geometry | 1: SingleStore |
 | A62 | Collections | fixed-length array | 1: Snowflake |
 | B20 | Boolean | Boolean | 1: SybaseASE |
-| B32 | Binary | Fixed-length BINARY(n) | 1: DuckDB |
 | B45 | Temporal | Interval day–second | 1: AuroraMySql |
 | B50 | Identifier | Security label | 1: Informix |
 | B53 | Semi-structured | JSON (text-preserving) | 1: Snowflake |
-| B61 | Composite | Tagged union | 1: DuckDB |
 | B63 | Composite | Multi-valued set | 1: Informix |
 
 ## By database, in full
@@ -355,14 +358,6 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 | B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B59 | Composite | Struct / row / composite | N | none | no cell |
 
-**Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (3)
-
-| ID | Category | Concept | Doc | Probe type | Note |
-|---|---|---|:--:|---|---|
-| A63 | Collections | list / multiset / set collection | N | list / multiset / set collection | refused: Parser Error: syntax error at or near \"MULTISET\" LINE 1: ... TABLE pr320 (id INTEGER NOT NULL PRIMA |
-| B32 | Binary | Fixed-length BINARY(n) | A | fixed binary | refused: Binder Error: Type 'BLOB' does not take any type parameters LINE 1: CREATE TABLE pr150 (id INTEGER NO |
-| B61 | Composite | Tagged union | N | variant / dynamic value [override] | refused: Invalid Input Error: VARIANT columns are not supported in storage versions prior to v1.5.0 (database  |
-
 **Version, extension or restriction check: documented V, E or R** (8)
 
 | ID | Category | Concept | Doc | Probe type | Note |
@@ -374,7 +369,7 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 | B51 | Network | IP address / CIDR | E | IP address | extension-dependent; tested on the test environment's version only |
 | B53 | Semi-structured | JSON (text-preserving) | E | JSON text / JSON value | extension-dependent; tested on the test environment's version only |
 | B68 | Spatial | Planar geometry | E | point geometry | extension-dependent; refused on the test environment: confirm the prerequisite |
-| B71 | Vector / AI | Vector embedding | R | vector embedding | restricted; refused on the test environment: confirm the prerequisite |
+| B71 | Vector / AI | Vector embedding | R | vector embedding | restricted; tested on the test environment's version only |
 
 **Classify first: the workbook marks it ? (unverified)** (11)
 

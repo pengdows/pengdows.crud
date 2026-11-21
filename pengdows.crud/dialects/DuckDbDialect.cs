@@ -51,6 +51,20 @@ internal class DuckDbDialect : SqlDialect
 {
     internal override bool RequiresSerializedConnectionOpen => true;
 
+    // DuckDB.NET names a UNION column's type ("Union") and a spatial GEOMETRY column's ("Geometry") and then throws a raw
+    // ArgumentException ("Unrecognised type Union (28) for column v") from GetFieldType and GetValue (live, DuckDB.NET 2.0.1). A result
+    // set holding one is refused when its reader opens, by name, with what to select instead (UnreadableColumnTypes).
+    internal override IReadOnlyDictionary<string, string>? UnreadableColumnTypes { get; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Union"] =
+                "a DuckDB UNION column, which DuckDB.NET cannot read (it throws \"Unrecognised type Union\"). Select union_tag(column) " +
+                "and union_extract(column, 'member') instead",
+            ["Geometry"] =
+                "a DuckDB GEOMETRY column, which DuckDB.NET cannot read (it throws \"Unrecognised type Geometry\"). Select " +
+                "ST_AsText(column), or ST_AsWKB(column) for bytes, instead"
+        };
+
     internal override bool ReadOnlyConnectionsCanBlockConcurrentWriters => true;
 
     internal override bool RejectsExplicitIsolationLevelOnBeginTransaction => true;

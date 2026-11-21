@@ -31,6 +31,11 @@ for path in glob.glob(os.path.join(probe, "fidelity-matrix", "*.tsv")):
         if len(parts) >= 4:
             status[(db, index)] = parts[3]
 
+# The databases the report covers: those with a live matrix (fidelity-matrix/<database>.tsv). The generator's own list is longer
+# (Snowflake, SAP HANA, InterBase and the Aurora variants run the fidelity test too, but have no matrix file here); a database with
+# no file would read as "no column type" for every type, which is not what its declarations say.
+COVERED = [db for db in gf.DB_ENUM if any(k[0] == db for k in status)]
+
 SHORT = {
     "PostgreSql": "PostgreSQL", "SqlServer": "SQL Server", "Oracle": "Oracle", "Firebird": "Firebird",
     "CockroachDb": "CockroachDB", "MariaDb": "MariaDB", "MySql": "MySQL", "Sqlite": "SQLite", "DuckDB": "DuckDB",
@@ -76,7 +81,7 @@ def cell(db, index):
 
 rows = []
 for index, (_column, sem, clr, dbtype, _sample, _kind) in enumerate(gf.SPEC):
-    rows.append((sem, clr, dbtype, [cell(db, index) for db in gf.DB_ENUM]))
+    rows.append((sem, clr, dbtype, [cell(db, index) for db in COVERED]))
 
 out = []
 out.append("# Type representation matrix")
@@ -116,7 +121,7 @@ for (db, index), value in status.items():
     else:
         verdicts["server"] += 1
 dashes = unsupported - sum(verdicts.values())
-out.append(f"- {len(rows)} types, {len(gf.DB_ENUM)} databases, {len(rows) * len(gf.DB_ENUM)} cells.")
+out.append(f"- {len(rows)} types, {len(COVERED)} databases, {len(rows) * len(COVERED)} cells.")
 out.append(f"- {passed} cells store and read the value back.")
 out.append(f"- {verdicts['open']} open: the database has a type and the library does not handle it yet.")
 out.append(f"- {verdicts['by design']} unsupported by design: a stated decision (reason in the table below).")
@@ -127,9 +132,9 @@ out.append(f"- {failed} cells fail.")
 out.append("")
 out.append("## Types by database")
 out.append("")
-header = "| Type | CLR type | DbType | " + " | ".join(SHORT[db] for db in gf.DB_ENUM) + " |"
+header = "| Type | CLR type | DbType | " + " | ".join(SHORT[db] for db in COVERED) + " |"
 out.append(header)
-out.append("|" + "---|" * (3 + len(gf.DB_ENUM)))
+out.append("|" + "---|" * (3 + len(COVERED)))
 for sem, clr, dbtype, cells in rows:
     out.append(f"| {esc(sem)} | `{esc(clr)}` | {dbtype} | " + " | ".join(cells) + " |")
 out.append("")
@@ -141,7 +146,7 @@ out.append("a database that has the type can be supported. The `—` cells are n
 out.append("")
 out.append("| Database | Type | Status | Current reason |")
 out.append("|---|---|---|---|")
-for db in gf.DB_ENUM:
+for db in COVERED:
     for sem, _clr, _dbtype, _cells in rows:
         reason = gf.DB_REFUSED.get((db, sem))  # a label shared by two rows has no refusal of its own
         if reason:

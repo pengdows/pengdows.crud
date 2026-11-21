@@ -105,5 +105,14 @@
         "CREATE EXTENSION IF NOT EXISTS postgis"
       ]
     }
+  },
+  "DuckDB": {
+    "user-defined enum / domain": {
+      "decl": "probe_domain",
+      "ddl": [
+        "DROP TYPE IF EXISTS probe_domain",
+        "CREATE TYPE probe_domain AS VARCHAR"
+      ]
+    }
   }
 }

@@ -62,6 +62,12 @@ KNOWN_OPEN = [
      "(opt-in databases: credentials, licence or an AWS account)."),
     ("FlatFile", "Workbook classification",
      "The workbook marks all 47 concepts unverified for pengdows.flatfile, so nothing about it is classified."),
+    ("All", "docs/type-representation-matrix.md is stale",
+     "gen_representation_doc.py crashed at HEAD (its database list had grown past the matrix files; fixed: it now covers only databases with a "
+     "fidelity-matrix TSV). Regenerating it then reports about 37 cells as open, because roughly 40 refusal reasons in gen_fidelity.py's "
+     "DB_REFUSED do not start with a verdict word (by design, server or upstream): the 'probe:' and 'extension gap:' forms, and the 'native "
+     "point/polygon is PostgreSQL's ... covered by' notes. Give each a verdict (or teach the generator the new forms), then regenerate. "
+     "The committed report predates those entries and says 0 open."),
     ("All", "reconciliation.csv",
      "Covers 14 databases and predates Db2, Informix, Access, Snowflake, SAP HANA, InterBase and the Aurora variants; their concepts are "
      "classified only from the unified workbook. Regenerate it."),
@@ -186,6 +192,10 @@ def main():
     out.append("")
     out.append("- **Unit, provider-independent:** `TypeCoercionCombinatorialMatrixTests` and its siblings convert a runtime value of one type to a target")
     out.append("  type (numeric widening and narrowing, string and numeric, and so on), with no database involved.")
+    out.append("- **fakeDb, every sample on every emulated database:** `FakeDbSampleRoundTripTests` writes each CLR type sample through the library's own")
+    out.append("  write path and reads it back on every `SupportedDatabase` product (about 13,000 cases). It proves the library's write and read are inverses")
+    out.append("  per product; what a real server does with the stored value is the live matrix's job. A database's own unreadable types are asserted as the")
+    out.append("  typed refusal (DuckDB's GEOMETRY).")
     out.append("- **Live, a fixed set of columns:** `TypeHydrationTests` reads one entity with typical, zero/null and boundary rows on every database;")
     out.append("  `TypeRoundTripMatrixTests` and the fidelity test read each column back as its natural .NET type.")
     out.append("- **Not found:** a live matrix of each database's column type read as each of the other .NET types it can map to (an INTEGER column as")

@@ -1433,7 +1433,7 @@ list / multiset / set collection,list_collection,int[],Object,CockroachDb,unsupp
 list / multiset / set collection,list_collection,int[],Object,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near ')' at line 1
 list / multiset / set collection,list_collection,int[],Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1
 list / multiset / set collection,list_collection,int[],Object,Sqlite,declared,INTEGER MULTISET,INTEGER MULTISET,
-list / multiset / set collection,list_collection,int[],Object,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""MULTISET"" LINE 1: ... TABLE pr320 (id INTEGER NOT NULL PRIMARY KEY, c INTEGER MULTISET)"
+list / multiset / set collection,list_collection,int[],Object,DuckDB,declared,INTEGER[],List,
 list / multiset / set collection,list_collection,int[],Object,YugabyteDb,unsupported,,,"42601: syntax error at or near ""MULTISET"" POSITION: 64"
 list / multiset / set collection,list_collection,int[],Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 71 near ""MULTISET)"""
 list / multiset / set collection,list_collection,int[],Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1
@@ -1525,7 +1525,7 @@ user-defined enum / domain,domain,string,String,CockroachDb,unsupported,,,"42601
 user-defined enum / domain,domain,string,String,MariaDb,unsupported,,,Unknown data type: 'CREATE'
 user-defined enum / domain,domain,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
 user-defined enum / domain,domain,string,String,Sqlite,declared,ENUM,ENUM,
-user-defined enum / domain,domain,string,String,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""CREATE"" LINE 1: CREATE TABLE pr342 (id INTEGER NOT NULL PRIMARY KEY, c CREATE TYPE) ^"
+user-defined enum / domain,domain,string,String,DuckDB,declared,probe_domain,VARCHAR,
 user-defined enum / domain,domain,string,String,YugabyteDb,unsupported,,,"42601: syntax error at or near ""CREATE"" POSITION: 56"
 user-defined enum / domain,domain,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 61 near ""CREATE TYPE)"""
 user-defined enum / domain,domain,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
@@ -1640,7 +1640,7 @@ vector embedding,vector,float[],Object,CockroachDb,declared,VECTOR(3),vector,
 vector embedding,vector,float[],Object,MariaDb,declared,VECTOR(3),BLOB,
 vector embedding,vector,float[],Object,MySql,declared,VECTOR(3),VECTOR,
 vector embedding,vector,float[],Object,Sqlite,declared,VECTOR(3),VECTOR,
-vector embedding,vector,float[],Object,DuckDB,unsupported,,,"Catalog Error: Type with name VECTOR does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr349 (id INTEGER NOT NULL PRIMARY KEY, c VECTOR(3))"
+vector embedding,vector,float[],Object,DuckDB,declared,FLOAT[3],Array,
 vector embedding,vector,float[],Object,YugabyteDb,unsupported,,,"42704: type ""vector"" does not exist POSITION: 56"
 vector embedding,vector,float[],Object,TiDb,declared,VECTOR(3),VARCHAR,
 vector embedding,vector,float[],Object,SingleStore,declared,VECTOR(3),BLOB,

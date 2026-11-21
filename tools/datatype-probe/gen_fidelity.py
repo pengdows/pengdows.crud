@@ -213,6 +213,12 @@ DB_PREFER = {
     # DuckDB's ENUM takes its values by name and the parameter binder sends the text as UINT8; an address and a network
     # are text on DuckDB, which refuses a varchar into INET or CIDR without a cast.
     ("DuckDB", "enumeration"): ("VARCHAR(20)", "VARCHAR"),
+    # DuckDB has no VECTOR type; its vector is a fixed-size FLOAT array (live, DuckDB 2.0.1: FLOAT[3] is accepted).
+    ("DuckDB", "vector embedding"): ("FLOAT[3]", "Array"),
+    # DuckDB's collection is its LIST type (INTEGER[], live DuckDB 2.0.1), not the MULTISET keyword the probe tried; its user-defined type
+    # is an alias made with CREATE TYPE ... AS (prerequisites.json).
+    ("DuckDB", "list / multiset / set collection"): ("INTEGER[]", "List"),
+    ("DuckDB", "user-defined enum / domain"): ("probe_domain", "VARCHAR"),
     ("DuckDB", "IP address"): ("VARCHAR(45)", "VARCHAR"),
     ("DuckDB", "IP network / CIDR"): ("VARCHAR(50)", "VARCHAR"),
     # A second-precision datetime keeps its time of day. Where the probe took DATE (PostgreSQL family, Firebird, Spanner) the
@@ -324,6 +330,15 @@ DB_REFUSED = {
     # Informix writes a BSON document from its JSON text (the JSON-to-BSON cast); the server refuses raw BSON bytes (No cast from byte to json).
     # A DateTimeOffset declared DbType.Time is a time with its offset (the PostgreSQL timetz and Firebird rule). DuckDB and
     # FlatFile have no time-with-zone type to hold the offset, so the parameter is refused at the validator.
+    # DuckDB 2.0.1 (live): BLOB takes no length, the spatial extension has one GEOMETRY type that DuckDB.NET cannot read, and VARIANT
+    # needs a newer storage version than the testbed's database file.
+    ("DuckDB", "fixed binary"): "server: DuckDB's BLOB (aliases BINARY and VARBINARY) takes no length: BINARY(16) and BLOB(16) are refused (Binder Error: does not take any type parameters, confirmed live); the bytes go in a BLOB",
+    ("DuckDB", "point geometry"): "by design: DuckDB has no POINT type; the spatial extension has one GEOMETRY type, which DuckDB.NET cannot read (see general geometry)",
+    ("DuckDB", "line / linestring geometry"): "by design: DuckDB has no LINESTRING type; the spatial extension has one GEOMETRY type, which DuckDB.NET cannot read (see general geometry)",
+    ("DuckDB", "polygon geometry"): "by design: DuckDB has no POLYGON type; the spatial extension has one GEOMETRY type, which DuckDB.NET cannot read (see general geometry)",
+    ("DuckDB", "general geometry"): "upstream: DuckDB.NET names a GEOMETRY column (spatial extension) and throws \"Unrecognised type Geometry\" when it reads it (confirmed live); the library refuses such a result set by column name, and ST_AsText(column) reads it",
+    ("DuckDB", "geography / geodetic"): "server: DuckDB has no GEOGRAPHY type (Catalog Error: Type with name GEOGRAPHY does not exist, confirmed live)",
+    ("DuckDB", "variant / dynamic value"): "server: VARIANT needs storage version v1.5.0 or later and the testbed's database file is v1.0.0 (an in-memory database accepts it, confirmed live)",
 }
 
 # A (database, type) whose column the server generates (a rowversion token, a ROWID): the library never writes it, so the

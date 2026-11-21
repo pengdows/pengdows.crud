@@ -18,7 +18,7 @@ concept that `reconciliation.csv` never linked (`OVERRIDES` in the script), not 
 | AuroraPostgreSql | 39 | 34 | 0 | 3 | 2 | 22 | 5 |
 | CockroachDb | 33 | 32 | 0 | 1 | 0 | 6 | 11 |
 | Db2 | 25 | 22 | 0 | 0 | 3 | 8 | 18 |
-| DuckDB | 37 | 33 | 0 | 3 | 1 | 9 | 11 |
+| DuckDB | 37 | 34 | 2 | 0 | 1 | 9 | 11 |
 | Firebird | 19 | 17 | 1 | 0 | 1 | 8 | 16 |
 | FlatFile | 0 | 0 | 0 | 0 | 0 | 0 | 47 |
 | Informix | 33 | 24 | 2 | 3 | 4 | 4 | 12 |
@@ -36,7 +36,7 @@ concept that `reconciliation.csv` never linked (`OVERRIDES` in the script), not 
 | SybaseASE | 34 | 27 | 3 | 1 | 3 | 2 | 10 |
 | TiDb | 32 | 30 | 0 | 1 | 1 | 3 | 12 |
 | YugabyteDb | 36 | 31 | 0 | 3 | 2 | 8 | 17 |
-| **All** | 681 | 602 | 10 | 32 | 37 | 143 | 317 |
+| **All** | 681 | 603 | 12 | 29 | 37 | 143 | 317 |
 
 ## AuroraMySql
 
@@ -78,12 +78,6 @@ concept that `reconciliation.csv` never linked (`OVERRIDES` in the script), not 
 - `B67` User-defined: Opaque / CLR / extension base type (N)
 
 ## DuckDB
-
-**Gap A** (supported; the probe found no accepted spelling):
-
-- `A63` Collections: list / multiset / set collection (N), probe type *list / multiset / set collection*
-- `B32` Binary: Fixed-length BINARY(n) (A), probe type *fixed binary*
-- `B61` Composite: Tagged union (N), probe type *variant / dynamic value [override]*
 
 **Gap B** (supported; no probe type or no fidelity cell, so nothing tests it):
 

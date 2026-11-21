@@ -489,8 +489,11 @@ internal static class TypeFidelityDeclarations
                 ["BSON"] = ("BYTEA", "Blob"),
                 ["IP network / CIDR"] = ("VARCHAR(50)", "VARCHAR"),
                 ["fixed-length array"] = ("INTEGER ARRAY[10]", "Array"),
+                ["list / multiset / set collection"] = ("INTEGER[]", "List"),
                 ["map / dictionary"] = ("VARCHAR", "VARCHAR"),
+                ["user-defined enum / domain"] = ("probe_domain", "VARCHAR"),
                 ["32-bit transaction ID"] = ("BIGINT", "BigInt"),
+                ["vector embedding"] = ("FLOAT[3]", "Array"),
             },
             [SupportedDatabase.YugabyteDb] = new Dictionary<string, (string Declaration, string ProviderType)>
             {
@@ -1323,27 +1326,24 @@ internal static class TypeFidelityDeclarations
                 ["decimal floating point"] = "refused: Catalog Error: Type with name DECFLOAT does not exist! Did you mean \"JSON\"? LINE 1: CREATE TABLE pr76 (id INTEGER NOT NULL PRIMARY KEY, c DECFLOAT)",
                 ["money / currency"] = "refused: Catalog Error: Type with name MONEY does not exist! Did you mean \"JSON\"? LINE 1: CREATE TABLE pr91 (id INTEGER NOT NULL PRIMARY KEY, c MONEY)",
                 ["set-valued enum"] = "refused: Catalog Error: Type with name SET does not exist! Did you mean \"JSON\"? LINE 1: CREATE TABLE pr148 (id INTEGER NOT NULL PRIMARY KEY, c SET('a','b'))",
-                ["fixed binary"] = "refused: Binder Error: Type 'BLOB' does not take any type parameters LINE 1: CREATE TABLE pr150 (id INTEGER NOT NULL PRIMARY KEY, c BINARY(16))",
+                ["fixed binary"] = "refused: server: DuckDB's BLOB (aliases BINARY and VARBINARY) takes no length: BINARY(16) and BLOB(16) are refused (Binder Error: does not take any type parameters, confirmed live); the bytes go in a BLOB",
                 ["legacy long binary"] = "refused: Parser Error: syntax error at or near \"RAW\" LINE 1: ...REATE TABLE pr176 (id INTEGER NOT NULL PRIMARY KEY, c LONG RAW) ^",
                 ["local-zone timestamp"] = "refused: Parser Error: syntax error at or near \"WITH\" LINE 1: ... TABLE pr207 (id INTEGER NOT NULL PRIMARY KEY, c TIMESTAMP WITH LOCAL TIME ZONE)",
                 ["transaction ID"] = "refused: Catalog Error: Type with name XID does not exist! Did you mean \"main.INTEGER\"? LINE 1: CREATE TABLE pr241 (id INTEGER NOT NULL PRIMARY KEY, c XID)",
                 ["WAL / log position"] = "refused: Catalog Error: Type with name PG_LSN does not exist! Did you mean \"JSON\"? LINE 1: CREATE TABLE pr243 (id INTEGER NOT NULL PRIMARY KEY, c PG_LSN)",
                 ["XML"] = "refused: Catalog Error: Type with name XML does not exist! LINE 1: CREATE TABLE pr256 (id INTEGER NOT NULL PRIMARY KEY, c XML) ^",
-                ["variant / dynamic value"] = "refused: Invalid Input Error: VARIANT columns are not supported in storage versions prior to v1.5.0 (database \"pengdows\" is using storage version v1.0.0+)",
+                ["variant / dynamic value"] = "refused: server: VARIANT needs storage version v1.5.0 or later and the testbed's database file is v1.0.0 (an in-memory database accepts it, confirmed live)",
                 ["MAC address"] = "refused: Catalog Error: Type with name MACADDR does not exist! Did you mean \"main.INTEGER\"? LINE 1: CREATE TABLE pr274 (id INTEGER NOT NULL PRIMARY KEY, c MACADDR)",
-                ["point geometry"] = "refused: Catalog Error: Type with name POINT does not exist! Did you mean \"JSON\"? LINE 1: CREATE TABLE pr276 (id INTEGER NOT NULL PRIMARY KEY, c POINT)",
-                ["line / linestring geometry"] = "refused: Catalog Error: Type with name LINESTRING does not exist! Did you mean \"main.INTEGER\"? LINE 1: CREATE TABLE pr285 (id INTEGER NOT NULL PRIMARY KEY, c LINESTRING)",
-                ["polygon geometry"] = "refused: Catalog Error: Type with name POLYGON does not exist! Did you mean \"JSON\"? LINE 1: CREATE TABLE pr291 (id INTEGER NOT NULL PRIMARY KEY, c POLYGON)",
-                ["general geometry"] = "refused: Unrecognised type 40 (40) for column c",
-                ["geography / geodetic"] = "refused: Catalog Error: Type with name GEOGRAPHY does not exist! Did you mean \"JSON\"? LINE 1: CREATE TABLE pr302 (id INTEGER NOT NULL PRIMARY KEY, c GEOGRAPHY)",
-                ["list / multiset / set collection"] = "refused: Parser Error: syntax error at or near \"MULTISET\" LINE 1: ... TABLE pr320 (id INTEGER NOT NULL PRIMARY KEY, c INTEGER MULTISET)",
+                ["point geometry"] = "refused: by design: DuckDB has no POINT type; the spatial extension has one GEOMETRY type, which DuckDB.NET cannot read (see general geometry)",
+                ["line / linestring geometry"] = "refused: by design: DuckDB has no LINESTRING type; the spatial extension has one GEOMETRY type, which DuckDB.NET cannot read (see general geometry)",
+                ["polygon geometry"] = "refused: by design: DuckDB has no POLYGON type; the spatial extension has one GEOMETRY type, which DuckDB.NET cannot read (see general geometry)",
+                ["general geometry"] = "refused: upstream: DuckDB.NET names a GEOMETRY column (spatial extension) and throws \"Unrecognised type Geometry\" when it reads it (confirmed live); the library refuses such a result set by column name, and ST_AsText(column) reads it",
+                ["geography / geodetic"] = "refused: server: DuckDB has no GEOGRAPHY type (Catalog Error: Type with name GEOGRAPHY does not exist, confirmed live)",
                 ["range"] = "refused: Catalog Error: Type with name INT4RANGE does not exist! Did you mean \"main.INTEGER\"? LINE 1: CREATE TABLE pr336 (id INTEGER NOT NULL PRIMARY KEY, c INT4RANGE)",
                 ["multirange"] = "refused: Catalog Error: Type with name INT4MULTIRANGE does not exist! Did you mean \"int4\"? LINE 1: CREATE TABLE pr340 (id INTEGER NOT NULL PRIMARY KEY, c INT4MULTIRANGE)",
-                ["user-defined enum / domain"] = "refused: Parser Error: syntax error at or near \"CREATE\" LINE 1: CREATE TABLE pr342 (id INTEGER NOT NULL PRIMARY KEY, c CREATE TYPE) ^",
                 ["full-text search vector / query"] = "refused: Catalog Error: Type with name TSVECTOR does not exist! Did you mean \"JSON\"? LINE 1: CREATE TABLE pr347 (id INTEGER NOT NULL PRIMARY KEY, c TSVECTOR)",
                 ["native point"] = "refused: native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry",
                 ["native polygon"] = "refused: native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry",
-                ["vector embedding"] = "refused: Catalog Error: Type with name VECTOR does not exist! Did you mean \"JSON\"? LINE 1: CREATE TABLE pr349 (id INTEGER NOT NULL PRIMARY KEY, c VECTOR(3))",
                 ["hierarchical path"] = "refused: Catalog Error: Type with name HIERARCHYID does not exist! Did you mean \"main.INTEGER\"? LINE 1: CREATE TABLE pr355 (id INTEGER NOT NULL PRIMARY KEY, c HIERARCHYID)",
                 ["external-file reference"] = "refused: Catalog Error: Type with name BFILE does not exist! Did you mean \"main.INTEGER\"? LINE 1: CREATE TABLE pr359 (id INTEGER NOT NULL PRIMARY KEY, c BFILE)",
                 ["specialized security label"] = "refused: Catalog Error: Type with name IDSSECURITYLABEL does not exist! Did you mean \"JSON\"? LINE 1: CREATE TABLE pr366 (id INTEGER NOT NULL PRIMARY KEY, c IDSSECURITYLABEL)",
@@ -1905,6 +1905,10 @@ internal static class TypeFidelityDeclarations
             [SupportedDatabase.Db2] = new Dictionary<string, string[]>
             {
                 ["user-defined enum / domain"] = new[] { "DROP TYPE probe_domain", "CREATE DISTINCT TYPE probe_domain AS VARCHAR(100) WITH COMPARISONS" },
+            },
+            [SupportedDatabase.DuckDB] = new Dictionary<string, string[]>
+            {
+                ["user-defined enum / domain"] = new[] { "DROP TYPE IF EXISTS probe_domain", "CREATE TYPE probe_domain AS VARCHAR" },
             },
             [SupportedDatabase.Firebird] = new Dictionary<string, string[]>
             {
