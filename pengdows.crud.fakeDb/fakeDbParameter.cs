@@ -19,7 +19,18 @@ public class fakeDbParameter : DbParameter, IDbDataParameter
     public override ParameterDirection Direction { get; set; } = ParameterDirection.Input;
     public override bool IsNullable { get; set; }
 
-    [AllowNull] public override string ParameterName { get; set; } = string.Empty;
+    // Set by the factory from fakeDbDriverQuirks.ParameterNameReadsWithMarker; off by default (conformant).
+    internal bool ParameterNameReadsWithMarker { get; set; }
+    private string? _parameterName = string.Empty;
+
+    [AllowNull]
+    public override string ParameterName
+    {
+        get => ParameterNameReadsWithMarker && !string.IsNullOrEmpty(_parameterName) && _parameterName[0] != '@'
+            ? "@" + _parameterName
+            : _parameterName!;
+        set => _parameterName = value;
+    }
 
     [AllowNull] public override string SourceColumn { get; set; } = string.Empty;
     [AllowNull]

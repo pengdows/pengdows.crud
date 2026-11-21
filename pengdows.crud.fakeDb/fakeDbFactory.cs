@@ -480,7 +480,9 @@ public partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
             return new fakeDbInformixParameter();
         }
 
-        return EmulatesNpgsqlParameterMetadata ? new fakeDbNpgsqlParameter() : new fakeDbParameter();
+        return EmulatesNpgsqlParameterMetadata
+            ? new fakeDbNpgsqlParameter()
+            : new fakeDbParameter { ParameterNameReadsWithMarker = DriverQuirks.ParameterNameReadsWithMarker };
     }
 
     /// <summary>

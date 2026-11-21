@@ -148,6 +148,13 @@ public sealed class fakeDbDriverQuirks
     /// </summary>
     public bool ParameterNameDefaultsToNull { get; set; }
 
+    /// <summary>
+    /// A parameter stores the name it was given without a marker, but reads <c>ParameterName</c> back with an
+    /// <c>@</c> in front. AdoNetCore.AseClient 0.19.2 does this: a name added as <c>id</c> reads back as <c>@id</c>
+    /// (observed in the SybaseASE integration run, 2026-11-21).
+    /// </summary>
+    public bool ParameterNameReadsWithMarker { get; set; }
+
     /// <summary>A new parameter's <c>Direction</c> is 0, not <c>Input</c>. DuckDB.NET 1.5.6.1.</summary>
     public bool ParameterDirectionDefaultsToZero { get; set; }
 
@@ -162,7 +169,8 @@ public sealed class fakeDbDriverQuirks
         ConnectionStringSettableWhileOpen || ConnectionStringWhileOpenException != null ||
         CompletedTransactionKeepsConnection || DisposedTransactionKeepsConnection ||
         DisposedTransactionThrowsObjectDisposed || TransactionCompletesAgain || SavepointReleaseIsNoOp ||
-        SavepointsWorkButUnreported || SavepointsSupported || ParameterNameDefaultsToNull || ParameterDirectionDefaultsToZero;
+        SavepointsWorkButUnreported || SavepointsSupported || ParameterNameDefaultsToNull || ParameterDirectionDefaultsToZero ||
+        ParameterNameReadsWithMarker;
 
     // ── Presets: one driver version each, a new instance per call so a test can change it ──
 
@@ -279,7 +287,8 @@ public sealed class fakeDbDriverQuirks
         DisposedTransactionThrowsObjectDisposed = true,
         TransactionCompletesAgain = true,
         SavepointReleaseIsNoOp = true,
-        ParameterNameDefaultsToNull = true
+        ParameterNameDefaultsToNull = true,
+        ParameterNameReadsWithMarker = true
     };
 
     /// <summary>IBM.Data.Db2 (Net.IBM.Data.Db2-lnx) 8.0.0.500.</summary>

@@ -168,6 +168,23 @@ public sealed class ParameterNameRuleTests
         Assert.Throws<KeyNotFoundException>(() => sc.GetParameterValue("fred; --"));
     }
 
+    // Regression (SybaseASE integration run, 2026-11-21): the AseClient driver stores "id" but reads ParameterName back
+    // as "@id". The rule must check the name it was given, not the value read back from the driver.
+    [Fact]
+    public void DriverThatReadsNamesWithAMarker_StillAcceptsAPlainName()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SybaseASE)
+        {
+            DriverQuirks = new fakeDbDriverQuirks { ParameterNameReadsWithMarker = true }
+        };
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=SybaseASE", factory);
+        using var sc = (SqlContainer)context.CreateSqlContainer("SELECT 1");
+
+        var parameter = sc.AddParameterWithValue("id", DbType.Int64, 1);
+
+        Assert.NotNull(parameter);
+    }
+
     // MakeParameterName writes the name into SQL text, so it applies the same rule as AddParameter.
     [Theory]
     [InlineData("fred; --")]

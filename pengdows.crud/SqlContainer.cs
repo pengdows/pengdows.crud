@@ -533,8 +533,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         else
         {
             // Strip any dialect prefix (@, :, ?, $) — parameters must be stored without prefix
-            parameter.ParameterName = NormalizeParameterName(parameter.ParameterName);
-            ValidateParameterName(parameter.ParameterName);
+            // Validate the name we stored, not the value read back: some drivers read a name back with a marker.
+            var name = NormalizeParameterName(parameter.ParameterName);
+            parameter.ParameterName = name;
+            ValidateParameterName(name);
         }
 
         var isOutput = parameter.Direction switch

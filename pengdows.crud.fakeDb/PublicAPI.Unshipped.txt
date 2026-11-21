@@ -288,6 +288,8 @@ pengdows.crud.fakeDb.fakeDbDriverQuirks.SavepointsWorkButUnreported.get -> bool
 pengdows.crud.fakeDb.fakeDbDriverQuirks.SavepointsWorkButUnreported.set -> void
 pengdows.crud.fakeDb.fakeDbDriverQuirks.ParameterNameDefaultsToNull.get -> bool
 pengdows.crud.fakeDb.fakeDbDriverQuirks.ParameterNameDefaultsToNull.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ParameterNameReadsWithMarker.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ParameterNameReadsWithMarker.set -> void
 pengdows.crud.fakeDb.fakeDbDriverQuirks.ParameterDirectionDefaultsToZero.get -> bool
 pengdows.crud.fakeDb.fakeDbDriverQuirks.ParameterDirectionDefaultsToZero.set -> void
 static pengdows.crud.fakeDb.fakeDbDriverQuirks.SqlClient() -> pengdows.crud.fakeDb.fakeDbDriverQuirks!
