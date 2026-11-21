@@ -24,7 +24,7 @@ public sealed class PortableAdvancedTypeRoundTripTests : DatabaseTestBase
             SupportedDatabase.Firebird, SupportedDatabase.Db2, SupportedDatabase.Oracle,
             SupportedDatabase.Spanner, SupportedDatabase.SybaseASE, SupportedDatabase.Informix,
             SupportedDatabase.FlatFile, SupportedDatabase.SapHana, SupportedDatabase.InterBase,
-            SupportedDatabase.Snowflake
+            SupportedDatabase.Snowflake, SupportedDatabase.Access
         });
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
@@ -53,6 +53,8 @@ public sealed class PortableAdvancedTypeRoundTripTests : DatabaseTestBase
             // InterBase names BLOB subtypes by number only (0 binary, 1 text) (HARN-011).
             SupportedDatabase.InterBase => "CREATE TABLE \"portable_advanced_types\" (\"id\" INTEGER NOT NULL PRIMARY KEY, \"payload\" BLOB SUB_TYPE 1 NOT NULL, \"bytes\" BLOB SUB_TYPE 0 NOT NULL, \"content\" BLOB SUB_TYPE 0 NOT NULL, \"notes\" BLOB SUB_TYPE 1 NOT NULL)",
             SupportedDatabase.Snowflake => "CREATE TABLE \"portable_advanced_types\" (\"id\" INTEGER PRIMARY KEY, \"payload\" VARCHAR NOT NULL, \"bytes\" BINARY NOT NULL, \"content\" BINARY NOT NULL, \"notes\" VARCHAR NOT NULL)",
+            // Access has no BLOB or TEXT-for-long-text keyword: MEMO holds the text and LONGBINARY the bytes.
+            SupportedDatabase.Access => "CREATE TABLE portable_advanced_types (id INTEGER PRIMARY KEY, payload MEMO NOT NULL, bytes LONGBINARY NOT NULL, content LONGBINARY NOT NULL, notes MEMO NOT NULL)",
             _ => "CREATE TABLE portable_advanced_types (id INTEGER PRIMARY KEY, payload TEXT NOT NULL, bytes BLOB NOT NULL, content BLOB NOT NULL, notes TEXT NOT NULL)"
         };
         await using var table = context.CreateSqlContainer(sql);

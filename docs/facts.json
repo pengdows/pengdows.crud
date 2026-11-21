@@ -3,19 +3,19 @@
   "integration": {
     "Access": {
       "net10.0": {
-        "pass": 154,
+        "pass": 156,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-21 20:24Z",
-        "commit": "141212e8",
+        "runUtc": "2026-11-21 20:49Z",
+        "commit": "067b673e",
         "dirtyTree": true
       },
       "net8.0": {
-        "pass": 154,
+        "pass": 156,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-21 20:22Z",
-        "commit": "141212e8",
+        "runUtc": "2026-11-21 20:47Z",
+        "commit": "067b673e",
         "dirtyTree": true
       }
     },
