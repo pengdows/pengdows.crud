@@ -153,6 +153,10 @@
 //   reports it as DBTYPE_DBTIMESTAMP with the month one early (Jun reads May, Dec 31 reads Nov 31, Jan reads month 0), a
 //   garbled fraction, and a read can crash the process; CDate/CDbl/Format on it fail. No library fix exists: a faithful
 //   read needs a per-column SELECT rewrite and the library does not know a column's type. Use DATETIME (about 1 ms).
+//   A write is stored correctly; a result set holding such a column (provider type name DBTYPE_DBTIMESTAMP, where a plain
+//   DATETIME is DBTYPE_DATE) is refused when its reader opens, before any value is read, with a DataMappingException naming the
+//   column (UnreadableColumnTypes, SqlContainer), so the caller never gets a wrong date or a crashed process. The engine's own
+//   Year(), Month(), Day(), Hour(), Minute() and Second() of the column read correctly and can be selected instead.
 // - Isolation: CONFIRMED live that only ReadUncommitted and ReadCommitted are accepted by
 //   OleDbConnection.BeginTransaction — RepeatableRead/Serializable/Snapshot all throw "Neither
 //   the isolation level nor a strengthening of it is supported."
@@ -334,6 +338,18 @@ internal sealed class AccessDialect : SqlDialect
     // CONFIRMED live: a Mode=Read connection refuses a write ("Operation must use an updateable query."),
     // which AccessExceptionTranslator maps to ReadOnlyViolationException.
     internal override bool EnforcesReadOnlyTransactions => true;
+
+    // Date/Time Extended (DATETIME2) comes through OLE DB as DBTYPE_DBTIMESTAMP, a plain DATETIME as DBTYPE_DATE. The
+    // provider returns the extended value wrong (month one early) and a read can crash the process, so a result set holding one
+    // is refused when its reader opens (see the file-level summary).
+    internal override IReadOnlyDictionary<string, string>? UnreadableColumnTypes { get; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["DBTYPE_DBTIMESTAMP"] =
+                "an Access Date/Time Extended (DATETIME2) column, which OLE DB cannot read: it returns the date wrong (the month one " +
+                "early) and a read can crash the process. Read it with a DATETIME column, or select Year(), Month(), Day(), Hour(), " +
+                "Minute() and Second() of it instead"
+        };
 
     // A long is bound as a Double when one holds it exactly (|v| <= 2^53) and as a Decimal beyond
     // that (see CreateDbParameter). The gateway clones a template and reassigns the value with

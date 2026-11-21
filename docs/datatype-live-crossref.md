@@ -521,7 +521,11 @@ smallest and largest value of Byte, Integer, Long, Single, Double, Currency, Dec
 writing them: an **append-only memo refuses every SQL write** (literal or parameter, insert or update: "Object invalid or no longer set"),
 so it surfaces as a typed exception and an insert that leaves it out reads back empty; a calculated column cannot call `DateAdd` (use
 `[d]+1`); DAO refuses the AutoNumber attribute on a GUID field ("Invalid argument"); a multi-value Decimal made through DAO has scale 0;
-and a column cannot be named after a type keyword (`memo`, `note`). Not covered: Date/Time Extended (below, cannot pass).
+and a column cannot be named after a type keyword (`memo`, `note`). An attachment's file name is written with `INSERT ... SELECT` but its
+bytes cannot be (a parameter for `v.FileData` fails with "Invalid argument", a typed `DatabaseException`); bytes written through DAO are
+read back by the library exactly, behind the 20-byte header Access puts in front of `FileData` (its first Int32 is the header length). A
+lookup field (a Long shown through a combo box) stores and reads its key, not its label. Date/Time Extended is below: it is stored
+correctly and refused on read.
 
 **Access Date/Time Extended is unsupported: an upstream defect (2026-11-11).** `DATETIME2` is not an alias of `DATETIME`: it
 creates Access's Date/Time Extended column (DAO type 26, 100 ns, 0001 to 9999). The engine stores it correctly: its own
@@ -532,4 +536,9 @@ fraction is garbled (1234567 ticks read as 12345), and a read can crash the proc
 next run). `CDate`, `CDbl` and `Format` on the column fail through OLE DB. A faithful read would need the SELECT list rewritten
 per column, and the library does not know a column's type when it builds one, so there is no library fix. It is not in the type
 matrix (the matrix's "timestamp without zone" is Access `DATETIME`, about 1 ms); it is recorded in `AccessDialect` and as a
-Notes-only entry in the testbed catalog.
+Notes-only entry in the testbed catalog. **Refused on read (2026-11-21):** the library cannot make it readable, but it no longer lets a
+wrong date or a crash through. A result set holding such a column (provider type name `DBTYPE_DBTIMESTAMP`; a plain `DATETIME` is
+`DBTYPE_DATE`) is refused when its reader opens, before any value is read, with a `DataMappingException` that names the column and says
+to use `DATETIME` or to select `Year()`, `Month()`, `Day()`, `Hour()`, `Minute()` and `Second()` of it (`SqlDialect.UnreadableColumnTypes`;
+unit tests in `AccessExtendedDateTimeRefusalTests`, live test `DateTimeExtended_IsStoredCorrectly_AndRefusedByNameOnRead`). A write
+through the gateway is stored correctly, to the second. Reading only the column through `ExecuteScalar` is not guarded (no reader opens).

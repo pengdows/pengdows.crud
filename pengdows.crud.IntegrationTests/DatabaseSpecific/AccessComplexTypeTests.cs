@@ -34,6 +34,7 @@ public class AccessComplexTypeTests : IDisposable
     private const int DaoComplexLong = 102;
     private const int DaoComplexText = 109;
     private const int DaoBigInt = 16;
+    private const int DaoDateTimeExtended = 26;
     private const int DaoBoolean = 1;
     private const int DaoCurrency = 5;
     private const int DaoDouble = 7;
@@ -360,6 +361,149 @@ public class AccessComplexTypeTests : IDisposable
     {
         [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
         [Column("v", DbType.String)] public string? V { get; set; }
+    }
+
+    // ---- Attachment file bytes ------------------------------------------------------------------------------------------------
+
+    // Access SQL can write an attachment's file name (INSERT ... SELECT, above) but not its bytes: a parameter for v.FileData fails
+    // with "Invalid argument" (verified live), so the failure must be typed. The bytes are written through DAO, outside the library,
+    // and the library reads them back exactly.
+    private static readonly byte[] AttachmentBytes =
+        Enumerable.Range(0, 256).Select(i => (byte)i).Concat(Enumerable.Range(0, 1000).Select(i => (byte)(i * 7))).ToArray();
+
+    [SkippableFact]
+    public async Task Attachment_FileDataCannotBeWrittenThroughSql_AndTheFailureIsTyped()
+    {
+        Skip.IfNot(OperatingSystem.IsWindows(), "Access requires Windows");
+        CreateTables(("t_att2", DaoAttachment, hyperlink: false));
+        await using var context = CreateContext();
+        await Exec(context, "INSERT INTO t_att2 (id) VALUES (1)");
+
+        await using var write = context.CreateSqlContainer("INSERT INTO t_att2 (v.FileName, v.FileData) SELECT 'blob.bin', ");
+        var data = write.AddParameterWithValue("d", DbType.Binary, AttachmentBytes);
+        write.Query.Append(write.MakeParameterName(data)).Append(" FROM t_att2 WHERE id = 1");
+
+        await Assert.ThrowsAnyAsync<DatabaseException>(async () => await write.ExecuteNonQueryAsync());
+    }
+
+    [SkippableFact]
+    public async Task Attachment_BytesWrittenThroughDao_AreReadBackByTheLibrary()
+    {
+        Skip.IfNot(OperatingSystem.IsWindows(), "Access requires Windows");
+        CreateTables(("t_att3", DaoAttachment, hyperlink: false));
+        var file = Path.Combine(Path.GetTempPath(), $"pengdows.att.{Guid.NewGuid():N}.bin");
+        try
+        {
+            File.WriteAllBytes(file, AttachmentBytes);
+            dynamic engine = Activator.CreateInstance(Type.GetTypeFromProgID("DAO.DBEngine.120")!)!;
+            dynamic db = engine.OpenDatabase(_path);
+            try
+            {
+                dynamic parent = db.OpenRecordset("t_att3");
+                parent.AddNew();
+                parent.Fields("id").Value = 1;
+                dynamic child = parent.Fields("v").Value;
+                child.AddNew();
+                child.Fields("FileData").LoadFromFile(file);
+                child.Fields("FileName").Value = "blob.bin";
+                child.Update();
+                child.Close();
+                parent.Update();
+                parent.Close();
+            }
+            finally
+            {
+                db.Close();
+            }
+
+            await using var context = CreateContext();
+            await using var read = context.CreateSqlContainer("SELECT v.FileName AS name, v.FileData AS data FROM t_att3 WHERE id = 1");
+            await using var reader = await read.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("blob.bin", reader["name"]);
+
+            // Access returns an attachment's FileData with its own header in front (the first Int32 is the header's length, 20
+            // here); the file's bytes follow it unchanged.
+            var data = (byte[])reader["data"];
+            var headerLength = BitConverter.ToInt32(data, 0);
+            Assert.Equal(20, headerLength);
+            Assert.Equal(AttachmentBytes, data.Skip(headerLength).ToArray());
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    // ---- Lookup field: a Long Access shows through a combo box; the stored value is the key, not the label -----------------------
+
+    [Table("t_lookup")]
+    private sealed class LookupRow
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("v", DbType.Int32)] public int V { get; set; }
+    }
+
+    [SkippableFact]
+    public async Task LookupField_StoresAndReadsItsKey_NotItsLabel()
+    {
+        Skip.IfNot(OperatingSystem.IsWindows(), "Access requires Windows");
+        CreateTableWithColumns("t_lookup",
+            db =>
+            {
+                dynamic field = db.TableDefs("t_lookup").Fields("v");
+                field.Properties.Append(field.CreateProperty("DisplayControl", 3, 111)); // a combo box
+                field.Properties.Append(field.CreateProperty("RowSourceType", 10, "Value List"));
+                field.Properties.Append(field.CreateProperty("RowSource", 10, "1;\"One\";2;\"Two\""));
+                field.Properties.Append(field.CreateProperty("BoundColumn", 3, 1));
+                field.Properties.Append(field.CreateProperty("ColumnCount", 3, 2));
+            },
+            ("id", DaoLong, 0, null), ("v", DaoLong, 0, null));
+        await using var context = CreateContext();
+
+        var gateway = new TableGateway<LookupRow, int>(context);
+        await gateway.CreateAsync(new LookupRow { Id = 1, V = 2 }, context);
+
+        Assert.Equal(2, (await gateway.RetrieveOneAsync(1, context))?.V);
+    }
+
+    // ---- Date/Time Extended: stored correctly, unreadable through OLE DB, so refused (never a wrong date) ------------------------
+
+    [Table("t_dtx")]
+    private sealed class DateTimeExtendedRow
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("v", DbType.DateTime2)] public DateTime V { get; set; }
+    }
+
+    [SkippableFact]
+    public async Task DateTimeExtended_IsStoredCorrectly_AndRefusedByNameOnRead()
+    {
+        Skip.IfNot(OperatingSystem.IsWindows(), "Access requires Windows");
+        CreateTables(("t_dtx", DaoDateTimeExtended, hyperlink: false));
+        await using var context = CreateContext();
+        var gateway = new TableGateway<DateTimeExtendedRow, int>(context);
+
+        // A write through the gateway is stored correctly (to the second: the gateway sends an OLE DB date, a double).
+        await gateway.CreateAsync(new DateTimeExtendedRow { Id = 1, V = new DateTime(2026, 10, 5, 13, 45, 30) }, context);
+        await Exec(context, "INSERT INTO t_dtx (id, v) VALUES (2, #2026-12-31 23:59:59#)");
+
+        // Reading the column through OLE DB returns the month one early (Oct as Sep, Dec 31 as Nov 31) and can crash the process,
+        // so the library refuses the result set by column name, with a typed error, before reading any value.
+        var ex = await Assert.ThrowsAsync<DataMappingException>(async () => await gateway.RetrieveOneAsync(1, context));
+        Assert.Contains("'v'", ex.Message);
+        Assert.Contains("Date/Time Extended", ex.Message);
+        Assert.Equal(0, context.NumberOfOpenConnections);
+
+        // The context still works, and the engine's own date parts read what was stored.
+        const string parts = "Year(v) & '-' & Month(v) & '-' & Day(v) & ' ' & Hour(v) & ':' & Minute(v) & ':' & Second(v)";
+        await using (var first = context.CreateSqlContainer($"SELECT {parts} FROM t_dtx WHERE id = 1"))
+        {
+            Assert.Equal("2026-10-5 13:45:30", await first.ExecuteScalarRequiredAsync<string>());
+        }
+
+        await using var second = context.CreateSqlContainer($"SELECT {parts} FROM t_dtx WHERE id = 2");
+        Assert.Equal("2026-12-31 23:59:59", await second.ExecuteScalarRequiredAsync<string>());
     }
 
     // ---- Limits: the smallest and largest value of each type, through the gateway ----------------------------------------------

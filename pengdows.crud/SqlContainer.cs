@@ -1753,6 +1753,20 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
 
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
+            if (_dialect is SqlDialect { UnreadableColumnTypes: { } unreadableTypes } &&
+                FindUnreadableColumn(dr, unreadableTypes) is { } unreadable)
+            {
+                // The provider can't read this column (Access's Date/Time Extended through OLE DB): refuse before any value is
+                // read, by name. The provider reader holds the connection, so it is closed first; the cleanup below does the rest.
+                await dr.DisposeAsync().ConfigureAwait(false);
+                commandFailed = true;
+                metrics?.CommandFailed(startTimestamp);
+                activity?.SetStatus(ActivityStatusCode.Error);
+                var refusal = new DataMappingException(unreadable, _dialect.DatabaseType);
+                AddSanitizedExceptionEvent(activity, refusal);
+                throw refusal;
+            }
+
             metrics?.CommandSucceeded(startTimestamp, 0);
             Interlocked.Increment(ref _activeReaders);
             var readerProfile = _dialect is SqlDialect profileDialect
@@ -1862,6 +1876,21 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await ReleaseLockBestEffortAsync(singleConnectionTxGate, _logger, "single-connection transaction gate")
                 .ConfigureAwait(false);
         }
+    }
+
+    // The message for the first column of the result whose provider data type the dialect cannot read (UnreadableColumnTypes),
+    // or null. Only the schema is consulted; no value is read.
+    private static string? FindUnreadableColumn(DbDataReader reader, IReadOnlyDictionary<string, string> unreadable)
+    {
+        for (var i = 0; i < reader.FieldCount; i++)
+        {
+            if (unreadable.TryGetValue(reader.GetDataTypeName(i), out var reason))
+            {
+                return $"Column '{reader.GetName(i)}' is {reason}.";
+            }
+        }
+
+        return null;
     }
 
     public void AddParameters(IEnumerable<DbParameter> list)

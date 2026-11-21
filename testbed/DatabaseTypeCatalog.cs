@@ -222,7 +222,9 @@ public static class DatabaseTypeCatalog
                    "(DAO type 26, 100 ns, 0001 to 9999) and the engine stores it correctly: its own Year/Month/Day and DAO both return the " +
                    "written value. Through OLE DB it is reported as DBTYPE_DBTIMESTAMP with the month one early (Jun reads as May, Dec 31 as " +
                    "Nov 31, Jan as month 0) and a garbled fraction, and a read can crash the process. CDate, CDbl and Format fail on it. A " +
-                   "faithful read needs a per-column SELECT rewrite the library cannot do (it does not know a column's type), so use DATETIME."),
+                   "faithful read needs a per-column SELECT rewrite the library cannot do (it does not know a column's type), so use DATETIME. " +
+                   "A result set holding one is refused when its reader opens, by column name, with a DataMappingException (live: " +
+                   "AccessComplexTypeTests.DateTimeExtended_IsStoredCorrectly_AndRefusedByNameOnRead); a write is stored correctly."),
         new("DATETIME (DateOnly)", ColumnTypeCategory.Temporal, IsTemporal: true,
             Declaration: "DATETIME", ClrType: typeof(DateOnly), DbType: System.Data.DbType.Date, Sample: new DateOnly(2026, 10, 1)),
         new("DATETIME (TimeOnly)", ColumnTypeCategory.Temporal, IsTemporal: true,

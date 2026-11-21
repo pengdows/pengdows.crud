@@ -1008,6 +1008,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual bool ReportsOffsetTimestampsAsDateTime => false;
 
     /// <summary>
+    /// Provider data type names (GetDataTypeName) of columns this database stores correctly but whose provider returns a wrong
+    /// value, or fails, when it reads them (Access's Date/Time Extended through OLE DB), each with the reason. A result set holding
+    /// one is refused when its reader opens, before any value is read, so the caller gets a typed error and never a wrong value;
+    /// null when the database has none.
+    /// </summary>
+    internal virtual IReadOnlyDictionary<string, string>? UnreadableColumnTypes => null;
+
+    /// <summary>
     /// The provider data type name (GetDataTypeName) of an offset timestamp column whose GetValue may
     /// return only the wall time, as a DateTime, while the reader's GetDateTimeOffset(int) returns the
     /// value (ODP.NET 21 on TIMESTAMP WITH TIME ZONE); null when the driver has no such column type.
