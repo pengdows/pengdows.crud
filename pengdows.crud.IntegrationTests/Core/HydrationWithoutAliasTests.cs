@@ -46,8 +46,11 @@ public sealed class HydrationWithoutAliasTests : IAsyncLifetime
 
     public Task DisposeAsync()
     {
-        // Release the context (and the SQLite file it holds) before the directory is removed.
+        // Release the context (and the SQLite file it holds) before the directory is removed. Microsoft.Data.Sqlite keeps
+        // closed connections in a pool that holds the file open: Windows refuses to delete an open file (Linux does not),
+        // so the pool is cleared too.
         _ctx?.Dispose();
+        SqliteConnection.ClearAllPools();
         Directory.Delete(_dir, recursive: true);
         return Task.CompletedTask;
     }

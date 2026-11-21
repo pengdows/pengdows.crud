@@ -307,6 +307,23 @@ integration_combination_filter() {
   awk -F'\t' -v combo="${combo}" '$2 == combo { print "FullyQualifiedName=" $1 }' "${manifest}" | paste -sd'|' -
 }
 
+# The filter reaches `dotnet test` in a runsettings file (<TestCaseFilter>), not on the command line. For Access it is about
+# 39,000 characters, and Windows refuses a command line over about 32,767 ("Argument list too long", exit 126), which failed
+# every database's run at once. A file has no such limit and the runner honors it. The filter is XML text, so & < > are
+# escaped (its terms are joined with &). Checked by IntegrationTargetPinTests.
+write_filter_settings() {
+  local file="$1" selection="$2"
+  {
+    echo '<?xml version="1.0" encoding="utf-8"?>'
+    echo '<RunSettings>'
+    echo '  <RunConfiguration>'
+    printf '    <TestCaseFilter>%s</TestCaseFilter>\n' \
+      "$(printf '%s' "${selection}" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')"
+    echo '  </RunConfiguration>'
+    echo '</RunSettings>'
+  } > "${file}"
+}
+
 run_database() {
   local tfm="$1" db="$2" started=${SECONDS} status=0 exclusion selection only="${2//+/,}"
   if [[ "${db}" == *+* ]]; then
@@ -314,8 +331,11 @@ run_database() {
   else
     selection="$(integration_exclusion_filter "${db}")"
   fi
-  local filter_args=()
-  [[ -n "${selection}" ]] && filter_args=(--filter "${selection}")
+  local settings_args=()
+  if [[ -n "${selection}" ]]; then
+    write_filter_settings "${results}/filter-${tfm}-${db}.runsettings" "${selection}"
+    settings_args=(--settings "${results}/filter-${tfm}-${db}.runsettings")
+  fi
   if [[ "${db}" == *+* && -z "${selection}" ]]; then
     echo "${db} $((SECONDS - started)) 0" >> "${results}/timings-${tfm}.txt"
     return 0
@@ -323,7 +343,7 @@ run_database() {
   INTEGRATION_ONLY="${only}" \
   INFORMIXSQLHOSTS="${INFORMIXSQLHOSTS_BASE:-${TMPDIR:-/tmp}/pengdows-informix-sqlhosts}-${tfm}-${db}" \
     dotnet test "${root}/pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj" \
-      -c Release -f "${tfm}" --no-build "${filter_args[@]}" \
+      -c Release -f "${tfm}" --no-build "${settings_args[@]}" \
       --results-directory "${results}" \
       --logger "trx;LogFileName=IntegrationTests-${tfm}-${db}.trx" \
       > "${results}/IntegrationTests-${tfm}-${db}.log" 2>&1 || status=$?

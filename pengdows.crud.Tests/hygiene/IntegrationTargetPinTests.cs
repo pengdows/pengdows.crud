@@ -387,6 +387,24 @@ public class IntegrationTargetPinTests
         }
     }
 
+    // The runner hands each database's exclusion filter to `dotnet test` in a runsettings file (<TestCaseFilter>), never as
+    // `--filter`: the filter names every method pinned elsewhere, about 39,000 characters for Access, and Windows refuses a
+    // command line over about 32,767 characters, so with `--filter` every database's run failed at once (exit 126,
+    // "Argument list too long"). A file has no such limit; the runner honors <TestCaseFilter> in it (verified live).
+    [Fact]
+    public void RunScript_PassesTheExclusionFilterInARunSettingsFile_NotOnTheCommandLine()
+    {
+        var script = File.ReadAllText(Path.Combine(IntegrationRoot(), "..", "run-integration-tests.sh"));
+        var start = script.IndexOf("run_database() {", StringComparison.Ordinal);
+        Assert.True(start >= 0, "run-integration-tests.sh declares no run_database()");
+        var end = script.IndexOf("\n}\n", start, StringComparison.Ordinal);
+        var runDatabase = script.Substring(start, end - start);
+
+        Assert.DoesNotContain("--filter", runDatabase);
+        Assert.Contains("--settings", runDatabase);
+        Assert.Contains("<TestCaseFilter>", script);
+    }
+
     // A negated member is every database except it, so naming it is not a target. The DateOnly/TimeOnly fixture
     // filters Unknown out of "all databases"; pinning to Unknown would stop those tests running in any process.
     [Fact]
