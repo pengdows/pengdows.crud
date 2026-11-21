@@ -513,6 +513,16 @@ a bit string cannot live in a one-bit YESNO column, and an arbitrary-size intege
 digits, NUMBER is a double, and a BigInteger cannot be marshalled to OLE DB). The last two are refusals recorded in
 `gen_fidelity.py` DB_REFUSED.
 
+**Access, the variants beyond the matrix (2026-11-21).** `AccessComplexTypeTests` now covers, live, through the gateway: multi-value
+fields of every element type (Byte, Integer, Long, Single, Double, Decimal, Text, GUID); calculated fields of every result type (Text,
+Date, Currency, Yes/No, Double, Long); a GUID column Access fills with a `GenGUID()` default; a rich-text memo (stored as HTML); and the
+smallest and largest value of Byte, Integer, Long, Single, Double, Currency, Decimal(28,10), Large Number, Date/Time (0100-01-01 to
+9999-12-31), Short Text (255, accented) and a 100,000-character Memo (all round-trip exactly). What the engine does not allow, found while
+writing them: an **append-only memo refuses every SQL write** (literal or parameter, insert or update: "Object invalid or no longer set"),
+so it surfaces as a typed exception and an insert that leaves it out reads back empty; a calculated column cannot call `DateAdd` (use
+`[d]+1`); DAO refuses the AutoNumber attribute on a GUID field ("Invalid argument"); a multi-value Decimal made through DAO has scale 0;
+and a column cannot be named after a type keyword (`memo`, `note`). Not covered: Date/Time Extended (below, cannot pass).
+
 **Access Date/Time Extended is unsupported: an upstream defect (2026-11-11).** `DATETIME2` is not an alias of `DATETIME`: it
 creates Access's Date/Time Extended column (DAO type 26, 100 ns, 0001 to 9999). The engine stores it correctly: its own
 `Year`/`Month`/`Day` and a DAO read both returned the written value for seven dates from 0100-07-04 to 9999-12-31. Read through
