@@ -18,11 +18,12 @@ public sealed class SerialShorthandTests : DatabaseTestBase
 {
     private const string TableName = "serial_shorthand";
 
+    // The documented SERIAL databases: the PostgreSQL and MySQL families, minus SingleStore (not documented for SERIAL), plus Informix.
+    private static readonly SupportedDatabase[] MySqlDocumented =
+        DatabaseFamilies.MySql.Where(p => p != SupportedDatabase.SingleStore).ToArray();
+
     private static readonly SupportedDatabase[] Documented =
-    {
-        SupportedDatabase.PostgreSql, SupportedDatabase.AuroraPostgreSql, SupportedDatabase.YugabyteDb, SupportedDatabase.CockroachDb,
-        SupportedDatabase.MySql, SupportedDatabase.AuroraMySql, SupportedDatabase.MariaDb, SupportedDatabase.TiDb, SupportedDatabase.Informix
-    };
+        DatabaseFamilies.PostgreSql.Concat(MySqlDocumented).Append(SupportedDatabase.Informix).ToArray();
 
     public SerialShorthandTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
     {
@@ -36,7 +37,7 @@ public sealed class SerialShorthandTests : DatabaseTestBase
 
     private static string Ddl(SupportedDatabase provider, string table, IDatabaseContext context) => provider switch
     {
-        SupportedDatabase.MySql or SupportedDatabase.AuroraMySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb =>
+        _ when Array.IndexOf(MySqlDocumented, provider) >= 0 =>
             $"CREATE TABLE {table} (`id` SERIAL, `name` VARCHAR(255) NOT NULL)",
         SupportedDatabase.Informix =>
             $"CREATE TABLE {table} ({context.WrapObjectName("id")} SERIAL NOT NULL PRIMARY KEY, {context.WrapObjectName("name")} VARCHAR(255) NOT NULL)",
