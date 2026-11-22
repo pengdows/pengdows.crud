@@ -13,11 +13,11 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 | # | Category | Rows | What closes a row |
 |---|---|---:|---|
-| 1 | New test needed: no fidelity cell covers the concept | 37 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
+| 1 | New test needed: no fidelity cell covers the concept | 33 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
 | 2 | Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column) | 27 | Find the spelling the server accepts and declare it, or record the refusal as by design, server or upstream. |
 | 3 | Version, extension or restriction check: documented V, E or R | 87 | Run the cell against another version or with the extension, or record why one version is enough. |
 | 4 | Classify first: the workbook marks it ? (unverified) | 275 | Decide the workbook status (supported, or unsupported with the reason); then test it if supported. |
-| | **Total** | **426** | |
+| | **Total** | **422** | |
 
 ## By database
 
@@ -29,7 +29,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 | CockroachDb | 1 | 1 | 2 | 11 | 15 |
 | Db2 | 5 | 0 | 5 | 18 | 28 |
 | DuckDB | 1 | 0 | 7 | 11 | 19 |
-| Firebird | 1 | 0 | 7 | 16 | 24 |
+| Firebird | 0 | 0 | 7 | 16 | 23 |
 | FlatFile | 0 | 0 | 0 | 5 | 5 |
 | Informix | 4 | 3 | 3 | 12 | 22 |
 | InterBase | 1 | 1 | 0 | 18 | 20 |
@@ -43,10 +43,10 @@ A cell is *tested* when the database declares a column for its probe type and th
 | Spanner | 2 | 2 | 5 | 7 | 16 |
 | SqlServer | 0 | 0 | 2 | 10 | 12 |
 | Sqlite | 0 | 0 | 0 | 17 | 17 |
-| SybaseASE | 3 | 1 | 1 | 10 | 15 |
+| SybaseASE | 0 | 1 | 1 | 10 | 12 |
 | TiDb | 0 | 1 | 1 | 12 | 14 |
 | YugabyteDb | 1 | 1 | 4 | 17 | 23 |
-| **All** | 37 | 27 | 87 | 275 | 426 |
+| **All** | 33 | 27 | 87 | 275 | 422 |
 
 ## Known open items (maintained by hand)
 
@@ -65,7 +65,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 ## Verified (closed with evidence)
 
-100 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
+104 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
 substitute because the native type is not available here (the native type is then still untested). They are not counted above.
 
 | Database | ID | Concept | State | Evidence |
@@ -83,6 +83,7 @@ substitute because the native type is not available here (the native type is the
 | DuckDB | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | DuckDB | B51 | Network: IP address / CIDR | verified | INET through the inet extension, tested natively by the IP address and CIDR fidelity cells: written through CAST(parameter AS INET), read from the struct DuckDB.NET returns (DuckDbInetReader, DuckDbInetColumnTests). The first run downloads the extension (INSTALL inet), so it needs network access. |
 | Firebird | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| Firebird | B35 | Binary: Custom BLOB subtypes | verified | BLOB SUB_TYPE 0 (binary), TEXT and a user-defined negative subtype, live: values round-trip and the subtype is recorded on the column's domain. SybaseAndFirebirdSpecialTypeTests.Firebird_BlobSubtypes_*. |
 | FlatFile | A26 | Character: set-valued enum | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
 | FlatFile | A30 | Binary: legacy long binary | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
 | FlatFile | A38 | Temporal: second-precision datetime | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
@@ -159,7 +160,10 @@ substitute because the native type is not available here (the native type is the
 | Sqlite | B57 | Semi-structured: Variant / dynamic | substitute only | Manifest typing: a value keeps the type it is given, whatever the declared name. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven. |
 | Sqlite | B68 | Spatial: Planar geometry | verified | SpatiaLite 4.3.0 (mod_spatialite NuGet package, win-x64 only) loaded for real: POINT and POLYGON geometry columns, text and WKB round trips, NULL. SqliteNativeExtensionTypeTests.SpatiaLite_*. The fidelity cell still round-trips text under the label POINT. |
 | Sqlite | B71 | Vector / AI: Vector embedding | verified | sqlite-vec 0.1.9 (HiraokaHyperTools.sqlite-vec NuGet package, win/linux/osx) loaded for real: vec0 float32, int8 and bit vectors, nearest-neighbour MATCH, dimension check. SqliteNativeExtensionTypeTests.SqliteVec_*. The fidelity cell still round-trips text under the label VECTOR(3). |
+| SybaseASE | A74 | Specialized: opaque / special database type | verified | timestamp, live: an 8-byte value the server generates and changes on UPDATE. SybaseAndFirebirdSpecialTypeTests.Sybase_Timestamp_*. |
+| SybaseASE | A77 | Specialized: cursor / table variable | verified | A cursor, live, inside a stored procedure (ASE requires DECLARE CURSOR to be the only statement of a batch). There is no table variable: a #temp table is the alias. SybaseAndFirebirdSpecialTypeTests.Sybase_CursorInsideAProcedure_*. |
 | SybaseASE | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| SybaseASE | B30 | Character: System-name alias | verified | sysname and longsysname, live: varchar aliases, NOT NULL honored. SybaseAndFirebirdSpecialTypeTests.Sybase_Sysname_*. |
 | TiDb | B05 | Integer: 24-bit signed/unsigned | verified | MEDIUMINT and MEDIUMINT UNSIGNED, live: both bounds round-trip into an int and a value one past either bound is refused, not clamped. MySqlFamilyMediumIntTests. |
 | TiDb | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | TiDb | B14 | Key generation: SERIAL shorthand | verified | SERIAL as the column spelling, live: the server fills the id and the gateway reads it back; ids are distinct (and consecutive except on CockroachDB, whose unique_rowid() is not). SerialShorthandTests. |
@@ -199,16 +203,15 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 |---|---|---|---|
 | A76 | Specialized | spatial raster / other extensions | 5: AuroraPostgreSql, CockroachDb, PostgreSql, Spanner, YugabyteDb |
 | B59 | Composite | Struct / row / composite | 5: AuroraPostgreSql, Db2, DuckDB, Informix, Snowflake |
-| A74 | Specialized | opaque / special database type | 4: Informix, SapHana, Snowflake, SybaseASE |
 | B67 | User-defined | Opaque / CLR / extension base type | 4: AuroraPostgreSql, Db2, Informix, PostgreSql |
 | B75 | System | Pseudo / non-column types | 4: AuroraPostgreSql, Db2, PostgreSql, SapHana |
-| A77 | Specialized | cursor / table variable | 3: Db2, SapHana, SybaseASE |
+| A74 | Specialized | opaque / special database type | 3: Informix, SapHana, Snowflake |
 | B14 | Key generation | SERIAL shorthand | 3: AuroraMySql, AuroraPostgreSql, Informix |
+| A77 | Specialized | cursor / table variable | 2: Db2, SapHana |
 | B05 | Integer | 24-bit signed/unsigned | 2: AuroraMySql, SingleStore |
-| B35 | Binary | Custom BLOB subtypes | 2: Firebird, InterBase |
 | B28 | Character | Double-byte GRAPHIC types | 1: Db2 |
-| B30 | Character | System-name alias | 1: SybaseASE |
 | B31 | Character | Case-insensitive text | 1: AuroraPostgreSql |
+| B35 | Binary | Custom BLOB subtypes | 1: InterBase |
 | B70 | Spatial | Built-in 2-D geometric primitives | 1: AuroraPostgreSql |
 | B76 | System | Commit timestamp | 1: Spanner |
 
@@ -472,12 +475,6 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 | A77 | Specialized | cursor / table variable | ? | cursor / table variable | no fidelity cell and no classification |
 
 ### Firebird
-
-**New test needed: no fidelity cell covers the concept** (1)
-
-| ID | Category | Concept | Doc | Probe type | Note |
-|---|---|---|:--:|---|---|
-| B35 | Binary | Custom BLOB subtypes | N | none | no cell |
 
 **Version, extension or restriction check: documented V, E or R** (7)
 
@@ -949,14 +946,6 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 | A77 | Specialized | cursor / table variable | ? | cursor / table variable | no fidelity cell and no classification |
 
 ### SybaseASE
-
-**New test needed: no fidelity cell covers the concept** (3)
-
-| ID | Category | Concept | Doc | Probe type | Note |
-|---|---|---|:--:|---|---|
-| A74 | Specialized | opaque / special database type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
-| A77 | Specialized | cursor / table variable | A | cursor / table variable | no cell (cursor / table variable is not a fidelity cell) |
-| B30 | Character | System-name alias | A | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (1)
 
