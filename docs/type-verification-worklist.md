@@ -13,11 +13,11 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 | # | Category | Rows | What closes a row |
 |---|---|---:|---|
-| 1 | New test needed: no fidelity cell covers the concept | 50 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
+| 1 | New test needed: no fidelity cell covers the concept | 47 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
 | 2 | Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column) | 27 | Find the spelling the server accepts and declare it, or record the refusal as by design, server or upstream. |
 | 3 | Version, extension or restriction check: documented V, E or R | 87 | Run the cell against another version or with the extension, or record why one version is enough. |
 | 4 | Classify first: the workbook marks it ? (unverified) | 275 | Decide the workbook status (supported, or unsupported with the reason); then test it if supported. |
-| | **Total** | **439** | |
+| | **Total** | **436** | |
 
 ## By database
 
@@ -33,8 +33,8 @@ A cell is *tested* when the database declares a column for its probe type and th
 | FlatFile | 0 | 0 | 0 | 5 | 5 |
 | Informix | 4 | 3 | 3 | 12 | 22 |
 | InterBase | 1 | 1 | 0 | 18 | 20 |
-| MariaDb | 1 | 1 | 4 | 11 | 17 |
-| MySql | 1 | 2 | 1 | 12 | 16 |
+| MariaDb | 0 | 1 | 4 | 11 | 16 |
+| MySql | 0 | 2 | 1 | 12 | 15 |
 | Oracle | 5 | 0 | 8 | 13 | 26 |
 | PostgreSql | 3 | 2 | 7 | 5 | 17 |
 | SapHana | 3 | 0 | 2 | 14 | 19 |
@@ -44,9 +44,9 @@ A cell is *tested* when the database declares a column for its probe type and th
 | SqlServer | 5 | 0 | 2 | 10 | 17 |
 | Sqlite | 0 | 0 | 0 | 17 | 17 |
 | SybaseASE | 3 | 1 | 1 | 10 | 15 |
-| TiDb | 1 | 1 | 1 | 12 | 15 |
+| TiDb | 0 | 1 | 1 | 12 | 14 |
 | YugabyteDb | 1 | 1 | 4 | 17 | 23 |
-| **All** | 50 | 27 | 87 | 275 | 439 |
+| **All** | 47 | 27 | 87 | 275 | 436 |
 
 ## Known open items (maintained by hand)
 
@@ -65,7 +65,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 ## Verified (closed with evidence)
 
-87 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
+90 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
 substitute because the native type is not available here (the native type is then still untested). They are not counted above.
 
 | Database | ID | Concept | State | Evidence |
@@ -126,8 +126,10 @@ substitute because the native type is not available here (the native type is the
 | FlatFile | B58 | Composite: Array | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
 | FlatFile | B66 | User-defined: Domain / distinct type | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
 | Informix | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| MariaDb | B05 | Integer: 24-bit signed/unsigned | verified | MEDIUMINT and MEDIUMINT UNSIGNED, live: both bounds round-trip into an int and a value one past either bound is refused, not clamped. MySqlFamilyMediumIntTests. |
 | MariaDb | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | MariaDb | B14 | Key generation: SERIAL shorthand | verified | SERIAL as the column spelling, live: the server fills the id and the gateway reads it back; ids are distinct (and consecutive except on CockroachDB, whose unique_rowid() is not). SerialShorthandTests. |
+| MySql | B05 | Integer: 24-bit signed/unsigned | verified | MEDIUMINT and MEDIUMINT UNSIGNED, live: both bounds round-trip into an int and a value one past either bound is refused, not clamped. MySqlFamilyMediumIntTests. |
 | MySql | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | MySql | B14 | Key generation: SERIAL shorthand | verified | SERIAL as the column spelling, live: the server fills the id and the gateway reads it back; ids are distinct (and consecutive except on CockroachDB, whose unique_rowid() is not). SerialShorthandTests. |
 | Oracle | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
@@ -148,6 +150,7 @@ substitute because the native type is not available here (the native type is the
 | Sqlite | B68 | Spatial: Planar geometry | verified | SpatiaLite 4.3.0 (mod_spatialite NuGet package, win-x64 only) loaded for real: POINT and POLYGON geometry columns, text and WKB round trips, NULL. SqliteNativeExtensionTypeTests.SpatiaLite_*. The fidelity cell still round-trips text under the label POINT. |
 | Sqlite | B71 | Vector / AI: Vector embedding | verified | sqlite-vec 0.1.9 (HiraokaHyperTools.sqlite-vec NuGet package, win/linux/osx) loaded for real: vec0 float32, int8 and bit vectors, nearest-neighbour MATCH, dimension check. SqliteNativeExtensionTypeTests.SqliteVec_*. The fidelity cell still round-trips text under the label VECTOR(3). |
 | SybaseASE | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| TiDb | B05 | Integer: 24-bit signed/unsigned | verified | MEDIUMINT and MEDIUMINT UNSIGNED, live: both bounds round-trip into an int and a value one past either bound is refused, not clamped. MySqlFamilyMediumIntTests. |
 | TiDb | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | TiDb | B14 | Key generation: SERIAL shorthand | verified | SERIAL as the column spelling, live: the server fills the id and the gateway reads it back; ids are distinct (and consecutive except on CockroachDB, whose unique_rowid() is not). SerialShorthandTests. |
 | YugabyteDb | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
@@ -190,8 +193,8 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 | B75 | System | Pseudo / non-column types | 6: AuroraPostgreSql, Db2, Oracle, PostgreSql, SapHana, SqlServer |
 | A76 | Specialized | spatial raster / other extensions | 5: AuroraPostgreSql, CockroachDb, PostgreSql, Spanner, YugabyteDb |
 | A77 | Specialized | cursor / table variable | 5: Db2, Oracle, SapHana, SqlServer, SybaseASE |
-| B05 | Integer | 24-bit signed/unsigned | 5: AuroraMySql, MariaDb, MySql, SingleStore, TiDb |
 | B14 | Key generation | SERIAL shorthand | 3: AuroraMySql, AuroraPostgreSql, Informix |
+| B05 | Integer | 24-bit signed/unsigned | 2: AuroraMySql, SingleStore |
 | B30 | Character | System-name alias | 2: SqlServer, SybaseASE |
 | B35 | Binary | Custom BLOB subtypes | 2: Firebird, InterBase |
 | B28 | Character | Double-byte GRAPHIC types | 1: Db2 |
@@ -594,12 +597,6 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### MariaDb
 
-**New test needed: no fidelity cell covers the concept** (1)
-
-| ID | Category | Concept | Doc | Probe type | Note |
-|---|---|---|:--:|---|---|
-| B05 | Integer | 24-bit signed/unsigned | N | none | no cell |
-
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (1)
 
 | ID | Category | Concept | Doc | Probe type | Note |
@@ -632,12 +629,6 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 | A77 | Specialized | cursor / table variable | ? | cursor / table variable | no fidelity cell and no classification |
 
 ### MySql
-
-**New test needed: no fidelity cell covers the concept** (1)
-
-| ID | Category | Concept | Doc | Probe type | Note |
-|---|---|---|:--:|---|---|
-| B05 | Integer | 24-bit signed/unsigned | N | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (2)
 
@@ -1005,12 +996,6 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 | A76 | Specialized | spatial raster / other extensions | ? | spatial raster / other extensions | no fidelity cell and no classification |
 
 ### TiDb
-
-**New test needed: no fidelity cell covers the concept** (1)
-
-| ID | Category | Concept | Doc | Probe type | Note |
-|---|---|---|:--:|---|---|
-| B05 | Integer | 24-bit signed/unsigned | N | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (1)
 
