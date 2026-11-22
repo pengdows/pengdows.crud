@@ -20,7 +20,7 @@ public sealed class PostgreSqlFamilyOddTypeRoundTripTests : DatabaseTestBase
     }
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders() =>
-        base.GetSupportedProviders().Where(p => p == SupportedDatabase.PostgreSql).ToArray();
+        base.GetSupportedProviders().Where(p => p is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb or SupportedDatabase.CockroachDb).ToArray();
 
     private static async Task Exec(IDatabaseContext context, string sql)
     {
@@ -60,8 +60,15 @@ public sealed class PostgreSqlFamilyOddTypeRoundTripTests : DatabaseTestBase
     [InlineData("circle", "<(1,2),3>", "<(1,2),3>")]
     public async Task GeometricPrimitive_IsStoredAsItsType_AndReadsBackAsItsText(string type, string input, string expected)
     {
-        await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
+            if (provider == SupportedDatabase.CockroachDb)
+            {
+                // CockroachDB has no 2-D geometric primitives (its spatial types are GEOMETRY and GEOGRAPHY): the type is refused.
+                await Assert.ThrowsAnyAsync<Exception>(() => Fresh(context, "pg_geo_" + type, "g", type));
+                return;
+            }
+
             var table = await Fresh(context, "pg_geo_" + type, "g", type);
 
             Assert.Equal(expected, await RoundTrip(context, table, "g", type, input));
@@ -74,8 +81,15 @@ public sealed class PostgreSqlFamilyOddTypeRoundTripTests : DatabaseTestBase
     [SkippableFact]
     public async Task Citext_ComparesWithoutCase_AndKeepsTheCaseItWasGiven()
     {
-        await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
+            if (provider == SupportedDatabase.CockroachDb)
+            {
+                // "unimplemented: extension citext is not yet supported".
+                await Assert.ThrowsAnyAsync<Exception>(() => Exec(context, "CREATE EXTENSION IF NOT EXISTS citext"));
+                return;
+            }
+
             await Exec(context, "CREATE EXTENSION IF NOT EXISTS citext");
             var table = await Fresh(context, "pg_citext", "t", "citext");
 
@@ -96,7 +110,7 @@ public sealed class PostgreSqlFamilyOddTypeRoundTripTests : DatabaseTestBase
     [SkippableFact]
     public async Task Composite_RoundTripsItsFields_AsRowText()
     {
-        await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             await Exec(context, "DROP TABLE IF EXISTS pg_composite_doc");
             await Exec(context, "DROP TYPE IF EXISTS pg_address_t");
@@ -116,7 +130,7 @@ public sealed class PostgreSqlFamilyOddTypeRoundTripTests : DatabaseTestBase
     [SkippableFact]
     public async Task Enum_StoresLabels_InTheirDeclaredOrder_AndRefusesAnUnknownLabel()
     {
-        await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             await Exec(context, "DROP TABLE IF EXISTS pg_enum_doc");
             await Exec(context, "DROP TYPE IF EXISTS pg_mood_t");
@@ -141,14 +155,23 @@ public sealed class PostgreSqlFamilyOddTypeRoundTripTests : DatabaseTestBase
     [SkippableFact]
     public async Task Domain_StoresItsBaseType_AndEnforcesItsCheck()
     {
-        await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
+            if (provider == SupportedDatabase.CockroachDb)
+            {
+                // CockroachDB has no CREATE DOMAIN ("unimplemented: this syntax").
+                await Assert.ThrowsAnyAsync<Exception>(() => Exec(context, "CREATE DOMAIN pg_percent_d AS numeric(5,2)"));
+                return;
+            }
+
             await Exec(context, "DROP TABLE IF EXISTS pg_domain_doc");
             await Exec(context, "DROP DOMAIN IF EXISTS pg_percent_d");
             await Exec(context, "CREATE DOMAIN pg_percent_d AS numeric(5,2) CHECK (VALUE BETWEEN 0 AND 100)");
             await Exec(context, "CREATE TABLE pg_domain_doc (id INTEGER PRIMARY KEY, p pg_percent_d)");
 
-            Assert.Equal("99.50", await RoundTrip(context, "pg_domain_doc", "p", "pg_percent_d", "99.5"));
+            // YugabyteDB does not apply the domain's numeric(5,2) scale to a cast: 99.5 stays 99.5. PostgreSQL pads it to 99.50.
+            Assert.Equal(provider == SupportedDatabase.YugabyteDb ? "99.5" : "99.50",
+                await RoundTrip(context, "pg_domain_doc", "p", "pg_percent_d", "99.5"));
 
             await using var bad = context.CreateSqlContainer("INSERT INTO pg_domain_doc (id, p) VALUES (2, CAST(");
             var p = bad.AddParameterWithValue("v", DbType.String, "101");

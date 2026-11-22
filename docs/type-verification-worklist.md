@@ -13,11 +13,11 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 | # | Category | Rows | What closes a row |
 |---|---|---:|---|
-| 1 | New test needed: no fidelity cell covers the concept | 78 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
-| 2 | Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column) | 29 | Find the spelling the server accepts and declare it, or record the refusal as by design, server or upstream. |
+| 1 | New test needed: no fidelity cell covers the concept | 74 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
+| 2 | Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column) | 27 | Find the spelling the server accepts and declare it, or record the refusal as by design, server or upstream. |
 | 3 | Version, extension or restriction check: documented V, E or R | 87 | Run the cell against another version or with the extension, or record why one version is enough. |
 | 4 | Classify first: the workbook marks it ? (unverified) | 275 | Decide the workbook status (supported, or unsupported with the reason); then test it if supported. |
-| | **Total** | **469** | |
+| | **Total** | **463** | |
 
 ## By database
 
@@ -26,7 +26,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 | Access | 0 | 0 | 0 | 15 | 15 |
 | AuroraMySql | 3 | 3 | 5 | 12 | 23 |
 | AuroraPostgreSql | 8 | 3 | 16 | 5 | 32 |
-| CockroachDb | 4 | 1 | 2 | 11 | 18 |
+| CockroachDb | 3 | 1 | 2 | 11 | 17 |
 | Db2 | 6 | 0 | 5 | 18 | 29 |
 | DuckDB | 2 | 0 | 7 | 11 | 20 |
 | Firebird | 2 | 0 | 7 | 16 | 25 |
@@ -45,8 +45,8 @@ A cell is *tested* when the database declares a column for its probe type and th
 | Sqlite | 0 | 0 | 0 | 17 | 17 |
 | SybaseASE | 4 | 1 | 1 | 10 | 16 |
 | TiDb | 3 | 1 | 1 | 12 | 17 |
-| YugabyteDb | 6 | 3 | 4 | 17 | 30 |
-| **All** | 78 | 29 | 87 | 275 | 469 |
+| YugabyteDb | 3 | 1 | 4 | 17 | 25 |
+| **All** | 74 | 27 | 87 | 275 | 463 |
 
 ## Known open items (maintained by hand)
 
@@ -65,7 +65,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 ## Verified (closed with evidence)
 
-57 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
+63 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
 substitute because the native type is not available here (the native type is then still untested). They are not counted above.
 
 | Database | ID | Concept | State | Evidence |
@@ -74,6 +74,7 @@ substitute because the native type is not available here (the native type is the
 | Access | B13 | Key generation: Identity column (declaration, not a type) | covered | COUNTER identity through SELECT @@IDENTITY: InsertReturningTests.CreateAsync_NonReturningProviders_InsertsSuccessfully. |
 | Access | B63 | Composite: Multi-valued set | covered | Multi-value fields of every element type: AccessComplexTypeTests.MultiValue_* (Byte, Integer, Long, Single, Double, Decimal, Text, GUID). |
 | Access | B77 | Access-only: Hyperlink / Attachment / Calculated / OLE | covered | AccessComplexTypeTests: hyperlink, attachment (name through SQL, bytes through DAO), calculated fields of every result type, OLE object (LONGBINARY in the catalog). |
+| CockroachDb | B70 | Spatial: Built-in 2-D geometric primitives | verified | CockroachDB has no point, line, lseg, box, path, polygon or circle type (its spatial types are GEOMETRY and GEOGRAPHY): the server refuses each, pinned by PostgreSqlFamilyOddTypeRoundTripTests.GeometricPrimitive_*. |
 | DuckDB | B51 | Network: IP address / CIDR | verified | INET through the inet extension, tested natively by the IP address and CIDR fidelity cells: written through CAST(parameter AS INET), read from the struct DuckDB.NET returns (DuckDbInetReader, DuckDbInetColumnTests). The first run downloads the extension (INSTALL inet), so it needs network access. |
 | FlatFile | A26 | Character: set-valued enum | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
 | FlatFile | A30 | Binary: legacy long binary | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
@@ -127,6 +128,11 @@ substitute because the native type is not available here (the native type is the
 | Sqlite | B57 | Semi-structured: Variant / dynamic | substitute only | Manifest typing: a value keeps the type it is given, whatever the declared name. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven. |
 | Sqlite | B68 | Spatial: Planar geometry | verified | SpatiaLite 4.3.0 (mod_spatialite NuGet package, win-x64 only) loaded for real: POINT and POLYGON geometry columns, text and WKB round trips, NULL. SqliteNativeExtensionTypeTests.SpatiaLite_*. The fidelity cell still round-trips text under the label POINT. |
 | Sqlite | B71 | Vector / AI: Vector embedding | verified | sqlite-vec 0.1.9 (HiraokaHyperTools.sqlite-vec NuGet package, win/linux/osx) loaded for real: vec0 float32, int8 and bit vectors, nearest-neighbour MATCH, dimension check. SqliteNativeExtensionTypeTests.SqliteVec_*. The fidelity cell still round-trips text under the label VECTOR(3). |
+| YugabyteDb | B31 | Character: Case-insensitive text | verified | citext, live on YugabyteDB: same behavior as PostgreSQL. PostgreSqlFamilyOddTypeRoundTripTests.Citext_*. |
+| YugabyteDb | B59 | Composite: Struct / row / composite | verified | A CREATE TYPE composite column, live on YugabyteDB. PostgreSqlFamilyOddTypeRoundTripTests.Composite_*. |
+| YugabyteDb | B62 | Composite: Enumeration | verified | An enum type, live on YugabyteDB: declaration order and an unknown label refused. PostgreSqlFamilyOddTypeRoundTripTests.Enum_*. |
+| YugabyteDb | B66 | User-defined: Domain / distinct type | verified | A domain with a CHECK, live on YugabyteDB: the check is enforced, but the domain's numeric(5,2) scale is not applied to a cast (99.5 stays 99.5; PostgreSQL gives 99.50). PostgreSqlFamilyOddTypeRoundTripTests.Domain_*. |
+| YugabyteDb | B70 | Spatial: Built-in 2-D geometric primitives | verified | point, line, lseg, box, path, polygon and circle, live on YugabyteDB: same behavior as PostgreSQL. PostgreSqlFamilyOddTypeRoundTripTests.GeometricPrimitive_*. |
 
 ## Type conversions
 
@@ -156,18 +162,18 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 |---|---|---|---|
 | B13 | Key generation | Identity column (declaration, not a type) | 18: AuroraMySql, AuroraPostgreSql, CockroachDb, Db2, DuckDB, Firebird, Informix, MariaDb, MySql, Oracle, PostgreSql, SapHana, SingleStore, Snowflake, SqlServer, SybaseASE, TiDb, YugabyteDb |
 | B14 | Key generation | SERIAL shorthand | 9: AuroraMySql, AuroraPostgreSql, CockroachDb, Informix, MariaDb, MySql, PostgreSql, TiDb, YugabyteDb |
-| B59 | Composite | Struct / row / composite | 7: AuroraPostgreSql, Db2, DuckDB, Informix, Oracle, Snowflake, YugabyteDb |
 | A74 | Specialized | opaque / special database type | 6: Informix, Oracle, SapHana, Snowflake, SqlServer, SybaseASE |
+| B59 | Composite | Struct / row / composite | 6: AuroraPostgreSql, Db2, DuckDB, Informix, Oracle, Snowflake |
 | B67 | User-defined | Opaque / CLR / extension base type | 6: AuroraPostgreSql, Db2, Informix, Oracle, PostgreSql, SqlServer |
 | B75 | System | Pseudo / non-column types | 6: AuroraPostgreSql, Db2, Oracle, PostgreSql, SapHana, SqlServer |
 | A76 | Specialized | spatial raster / other extensions | 5: AuroraPostgreSql, CockroachDb, PostgreSql, Spanner, YugabyteDb |
 | A77 | Specialized | cursor / table variable | 5: Db2, Oracle, SapHana, SqlServer, SybaseASE |
 | B05 | Integer | 24-bit signed/unsigned | 5: AuroraMySql, MariaDb, MySql, SingleStore, TiDb |
-| B70 | Spatial | Built-in 2-D geometric primitives | 3: AuroraPostgreSql, CockroachDb, YugabyteDb |
 | B30 | Character | System-name alias | 2: SqlServer, SybaseASE |
-| B31 | Character | Case-insensitive text | 2: AuroraPostgreSql, YugabyteDb |
 | B35 | Binary | Custom BLOB subtypes | 2: Firebird, InterBase |
 | B28 | Character | Double-byte GRAPHIC types | 1: Db2 |
+| B31 | Character | Case-insensitive text | 1: AuroraPostgreSql |
+| B70 | Spatial | Built-in 2-D geometric primitives | 1: AuroraPostgreSql |
 | B76 | System | Commit timestamp | 1: Spanner |
 
 ### Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)
@@ -176,9 +182,8 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 |---|---|---|---|
 | A63 | Collections | list / multiset / set collection | 5: AuroraPostgreSql, CockroachDb, PostgreSql, Spanner, YugabyteDb |
 | B43 | Temporal | Instant (UTC-normalized, session-zone rendered) | 5: AuroraMySql, MariaDb, MySql, SingleStore, TiDb |
-| B66 | User-defined | Domain / distinct type | 4: AuroraPostgreSql, Informix, InterBase, YugabyteDb |
+| B66 | User-defined | Domain / distinct type | 3: AuroraPostgreSql, Informix, InterBase |
 | A57 | Spatial | line / linestring geometry | 2: PostgreSql, SingleStore |
-| B62 | Composite | Enumeration | 2: AuroraPostgreSql, YugabyteDb |
 | B69 | Spatial | Geodetic geography | 2: AuroraMySql, MySql |
 | A42 | Temporal | generic interval | 1: Spanner |
 | A56 | Spatial | point geometry | 1: SingleStore |
@@ -188,6 +193,7 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 | B45 | Temporal | Interval day–second | 1: AuroraMySql |
 | B50 | Identifier | Security label | 1: Informix |
 | B53 | Semi-structured | JSON (text-preserving) | 1: Snowflake |
+| B62 | Composite | Enumeration | 1: AuroraPostgreSql |
 | B63 | Composite | Multi-valued set | 1: Informix |
 
 ## By database, in full
@@ -315,14 +321,13 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### CockroachDb
 
-**New test needed: no fidelity cell covers the concept** (4)
+**New test needed: no fidelity cell covers the concept** (3)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A76 | Specialized | spatial raster / other extensions | E | spatial raster / other extensions | no cell (spatial raster / other extensions is not a fidelity cell) |
 | B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B14 | Key generation | SERIAL shorthand | R | none | no cell |
-| B70 | Spatial | Built-in 2-D geometric primitives | R | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (1)
 
@@ -1037,24 +1042,19 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### YugabyteDb
 
-**New test needed: no fidelity cell covers the concept** (6)
+**New test needed: no fidelity cell covers the concept** (3)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A76 | Specialized | spatial raster / other extensions | E | spatial raster / other extensions | no cell (spatial raster / other extensions is not a fidelity cell) |
 | B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B14 | Key generation | SERIAL shorthand | R | none | no cell |
-| B31 | Character | Case-insensitive text | E | none | no cell |
-| B59 | Composite | Struct / row / composite | N | none | no cell |
-| B70 | Spatial | Built-in 2-D geometric primitives | N | none | no cell |
 
-**Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (3)
+**Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (1)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A63 | Collections | list / multiset / set collection | A | list / multiset / set collection | refused: 42601: syntax error at or near \"MULTISET\" POSITION: 64 |
-| B62 | Composite | Enumeration | N | enumeration | refused: 42704: type \"enum\" does not exist POSITION: 56 |
-| B66 | User-defined | Domain / distinct type | N | user-defined enum / domain | refused: 42601: syntax error at or near \"CREATE\" POSITION: 56 |
 
 **Version, extension or restriction check: documented V, E or R** (4)
 
