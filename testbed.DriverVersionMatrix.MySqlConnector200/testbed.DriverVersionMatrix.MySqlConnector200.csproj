@@ -15,6 +15,12 @@
       No live database needed — this is pure MySqlConnectionStringBuilder key-validation
       behavior. Sibling of testbed.DriverVersionMatrix.MySqlConnector262, which pins the newest
       stable 2.x release; one project can't reference two versions of the same NuGet package.
+
+      Known advisory, accepted: MySqlConnector below 2.6.1 is affected by GHSA-473q-m89c-ghf8
+      (clear-text password sent before the certificate is verified, with SslMode VerifyCA or
+      VerifyFull and no SslCa). 2.0.0 is pinned on purpose, as the oldest stable 2.x. The tests
+      here only parse connection strings: they never open a connection, so the flaw cannot be
+      reached. Do not use this project's package version anywhere that connects to a server.
     -->
     <ItemGroup>
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0"/>
