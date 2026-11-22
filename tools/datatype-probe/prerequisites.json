@@ -113,6 +113,20 @@
         "DROP TYPE IF EXISTS probe_domain",
         "CREATE TYPE probe_domain AS VARCHAR"
       ]
+    },
+    "IP address": {
+      "decl": "INET",
+      "ddl": [
+        "INSTALL inet",
+        "LOAD inet"
+      ]
+    },
+    "IP network / CIDR": {
+      "decl": "INET",
+      "ddl": [
+        "INSTALL inet",
+        "LOAD inet"
+      ]
     }
   }
 }

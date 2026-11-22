@@ -210,8 +210,9 @@ DB_PREFER = {
     ("MariaDb", "enumeration"): ("ENUM('active','inactive')", "ENUM"),
     ("TiDb", "enumeration"): ("ENUM('active','inactive')", "ENUM"),
     ("SingleStore", "enumeration"): ("ENUM('active','inactive')", "ENUM"),
-    # DuckDB's ENUM takes its values by name and the parameter binder sends the text as UINT8; an address and a network
-    # are text on DuckDB, which refuses a varchar into INET or CIDR without a cast.
+    # DuckDB's ENUM takes its values by name and the parameter binder sends the text as UINT8. An address and a network are the
+    # inet extension's INET (the entry below, NATIVE_TYPE and prerequisites.json): written through CAST(parameter AS INET), read
+    # from the struct DuckDB.NET returns (DuckDbInetReader).
     ("DuckDB", "enumeration"): ("VARCHAR(20)", "VARCHAR"),
     # DuckDB has no VECTOR type; its vector is a fixed-size FLOAT array (live, DuckDB 2.0.1: FLOAT[3] is accepted).
     ("DuckDB", "vector embedding"): ("FLOAT[3]", "Array"),
@@ -219,8 +220,8 @@ DB_PREFER = {
     # is an alias made with CREATE TYPE ... AS (prerequisites.json).
     ("DuckDB", "list / multiset / set collection"): ("INTEGER[]", "List"),
     ("DuckDB", "user-defined enum / domain"): ("probe_domain", "VARCHAR"),
-    ("DuckDB", "IP address"): ("VARCHAR(45)", "VARCHAR"),
-    ("DuckDB", "IP network / CIDR"): ("VARCHAR(50)", "VARCHAR"),
+    ("DuckDB", "IP address"): ("INET", "Struct"),
+    ("DuckDB", "IP network / CIDR"): ("INET", "Struct"),
     # A second-precision datetime keeps its time of day. Where the probe took DATE (PostgreSQL family, Firebird, Spanner) the
     # column drops the time; where it took SMALLDATETIME (SQL Server, Sybase) the column rounds to the minute. Oracle's DATE
     # holds seconds, so it stays as the probe found it.
@@ -422,6 +423,10 @@ NATIVE_TYPE = {
     ("Snowflake", "variant / dynamic value"): "VARIANT",
     # The VARRAY's native type: the library builds it from the elements' JSON (OracleDialect.CollectionArgument).
     ("Oracle", "SQL array"): "probe_varray",
+    # DuckDB's INET (the inet extension) is written through CAST(parameter AS INET) and read through CAST(column AS VARCHAR)
+    # (DuckDbDialect.NativeTypeArgument and RenderColumnSelect); the fidelity test installs the extension first (prerequisites.json).
+    ("DuckDB", "IP address"): "INET",
+    ("DuckDB", "IP network / CIDR"): "INET",
     ("Firebird", "decimal floating point"): "DECFLOAT",
     ("Oracle", "external-file reference"): "BFILE",
     **{(db, "bit / bitstring"): "BIT(3)" for db in ("MySql", "MariaDb", "TiDb", "SingleStore")},

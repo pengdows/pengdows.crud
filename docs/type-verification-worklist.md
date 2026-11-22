@@ -15,9 +15,9 @@ A cell is *tested* when the database declares a column for its probe type and th
 |---|---|---:|---|
 | 1 | New test needed: no fidelity cell covers the concept | 81 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
 | 2 | Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column) | 29 | Find the spelling the server accepts and declare it, or record the refusal as by design, server or upstream. |
-| 3 | Version, extension or restriction check: documented V, E or R | 88 | Run the cell against another version or with the extension, or record why one version is enough. |
+| 3 | Version, extension or restriction check: documented V, E or R | 87 | Run the cell against another version or with the extension, or record why one version is enough. |
 | 4 | Classify first: the workbook marks it ? (unverified) | 317 | Decide the workbook status (supported, or unsupported with the reason); then test it if supported. |
-| | **Total** | **515** | |
+| | **Total** | **514** | |
 
 ## By database
 
@@ -28,7 +28,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 | AuroraPostgreSql | 8 | 3 | 16 | 5 | 32 |
 | CockroachDb | 4 | 1 | 2 | 11 | 18 |
 | Db2 | 6 | 0 | 5 | 18 | 29 |
-| DuckDB | 2 | 0 | 8 | 11 | 21 |
+| DuckDB | 2 | 0 | 7 | 11 | 20 |
 | Firebird | 2 | 0 | 7 | 16 | 25 |
 | FlatFile | 0 | 0 | 0 | 47 | 47 |
 | Informix | 5 | 3 | 3 | 12 | 23 |
@@ -46,7 +46,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 | SybaseASE | 4 | 1 | 1 | 10 | 16 |
 | TiDb | 3 | 1 | 1 | 12 | 17 |
 | YugabyteDb | 6 | 3 | 4 | 17 | 30 |
-| **All** | 81 | 29 | 88 | 317 | 515 |
+| **All** | 81 | 29 | 87 | 317 | 514 |
 
 ## Known open items (maintained by hand)
 
@@ -54,6 +54,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 |---|---|---|
 | Access | Date/Time Extended (DATETIME2) | Upstream ACE defect: stored correctly, but OLE DB reads it with the month one early and a read can crash the process. Refused on read with a typed DataMappingException. Cannot be made to pass; re-check if a newer ACE build is installed. |
 | Access | AutoNumber as Replication ID | DAO refuses the AutoNumber attribute on a GUID field. Tested as a GUID column with a GenGUID() default; the true attribute is untested. |
+| DuckDB | Extension downloads | The IP address and CIDR fidelity cells install the inet extension (INSTALL inet, LOAD inet in prerequisites.json). DuckDB caches it after the first download, so a host with no network and an empty cache fails those two cells. The spatial extension loads the same way but is not used: DuckDB.NET cannot read its GEOMETRY type (refused by name, DuckDbUnreadableColumnRefusalTests). |
 | All | Dedicated tests outside the fidelity cells | Some category 1 rows are covered by live tests that are not fidelity cells. Check these before writing a new test: PostgreSqlAdvancedTypeRoundTripTests, PostgreSqlIntervalRoundTripTests, PostgreSqlRangeRoundTripTests, DuckDbWideAndListTypeRoundTripTests, SqlServerOddTypeRoundTripTests, MySqlSpatialRoundTripTests, OracleIntervalRoundTripTests, PortableAdvancedTypeRoundTripTests, SmallAndUnsignedTypeRoundTripTests. A row they cover should be closed by adding the cell or by recording the test here. |
 | Access | Attachment bytes, append-only memo | ACE refuses a SQL write of attachment bytes and of an append-only memo; both are pinned as typed failures, not stored values. |
 | Snowflake, SapHana, InterBase, AuroraMySql, AuroraPostgreSql | Generated matrix report | They have declarations and run the fidelity test, but are absent from docs/type-representation-matrix.md, the probe's fidelity-matrix TSVs and reconciliation.csv, so their per-type results are not in the generated documents. Needs a probe run per database (opt-in databases: credentials, licence or an AWS account). |
@@ -64,7 +65,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 ## Verified (closed with evidence)
 
-11 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
+12 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
 substitute because the native type is not available here (the native type is then still untested). They are not counted above.
 
 | Database | ID | Concept | State | Evidence |
@@ -73,6 +74,7 @@ substitute because the native type is not available here (the native type is the
 | Access | B13 | Key generation: Identity column (declaration, not a type) | covered | COUNTER identity through SELECT @@IDENTITY: InsertReturningTests.CreateAsync_NonReturningProviders_InsertsSuccessfully. |
 | Access | B63 | Composite: Multi-valued set | covered | Multi-value fields of every element type: AccessComplexTypeTests.MultiValue_* (Byte, Integer, Long, Single, Double, Decimal, Text, GUID). |
 | Access | B77 | Access-only: Hyperlink / Attachment / Calculated / OLE | covered | AccessComplexTypeTests: hyperlink, attachment (name through SQL, bytes through DAO), calculated fields of every result type, OLE object (LONGBINARY in the catalog). |
+| DuckDB | B51 | Network: IP address / CIDR | verified | INET through the inet extension, tested natively by the IP address and CIDR fidelity cells: written through CAST(parameter AS INET), read from the struct DuckDB.NET returns (DuckDbInetReader, DuckDbInetColumnTests). The first run downloads the extension (INSTALL inet), so it needs network access. |
 | Sqlite | B13 | Key generation: Identity column (declaration, not a type) | covered | AUTOINCREMENT identity: InsertReturningTests.CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders (INSERT ... RETURNING). |
 | Sqlite | B49 | Identifier: Physical row id | substitute only | rowid is a pseudo-column that is always the INTEGER PRIMARY KEY; the cell declares a column labelled ROWID. SqliteDeclaredTypeNameTests.Rowid_IsAPseudoColumn_ThatIsTheIntegerPrimaryKey. |
 | Sqlite | B53 | Semi-structured: JSON (text-preserving) | substitute only | JSON is text with the json_* functions; the cell declares a column labelled JSON. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven. |
@@ -361,7 +363,7 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 | B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B59 | Composite | Struct / row / composite | N | none | no cell |
 
-**Version, extension or restriction check: documented V, E or R** (8)
+**Version, extension or restriction check: documented V, E or R** (7)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
@@ -369,7 +371,6 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 | A57 | Spatial | line / linestring geometry | E | line / linestring geometry | extension-dependent; refused on the test environment: confirm the prerequisite |
 | A58 | Spatial | polygon geometry | E | polygon geometry | extension-dependent; refused on the test environment: confirm the prerequisite |
 | B12 | Integer | Arbitrary-precision integer | V | arbitrary-size integer | version-dependent; tested on the test environment's version only |
-| B51 | Network | IP address / CIDR | E | IP address | extension-dependent; tested on the test environment's version only |
 | B53 | Semi-structured | JSON (text-preserving) | E | JSON text / JSON value | extension-dependent; tested on the test environment's version only |
 | B68 | Spatial | Planar geometry | E | point geometry | extension-dependent; refused on the test environment: confirm the prerequisite |
 | B71 | Vector / AI | Vector embedding | R | vector embedding | restricted; tested on the test environment's version only |

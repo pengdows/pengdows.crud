@@ -1,5 +1,6 @@
 using System.Data;
 using System.Linq.Expressions;
+using System.Net;
 using System.Reflection;
 using pengdows.crud.dialects;
 using pengdows.crud.types.converters;
@@ -38,6 +39,17 @@ internal static class ColumnQuirkReads
     {
         var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
         var ordinalExpr = Expression.Constant(ordinal);
+
+        if (fieldType == typeof(Dictionary<string, object>) &&
+            (underlying == typeof(IPAddress) || underlying == typeof(Cidr) || underlying == typeof(Inet)))
+        {
+            // DuckDB's INET (the inet extension) arrives as a struct { ip_type, address, mask }: decoded by its members, which needs
+            // no extension on the connection (its text form does).
+            var read = underlying == typeof(IPAddress) ? DuckDbInetReader.ReadAddressMethod
+                : underlying == typeof(Cidr) ? DuckDbInetReader.ReadCidrMethod
+                : DuckDbInetReader.ReadInetMethod;
+            return ColumnConversion.Build(Expression.Call(read, record, ordinalExpr), typeof(object), targetType, options);
+        }
 
         if (underlying == typeof(Inet))
         {

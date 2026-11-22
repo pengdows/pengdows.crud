@@ -469,7 +469,7 @@ internal static class TypeFidelityDeclarations
                 ["timestamp with zone"] = ("TIMESTAMP WITH TIME ZONE", "TimestampTz"),
                 ["binary LOB"] = ("BLOB", "Blob"),
                 ["JSON text / JSON value"] = ("JSON", "Varchar"),
-                ["IP address"] = ("VARCHAR(45)", "VARCHAR"),
+                ["IP address"] = ("INET", "Struct"),
                 ["SQL array"] = ("INTEGER ARRAY", "List"),
                 ["unsigned 128-bit"] = ("UHUGEINT", "UnsignedHugeInt"),
                 ["fixed character"] = ("CHAR(10)", "Varchar"),
@@ -487,7 +487,7 @@ internal static class TypeFidelityDeclarations
                 ["object identifier / OID"] = ("OID", "BigInt"),
                 ["native binary JSON"] = ("JSON", "Varchar"),
                 ["BSON"] = ("BYTEA", "Blob"),
-                ["IP network / CIDR"] = ("VARCHAR(50)", "VARCHAR"),
+                ["IP network / CIDR"] = ("INET", "Struct"),
                 ["fixed-length array"] = ("INTEGER ARRAY[10]", "Array"),
                 ["list / multiset / set collection"] = ("INTEGER[]", "List"),
                 ["map / dictionary"] = ("VARCHAR", "VARCHAR"),
@@ -1908,6 +1908,8 @@ internal static class TypeFidelityDeclarations
             },
             [SupportedDatabase.DuckDB] = new Dictionary<string, string[]>
             {
+                ["IP address"] = new[] { "INSTALL inet", "LOAD inet" },
+                ["IP network / CIDR"] = new[] { "INSTALL inet", "LOAD inet" },
                 ["user-defined enum / domain"] = new[] { "DROP TYPE IF EXISTS probe_domain", "CREATE TYPE probe_domain AS VARCHAR" },
             },
             [SupportedDatabase.Firebird] = new Dictionary<string, string[]>

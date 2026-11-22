@@ -46,6 +46,10 @@ KNOWN_OPEN = [
      "with a typed DataMappingException. Cannot be made to pass; re-check if a newer ACE build is installed."),
     ("Access", "AutoNumber as Replication ID",
      "DAO refuses the AutoNumber attribute on a GUID field. Tested as a GUID column with a GenGUID() default; the true attribute is untested."),
+    ("DuckDB", "Extension downloads",
+     "The IP address and CIDR fidelity cells install the inet extension (INSTALL inet, LOAD inet in prerequisites.json). DuckDB caches it after the first "
+     "download, so a host with no network and an empty cache fails those two cells. The spatial extension loads the same way but is not used: "
+     "DuckDB.NET cannot read its GEOMETRY type (refused by name, DuckDbUnreadableColumnRefusalTests)."),
     ("All", "Dedicated tests outside the fidelity cells",
      "Some category 1 rows are covered by live tests that are not fidelity cells. Check these before writing a new test: "
      "PostgreSqlAdvancedTypeRoundTripTests, PostgreSqlIntervalRoundTripTests, PostgreSqlRangeRoundTripTests, DuckDbWideAndListTypeRoundTripTests, "
@@ -85,6 +89,7 @@ VERIFIED = {
     ("Sqlite", "B57"): ("substitute only", "Manifest typing: a value keeps the type it is given, whatever the declared name. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven."),
     ("Sqlite", "B68"): ("substitute only", "SpatiaLite is an extension and is not installed on this host (load_extension: module not found, live 2026-11-21); the cell round-trips text under the label POINT. The native extension type is untested."),
     ("Sqlite", "B71"): ("substitute only", "sqlite-vec is an extension and is not installed on this host (load_extension: module not found, live 2026-11-21); the cell round-trips text under the label VECTOR(3). The native extension type is untested."),
+    ("DuckDB", "B51"): ("verified", "INET through the inet extension, tested natively by the IP address and CIDR fidelity cells: written through CAST(parameter AS INET), read from the struct DuckDB.NET returns (DuckDbInetReader, DuckDbInetColumnTests). The first run downloads the extension (INSTALL inet), so it needs network access."),
     ("Access", "B13"): ("covered", "COUNTER identity through SELECT @@IDENTITY: InsertReturningTests.CreateAsync_NonReturningProviders_InsertsSuccessfully."),
     ("Access", "B77"): ("covered", "AccessComplexTypeTests: hyperlink, attachment (name through SQL, bytes through DAO), calculated fields of every result type, OLE object (LONGBINARY in the catalog)."),
     ("Access", "B08"): ("verified", "Large Number needs a current ACE build (16.0.5320 refused it, this host accepts it): AccessComplexTypeTests.NativeLargeNumber_CanBeCreatedWithTheInstalledAceProvider, and the catalog's BIGINT full-range entry."),

@@ -1358,6 +1358,38 @@ public sealed class Cell_IntArray_Oracle : IFidelityRow<Cell_IntArray_Oracle>
 }
 
 [Table("type_fidelity")]
+public sealed class Cell_IpAddress_DuckDB : IFidelityRow<Cell_IpAddress_DuckDB>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("ip_address", DbType.Object, NativeType = "INET")]
+    public IPAddress Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("ip_address", "Value", "IP address") };
+
+    public static Cell_IpAddress_DuckDB Expected() => new() { Id = 1, Value = IPAddress.Parse("192.168.1.10") };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Cidr_DuckDB : IFidelityRow<Cell_Cidr_DuckDB>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("cidr", DbType.Object, NativeType = "INET")]
+    public Cidr Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("cidr", "Value", "IP network / CIDR") };
+
+    public static Cell_Cidr_DuckDB Expected() => new() { Id = 1, Value = Cidr.Parse("10.0.0.0/8") };
+}
+
+[Table("type_fidelity")]
 public sealed class Cell_DecimalFloat_Firebird : IFidelityRow<Cell_DecimalFloat_Firebird>
 {
     [Id(true)]
@@ -2027,6 +2059,8 @@ internal static class TypeFidelityCells
         (SupportedDatabase.Snowflake, "external-file reference") => typeof(Cell_FileReference_Snowflake),
         (SupportedDatabase.Snowflake, "variant / dynamic value") => typeof(Cell_Variant_Snowflake),
         (SupportedDatabase.Oracle, "SQL array") => typeof(Cell_IntArray_Oracle),
+        (SupportedDatabase.DuckDB, "IP address") => typeof(Cell_IpAddress_DuckDB),
+        (SupportedDatabase.DuckDB, "IP network / CIDR") => typeof(Cell_Cidr_DuckDB),
         (SupportedDatabase.Firebird, "decimal floating point") => typeof(Cell_DecimalFloat_Firebird),
         (SupportedDatabase.Oracle, "external-file reference") => typeof(Cell_FileReference_Oracle),
         (SupportedDatabase.MySql, "bit / bitstring") => typeof(Cell_BitString_MySql),

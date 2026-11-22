@@ -96,16 +96,16 @@
         "pass": 156,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-21 22:20Z",
-        "commit": "6d696119",
+        "runUtc": "2026-11-22 00:18Z",
+        "commit": "f13d948c",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 156,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-21 22:18Z",
-        "commit": "6d696119",
+        "runUtc": "2026-11-22 00:16Z",
+        "commit": "f13d948c",
         "dirtyTree": true
       }
     },

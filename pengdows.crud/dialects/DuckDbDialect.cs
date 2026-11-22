@@ -51,6 +51,15 @@ internal class DuckDbDialect : SqlDialect
 {
     internal override bool RequiresSerializedConnectionOpen => true;
 
+    // An INET column (the inet extension) rejects a VARCHAR parameter ("Conversion Error: Type VARCHAR with value '192.168.1.10' can't
+    // be cast to the destination type INET", live, DuckDB 2.0.1), so an address written to a column declared NativeType = "INET" goes
+    // through CAST(parameter AS INET). It is read as the struct DuckDB.NET returns (DuckDbInetReader), not through a text cast: the
+    // cast only reads as an address while the extension is loaded on the connection.
+    private static bool IsInet(string? nativeType) => string.Equals(nativeType, "INET", StringComparison.OrdinalIgnoreCase);
+
+    internal override string? NativeTypeArgument(string parameterMarker, string nativeType) =>
+        IsInet(nativeType) ? $"CAST({parameterMarker} AS INET)" : base.NativeTypeArgument(parameterMarker, nativeType);
+
     // DuckDB.NET names a UNION column's type ("Union") and a spatial GEOMETRY column's ("Geometry") and then throws a raw
     // ArgumentException ("Unrecognised type Union (28) for column v") from GetFieldType and GetValue (live, DuckDB.NET 2.0.1). A result
     // set holding one is refused when its reader opens, by name, with what to select instead (UnreadableColumnTypes).

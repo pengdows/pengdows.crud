@@ -605,7 +605,7 @@ IP address,ip_address,IPAddress,Object,CockroachDb,declared,INET,inet,
 IP address,ip_address,IPAddress,Object,MariaDb,declared,VARCHAR(45),VARCHAR,
 IP address,ip_address,IPAddress,Object,MySql,declared,VARCHAR(45),VARCHAR,
 IP address,ip_address,IPAddress,Object,Sqlite,declared,INET,INET,
-IP address,ip_address,IPAddress,Object,DuckDB,declared,VARCHAR(45),VARCHAR,
+IP address,ip_address,IPAddress,Object,DuckDB,declared,INET,Struct,
 IP address,ip_address,IPAddress,Object,YugabyteDb,declared,INET,inet,
 IP address,ip_address,IPAddress,Object,TiDb,declared,VARCHAR(45),VARCHAR,
 IP address,ip_address,IPAddress,Object,SingleStore,declared,VARCHAR(45),VARCHAR,
@@ -1249,7 +1249,7 @@ IP network / CIDR,cidr,Cidr,Object,CockroachDb,declared,INET,inet,
 IP network / CIDR,cidr,Cidr,Object,MariaDb,unsupported,,,Unknown data type: 'CIDR'
 IP network / CIDR,cidr,Cidr,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CIDR)' at line 1
 IP network / CIDR,cidr,Cidr,Object,Sqlite,declared,CIDR,CIDR,
-IP network / CIDR,cidr,Cidr,Object,DuckDB,declared,VARCHAR(50),VARCHAR,
+IP network / CIDR,cidr,Cidr,Object,DuckDB,declared,INET,Struct,
 IP network / CIDR,cidr,Cidr,Object,YugabyteDb,declared,CIDR,cidr,
 IP network / CIDR,cidr,Cidr,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 59 near ""CIDR)"""
 IP network / CIDR,cidr,Cidr,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CIDR)' at line 1
