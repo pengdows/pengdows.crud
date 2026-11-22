@@ -13,11 +13,11 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 | # | Category | Rows | What closes a row |
 |---|---|---:|---|
-| 1 | New test needed: no fidelity cell covers the concept | 47 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
+| 1 | New test needed: no fidelity cell covers the concept | 37 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
 | 2 | Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column) | 27 | Find the spelling the server accepts and declare it, or record the refusal as by design, server or upstream. |
 | 3 | Version, extension or restriction check: documented V, E or R | 87 | Run the cell against another version or with the extension, or record why one version is enough. |
 | 4 | Classify first: the workbook marks it ? (unverified) | 275 | Decide the workbook status (supported, or unsupported with the reason); then test it if supported. |
-| | **Total** | **436** | |
+| | **Total** | **426** | |
 
 ## By database
 
@@ -35,18 +35,18 @@ A cell is *tested* when the database declares a column for its probe type and th
 | InterBase | 1 | 1 | 0 | 18 | 20 |
 | MariaDb | 0 | 1 | 4 | 11 | 16 |
 | MySql | 0 | 2 | 1 | 12 | 15 |
-| Oracle | 5 | 0 | 8 | 13 | 26 |
+| Oracle | 0 | 0 | 8 | 13 | 21 |
 | PostgreSql | 3 | 2 | 7 | 5 | 17 |
 | SapHana | 3 | 0 | 2 | 14 | 19 |
 | SingleStore | 1 | 4 | 2 | 14 | 21 |
 | Snowflake | 2 | 2 | 5 | 10 | 19 |
 | Spanner | 2 | 2 | 5 | 7 | 16 |
-| SqlServer | 5 | 0 | 2 | 10 | 17 |
+| SqlServer | 0 | 0 | 2 | 10 | 12 |
 | Sqlite | 0 | 0 | 0 | 17 | 17 |
 | SybaseASE | 3 | 1 | 1 | 10 | 15 |
 | TiDb | 0 | 1 | 1 | 12 | 14 |
 | YugabyteDb | 1 | 1 | 4 | 17 | 23 |
-| **All** | 47 | 27 | 87 | 275 | 436 |
+| **All** | 37 | 27 | 87 | 275 | 426 |
 
 ## Known open items (maintained by hand)
 
@@ -65,7 +65,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 ## Verified (closed with evidence)
 
-90 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
+100 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
 substitute because the native type is not available here (the native type is then still untested). They are not counted above.
 
 | Database | ID | Concept | State | Evidence |
@@ -132,7 +132,12 @@ substitute because the native type is not available here (the native type is the
 | MySql | B05 | Integer: 24-bit signed/unsigned | verified | MEDIUMINT and MEDIUMINT UNSIGNED, live: both bounds round-trip into an int and a value one past either bound is refused, not clamped. MySqlFamilyMediumIntTests. |
 | MySql | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | MySql | B14 | Key generation: SERIAL shorthand | verified | SERIAL as the column spelling, live: the server fills the id and the gateway reads it back; ids are distinct (and consecutive except on CockroachDB, whose unique_rowid() is not). SerialShorthandTests. |
+| Oracle | A74 | Specialized: opaque / special database type | verified | ANYDATA keeps the type of the value it holds, and XMLTYPE round-trips a document and refuses malformed XML, live. XMLTYPE needs BASICFILE CLOB storage on the test image: the default SecureFile is refused in the SYSTEM tablespace (ORA-43853). SqlServerAndOracleSpecialTypeTests.Oracle_AnyData_*, Oracle_XmlType_*. |
+| Oracle | A77 | Specialized: cursor / table variable | verified | A nested table column (TABLE OF NUMBER), live: a collection per row, queried with TABLE(). SqlServerAndOracleSpecialTypeTests.Oracle_NestedTable_*. |
 | Oracle | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| Oracle | B59 | Composite: Struct / row / composite | verified | An object type column, live: attributes addressable, an oversized attribute refused. SqlServerAndOracleSpecialTypeTests.Oracle_ObjectType_*. Written and read through SQL, no CLR mapping. |
+| Oracle | B67 | User-defined: Opaque / CLR / extension base type | verified | ANYDATA and XMLTYPE as the opaque extension base types, live. SqlServerAndOracleSpecialTypeTests.Oracle_AnyData_*, Oracle_XmlType_*. |
+| Oracle | B75 | System: Pseudo / non-column types | verified | SYS_REFCURSOR is refused as a column type, live. SqlServerAndOracleSpecialTypeTests.Oracle_RefCursor_IsRefusedAsAColumnType. |
 | PostgreSql | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | PostgreSql | B14 | Key generation: SERIAL shorthand | verified | SERIAL as the column spelling, live: the server fills the id and the gateway reads it back; ids are distinct (and consecutive except on CockroachDB, whose unique_rowid() is not). SerialShorthandTests. |
 | PostgreSql | B31 | Character: Case-insensitive text | verified | citext (CREATE EXTENSION citext), live: stored as citext, compares without case, keeps the case it was given. PostgreSqlFamilyOddTypeRoundTripTests.Citext_*. |
@@ -141,7 +146,12 @@ substitute because the native type is not available here (the native type is the
 | SapHana | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | SingleStore | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | Snowflake | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| SqlServer | A74 | Specialized: opaque / special database type | verified | sql_variant, live: each value keeps its base type (int, nvarchar, decimal) and NULL reads as NULL. SqlServerAndOracleSpecialTypeTests.SqlServer_SqlVariant_*. |
+| SqlServer | A77 | Specialized: cursor / table variable | verified | Table variable and cursor variable, live, in a batch. SqlServerAndOracleSpecialTypeTests.SqlServer_TableVariableAndCursorVariable_*. |
 | SqlServer | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| SqlServer | B30 | Character: System-name alias | verified | sysname, live: nvarchar(128) NOT NULL; NULL and a 129-character value are refused. SqlServerAndOracleSpecialTypeTests.SqlServer_Sysname_*. |
+| SqlServer | B67 | User-defined: Opaque / CLR / extension base type | covered | The CLR user-defined types SQL Server ships (hierarchyid, geometry, geography): SqlServerHierarchyIdRoundTripTests, SqlServerSpatialRoundTripTests. A user-built CLR assembly type is not tested. |
+| SqlServer | B75 | System: Pseudo / non-column types | verified | cursor and table are refused as column types, live. SqlServerAndOracleSpecialTypeTests.SqlServer_CursorAndTable_AreRefusedAsColumnTypes. |
 | Sqlite | B13 | Key generation: Identity column (declaration, not a type) | covered | AUTOINCREMENT identity: InsertReturningTests.CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders (INSERT ... RETURNING). |
 | Sqlite | B49 | Identifier: Physical row id | substitute only | rowid is a pseudo-column that is always the INTEGER PRIMARY KEY; the cell declares a column labelled ROWID. SqliteDeclaredTypeNameTests.Rowid_IsAPseudoColumn_ThatIsTheIntegerPrimaryKey. |
 | Sqlite | B53 | Semi-structured: JSON (text-preserving) | substitute only | JSON is text with the json_* functions; the cell declares a column labelled JSON. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven. |
@@ -187,17 +197,17 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 | ID | Category | Concept | Databases |
 |---|---|---|---|
-| A74 | Specialized | opaque / special database type | 6: Informix, Oracle, SapHana, Snowflake, SqlServer, SybaseASE |
-| B59 | Composite | Struct / row / composite | 6: AuroraPostgreSql, Db2, DuckDB, Informix, Oracle, Snowflake |
-| B67 | User-defined | Opaque / CLR / extension base type | 6: AuroraPostgreSql, Db2, Informix, Oracle, PostgreSql, SqlServer |
-| B75 | System | Pseudo / non-column types | 6: AuroraPostgreSql, Db2, Oracle, PostgreSql, SapHana, SqlServer |
 | A76 | Specialized | spatial raster / other extensions | 5: AuroraPostgreSql, CockroachDb, PostgreSql, Spanner, YugabyteDb |
-| A77 | Specialized | cursor / table variable | 5: Db2, Oracle, SapHana, SqlServer, SybaseASE |
+| B59 | Composite | Struct / row / composite | 5: AuroraPostgreSql, Db2, DuckDB, Informix, Snowflake |
+| A74 | Specialized | opaque / special database type | 4: Informix, SapHana, Snowflake, SybaseASE |
+| B67 | User-defined | Opaque / CLR / extension base type | 4: AuroraPostgreSql, Db2, Informix, PostgreSql |
+| B75 | System | Pseudo / non-column types | 4: AuroraPostgreSql, Db2, PostgreSql, SapHana |
+| A77 | Specialized | cursor / table variable | 3: Db2, SapHana, SybaseASE |
 | B14 | Key generation | SERIAL shorthand | 3: AuroraMySql, AuroraPostgreSql, Informix |
 | B05 | Integer | 24-bit signed/unsigned | 2: AuroraMySql, SingleStore |
-| B30 | Character | System-name alias | 2: SqlServer, SybaseASE |
 | B35 | Binary | Custom BLOB subtypes | 2: Firebird, InterBase |
 | B28 | Character | Double-byte GRAPHIC types | 1: Db2 |
+| B30 | Character | System-name alias | 1: SybaseASE |
 | B31 | Character | Case-insensitive text | 1: AuroraPostgreSql |
 | B70 | Spatial | Built-in 2-D geometric primitives | 1: AuroraPostgreSql |
 | B76 | System | Commit timestamp | 1: Spanner |
@@ -662,16 +672,6 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### Oracle
 
-**New test needed: no fidelity cell covers the concept** (5)
-
-| ID | Category | Concept | Doc | Probe type | Note |
-|---|---|---|:--:|---|---|
-| A74 | Specialized | opaque / special database type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
-| A77 | Specialized | cursor / table variable | A | cursor / table variable | no cell (cursor / table variable is not a fidelity cell) |
-| B59 | Composite | Struct / row / composite | N | none | no cell |
-| B67 | User-defined | Opaque / CLR / extension base type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
-| B75 | System | Pseudo / non-column types | R | none | no cell |
-
 **Version, extension or restriction check: documented V, E or R** (8)
 
 | ID | Category | Concept | Doc | Probe type | Note |
@@ -901,16 +901,6 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 | B14 | Key generation | SERIAL shorthand | ? | none | no fidelity cell and no classification |
 
 ### SqlServer
-
-**New test needed: no fidelity cell covers the concept** (5)
-
-| ID | Category | Concept | Doc | Probe type | Note |
-|---|---|---|:--:|---|---|
-| A74 | Specialized | opaque / special database type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
-| A77 | Specialized | cursor / table variable | A | cursor / table variable | no cell (cursor / table variable is not a fidelity cell) |
-| B30 | Character | System-name alias | A | none | no cell |
-| B67 | User-defined | Opaque / CLR / extension base type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
-| B75 | System | Pseudo / non-column types | R | none | no cell |
 
 **Version, extension or restriction check: documented V, E or R** (2)
 
