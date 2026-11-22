@@ -24,7 +24,7 @@ that was run for the release is green. Access runs only on Windows.
 | Oracle | 158 pass, 0 fail, 0 skip · 2026-11-21 02:13Z · 9e81cc53+ | 158 pass, 0 fail, 0 skip · 2026-11-21 02:35Z · 9e81cc53+ |
 | YugabyteDb | 173 pass, 0 fail, 0 skip · 2026-11-21 02:09Z · 9e81cc53+ | 173 pass, 0 fail, 0 skip · 2026-11-21 02:31Z · 9e81cc53+ |
 | TiDb | 163 pass, 0 fail, 0 skip · 2026-11-21 02:17Z · 9e81cc53+ | 163 pass, 0 fail, 0 skip · 2026-11-21 02:39Z · 9e81cc53+ |
-| FlatFile | 124 pass, 32 fail, 0 skip · 2026-11-22 01:29Z · 7eb03064+ | 0 pass, 1 fail, 0 skip · 2026-11-22 01:32Z · 7eb03064+ |
+| FlatFile | 156 pass, 0 fail, 0 skip · 2026-11-22 09:11Z · 43dfc3e1+ | 156 pass, 0 fail, 0 skip · 2026-11-22 09:12Z · 43dfc3e1+ |
 | Db2 | 156 pass, 0 fail, 0 skip · 2026-11-21 02:05Z · 9e81cc53+ | 156 pass, 0 fail, 0 skip · 2026-11-21 02:27Z · 9e81cc53+ |
 | Informix | 156 pass, 0 fail, 0 skip · 2026-11-21 02:17Z · 9e81cc53+ | 156 pass, 0 fail, 0 skip · 2026-11-21 02:39Z · 9e81cc53+ |
 | SybaseASE | 156 pass, 0 fail, 0 skip · 2026-11-21 02:12Z · 9e81cc53+ | 156 pass, 0 fail, 0 skip · 2026-11-21 02:34Z · 9e81cc53+ |
@@ -37,4 +37,4 @@ that was run for the release is green. Access runs only on Windows.
 | AuroraPostgreSql | 174 pass, 0 fail, 0 skip · 2026-11-13 16:22Z · e11ef215 | 174 pass, 0 fail, 0 skip · 2026-11-13 16:47Z · e11ef215 |
 | AuroraMySql | 164 pass, 0 fail, 0 skip · 2026-11-13 16:12Z · e11ef215 | 164 pass, 0 fail, 0 skip · 2026-11-13 16:37Z · e11ef215 |
 
-Failing now: FlatFile net10.0, FlatFile net8.0.
+Failing now: none.

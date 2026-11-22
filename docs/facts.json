@@ -129,19 +129,19 @@
     },
     "FlatFile": {
       "net10.0": {
-        "pass": 0,
-        "fail": 1,
+        "pass": 156,
+        "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-22 01:32Z",
-        "commit": "7eb03064",
+        "runUtc": "2026-11-22 09:12Z",
+        "commit": "43dfc3e1",
         "dirtyTree": true
       },
       "net8.0": {
-        "pass": 124,
-        "fail": 32,
+        "pass": 156,
+        "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-22 01:29Z",
-        "commit": "7eb03064",
+        "runUtc": "2026-11-22 09:11Z",
+        "commit": "43dfc3e1",
         "dirtyTree": true
       }
     },
