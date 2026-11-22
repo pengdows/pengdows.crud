@@ -13,40 +13,40 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 | # | Category | Rows | What closes a row |
 |---|---|---:|---|
-| 1 | New test needed: no fidelity cell covers the concept | 74 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
+| 1 | New test needed: no fidelity cell covers the concept | 50 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
 | 2 | Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column) | 27 | Find the spelling the server accepts and declare it, or record the refusal as by design, server or upstream. |
 | 3 | Version, extension or restriction check: documented V, E or R | 87 | Run the cell against another version or with the extension, or record why one version is enough. |
 | 4 | Classify first: the workbook marks it ? (unverified) | 275 | Decide the workbook status (supported, or unsupported with the reason); then test it if supported. |
-| | **Total** | **463** | |
+| | **Total** | **439** | |
 
 ## By database
 
 | Database | 1 | 2 | 3 | 4 | Total |
 |---|---:|---:|---:|---:|---:|
 | Access | 0 | 0 | 0 | 15 | 15 |
-| AuroraMySql | 3 | 3 | 5 | 12 | 23 |
-| AuroraPostgreSql | 8 | 3 | 16 | 5 | 32 |
-| CockroachDb | 3 | 1 | 2 | 11 | 17 |
-| Db2 | 6 | 0 | 5 | 18 | 29 |
-| DuckDB | 2 | 0 | 7 | 11 | 20 |
-| Firebird | 2 | 0 | 7 | 16 | 25 |
+| AuroraMySql | 2 | 3 | 5 | 12 | 22 |
+| AuroraPostgreSql | 7 | 3 | 16 | 5 | 31 |
+| CockroachDb | 1 | 1 | 2 | 11 | 15 |
+| Db2 | 5 | 0 | 5 | 18 | 28 |
+| DuckDB | 1 | 0 | 7 | 11 | 19 |
+| Firebird | 1 | 0 | 7 | 16 | 24 |
 | FlatFile | 0 | 0 | 0 | 5 | 5 |
-| Informix | 5 | 3 | 3 | 12 | 23 |
+| Informix | 4 | 3 | 3 | 12 | 22 |
 | InterBase | 1 | 1 | 0 | 18 | 20 |
-| MariaDb | 3 | 1 | 4 | 11 | 19 |
-| MySql | 3 | 2 | 1 | 12 | 18 |
-| Oracle | 6 | 0 | 8 | 13 | 27 |
-| PostgreSql | 5 | 2 | 7 | 5 | 19 |
-| SapHana | 4 | 0 | 2 | 14 | 20 |
-| SingleStore | 2 | 4 | 2 | 14 | 22 |
-| Snowflake | 3 | 2 | 5 | 10 | 20 |
+| MariaDb | 1 | 1 | 4 | 11 | 17 |
+| MySql | 1 | 2 | 1 | 12 | 16 |
+| Oracle | 5 | 0 | 8 | 13 | 26 |
+| PostgreSql | 3 | 2 | 7 | 5 | 17 |
+| SapHana | 3 | 0 | 2 | 14 | 19 |
+| SingleStore | 1 | 4 | 2 | 14 | 21 |
+| Snowflake | 2 | 2 | 5 | 10 | 19 |
 | Spanner | 2 | 2 | 5 | 7 | 16 |
-| SqlServer | 6 | 0 | 2 | 10 | 18 |
+| SqlServer | 5 | 0 | 2 | 10 | 17 |
 | Sqlite | 0 | 0 | 0 | 17 | 17 |
-| SybaseASE | 4 | 1 | 1 | 10 | 16 |
-| TiDb | 3 | 1 | 1 | 12 | 17 |
-| YugabyteDb | 3 | 1 | 4 | 17 | 25 |
-| **All** | 74 | 27 | 87 | 275 | 463 |
+| SybaseASE | 3 | 1 | 1 | 10 | 15 |
+| TiDb | 1 | 1 | 1 | 12 | 15 |
+| YugabyteDb | 1 | 1 | 4 | 17 | 23 |
+| **All** | 50 | 27 | 87 | 275 | 439 |
 
 ## Known open items (maintained by hand)
 
@@ -65,7 +65,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 ## Verified (closed with evidence)
 
-63 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
+87 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
 substitute because the native type is not available here (the native type is then still untested). They are not counted above.
 
 | Database | ID | Concept | State | Evidence |
@@ -74,8 +74,15 @@ substitute because the native type is not available here (the native type is the
 | Access | B13 | Key generation: Identity column (declaration, not a type) | covered | COUNTER identity through SELECT @@IDENTITY: InsertReturningTests.CreateAsync_NonReturningProviders_InsertsSuccessfully. |
 | Access | B63 | Composite: Multi-valued set | covered | Multi-value fields of every element type: AccessComplexTypeTests.MultiValue_* (Byte, Integer, Long, Single, Double, Decimal, Text, GUID). |
 | Access | B77 | Access-only: Hyperlink / Attachment / Calculated / OLE | covered | AccessComplexTypeTests: hyperlink, attachment (name through SQL, bytes through DAO), calculated fields of every result type, OLE object (LONGBINARY in the catalog). |
+| AuroraMySql | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| AuroraPostgreSql | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| CockroachDb | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| CockroachDb | B14 | Key generation: SERIAL shorthand | verified | SERIAL as the column spelling, live: the server fills the id and the gateway reads it back; ids are distinct (and consecutive except on CockroachDB, whose unique_rowid() is not). SerialShorthandTests. |
 | CockroachDb | B70 | Spatial: Built-in 2-D geometric primitives | verified | CockroachDB has no point, line, lseg, box, path, polygon or circle type (its spatial types are GEOMETRY and GEOGRAPHY): the server refuses each, pinned by PostgreSqlFamilyOddTypeRoundTripTests.GeometricPrimitive_*. |
+| Db2 | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| DuckDB | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | DuckDB | B51 | Network: IP address / CIDR | verified | INET through the inet extension, tested natively by the IP address and CIDR fidelity cells: written through CAST(parameter AS INET), read from the struct DuckDB.NET returns (DuckDbInetReader, DuckDbInetColumnTests). The first run downloads the extension (INSTALL inet), so it needs network access. |
+| Firebird | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | FlatFile | A26 | Character: set-valued enum | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
 | FlatFile | A30 | Binary: legacy long binary | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
 | FlatFile | A38 | Temporal: second-precision datetime | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
@@ -118,9 +125,21 @@ substitute because the native type is not available here (the native type is the
 | FlatFile | B56 | Semi-structured: XML | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
 | FlatFile | B58 | Composite: Array | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
 | FlatFile | B66 | User-defined: Domain / distinct type | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| Informix | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| MariaDb | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| MariaDb | B14 | Key generation: SERIAL shorthand | verified | SERIAL as the column spelling, live: the server fills the id and the gateway reads it back; ids are distinct (and consecutive except on CockroachDB, whose unique_rowid() is not). SerialShorthandTests. |
+| MySql | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| MySql | B14 | Key generation: SERIAL shorthand | verified | SERIAL as the column spelling, live: the server fills the id and the gateway reads it back; ids are distinct (and consecutive except on CockroachDB, whose unique_rowid() is not). SerialShorthandTests. |
+| Oracle | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| PostgreSql | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| PostgreSql | B14 | Key generation: SERIAL shorthand | verified | SERIAL as the column spelling, live: the server fills the id and the gateway reads it back; ids are distinct (and consecutive except on CockroachDB, whose unique_rowid() is not). SerialShorthandTests. |
 | PostgreSql | B31 | Character: Case-insensitive text | verified | citext (CREATE EXTENSION citext), live: stored as citext, compares without case, keeps the case it was given. PostgreSqlFamilyOddTypeRoundTripTests.Citext_*. |
 | PostgreSql | B59 | Composite: Struct / row / composite | verified | A CREATE TYPE composite column, live: round-trips its row text and its fields are addressable. PostgreSqlFamilyOddTypeRoundTripTests.Composite_*. Written and read as text; there is no CLR composite mapping. |
 | PostgreSql | B70 | Spatial: Built-in 2-D geometric primitives | verified | point, line, lseg, box, path, polygon and circle, live: each stored as its type (pg_typeof) and read back as its text form. PostgreSqlFamilyOddTypeRoundTripTests.GeometricPrimitive_*. |
+| SapHana | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| SingleStore | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| Snowflake | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| SqlServer | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | Sqlite | B13 | Key generation: Identity column (declaration, not a type) | covered | AUTOINCREMENT identity: InsertReturningTests.CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders (INSERT ... RETURNING). |
 | Sqlite | B49 | Identifier: Physical row id | substitute only | rowid is a pseudo-column that is always the INTEGER PRIMARY KEY; the cell declares a column labelled ROWID. SqliteDeclaredTypeNameTests.Rowid_IsAPseudoColumn_ThatIsTheIntegerPrimaryKey. |
 | Sqlite | B53 | Semi-structured: JSON (text-preserving) | substitute only | JSON is text with the json_* functions; the cell declares a column labelled JSON. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven. |
@@ -128,6 +147,11 @@ substitute because the native type is not available here (the native type is the
 | Sqlite | B57 | Semi-structured: Variant / dynamic | substitute only | Manifest typing: a value keeps the type it is given, whatever the declared name. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven. |
 | Sqlite | B68 | Spatial: Planar geometry | verified | SpatiaLite 4.3.0 (mod_spatialite NuGet package, win-x64 only) loaded for real: POINT and POLYGON geometry columns, text and WKB round trips, NULL. SqliteNativeExtensionTypeTests.SpatiaLite_*. The fidelity cell still round-trips text under the label POINT. |
 | Sqlite | B71 | Vector / AI: Vector embedding | verified | sqlite-vec 0.1.9 (HiraokaHyperTools.sqlite-vec NuGet package, win/linux/osx) loaded for real: vec0 float32, int8 and bit vectors, nearest-neighbour MATCH, dimension check. SqliteNativeExtensionTypeTests.SqliteVec_*. The fidelity cell still round-trips text under the label VECTOR(3). |
+| SybaseASE | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| TiDb | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| TiDb | B14 | Key generation: SERIAL shorthand | verified | SERIAL as the column spelling, live: the server fills the id and the gateway reads it back; ids are distinct (and consecutive except on CockroachDB, whose unique_rowid() is not). SerialShorthandTests. |
+| YugabyteDb | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| YugabyteDb | B14 | Key generation: SERIAL shorthand | verified | SERIAL as the column spelling, live: the server fills the id and the gateway reads it back; ids are distinct (and consecutive except on CockroachDB, whose unique_rowid() is not). SerialShorthandTests. |
 | YugabyteDb | B31 | Character: Case-insensitive text | verified | citext, live on YugabyteDB: same behavior as PostgreSQL. PostgreSqlFamilyOddTypeRoundTripTests.Citext_*. |
 | YugabyteDb | B59 | Composite: Struct / row / composite | verified | A CREATE TYPE composite column, live on YugabyteDB. PostgreSqlFamilyOddTypeRoundTripTests.Composite_*. |
 | YugabyteDb | B62 | Composite: Enumeration | verified | An enum type, live on YugabyteDB: declaration order and an unknown label refused. PostgreSqlFamilyOddTypeRoundTripTests.Enum_*. |
@@ -160,8 +184,6 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 | ID | Category | Concept | Databases |
 |---|---|---|---|
-| B13 | Key generation | Identity column (declaration, not a type) | 18: AuroraMySql, AuroraPostgreSql, CockroachDb, Db2, DuckDB, Firebird, Informix, MariaDb, MySql, Oracle, PostgreSql, SapHana, SingleStore, Snowflake, SqlServer, SybaseASE, TiDb, YugabyteDb |
-| B14 | Key generation | SERIAL shorthand | 9: AuroraMySql, AuroraPostgreSql, CockroachDb, Informix, MariaDb, MySql, PostgreSql, TiDb, YugabyteDb |
 | A74 | Specialized | opaque / special database type | 6: Informix, Oracle, SapHana, Snowflake, SqlServer, SybaseASE |
 | B59 | Composite | Struct / row / composite | 6: AuroraPostgreSql, Db2, DuckDB, Informix, Oracle, Snowflake |
 | B67 | User-defined | Opaque / CLR / extension base type | 6: AuroraPostgreSql, Db2, Informix, Oracle, PostgreSql, SqlServer |
@@ -169,6 +191,7 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 | A76 | Specialized | spatial raster / other extensions | 5: AuroraPostgreSql, CockroachDb, PostgreSql, Spanner, YugabyteDb |
 | A77 | Specialized | cursor / table variable | 5: Db2, Oracle, SapHana, SqlServer, SybaseASE |
 | B05 | Integer | 24-bit signed/unsigned | 5: AuroraMySql, MariaDb, MySql, SingleStore, TiDb |
+| B14 | Key generation | SERIAL shorthand | 3: AuroraMySql, AuroraPostgreSql, Informix |
 | B30 | Character | System-name alias | 2: SqlServer, SybaseASE |
 | B35 | Binary | Custom BLOB subtypes | 2: Firebird, InterBase |
 | B28 | Character | Double-byte GRAPHIC types | 1: Db2 |
@@ -222,12 +245,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### AuroraMySql
 
-**New test needed: no fidelity cell covers the concept** (3)
+**New test needed: no fidelity cell covers the concept** (2)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | B05 | Integer | 24-bit signed/unsigned | N | none | no cell |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B14 | Key generation | SERIAL shorthand | R | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (3)
@@ -267,12 +289,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### AuroraPostgreSql
 
-**New test needed: no fidelity cell covers the concept** (8)
+**New test needed: no fidelity cell covers the concept** (7)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A76 | Specialized | spatial raster / other extensions | E | spatial raster / other extensions | no cell (spatial raster / other extensions is not a fidelity cell) |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B14 | Key generation | SERIAL shorthand | R | none | no cell |
 | B31 | Character | Case-insensitive text | E | none | no cell |
 | B59 | Composite | Struct / row / composite | N | none | no cell |
@@ -321,13 +342,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### CockroachDb
 
-**New test needed: no fidelity cell covers the concept** (3)
+**New test needed: no fidelity cell covers the concept** (1)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A76 | Specialized | spatial raster / other extensions | E | spatial raster / other extensions | no cell (spatial raster / other extensions is not a fidelity cell) |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
-| B14 | Key generation | SERIAL shorthand | R | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (1)
 
@@ -360,12 +379,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### Db2
 
-**New test needed: no fidelity cell covers the concept** (6)
+**New test needed: no fidelity cell covers the concept** (5)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A77 | Specialized | cursor / table variable | A | cursor / table variable | no cell (cursor / table variable is not a fidelity cell) |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B28 | Character | Double-byte GRAPHIC types | N | none | no cell |
 | B59 | Composite | Struct / row / composite | R | none | no cell |
 | B67 | User-defined | Opaque / CLR / extension base type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
@@ -406,11 +424,10 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### DuckDB
 
-**New test needed: no fidelity cell covers the concept** (2)
+**New test needed: no fidelity cell covers the concept** (1)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B59 | Composite | Struct / row / composite | N | none | no cell |
 
 **Version, extension or restriction check: documented V, E or R** (7)
@@ -443,11 +460,10 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### Firebird
 
-**New test needed: no fidelity cell covers the concept** (2)
+**New test needed: no fidelity cell covers the concept** (1)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B35 | Binary | Custom BLOB subtypes | N | none | no cell |
 
 **Version, extension or restriction check: documented V, E or R** (7)
@@ -497,12 +513,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### Informix
 
-**New test needed: no fidelity cell covers the concept** (5)
+**New test needed: no fidelity cell covers the concept** (4)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A74 | Specialized | opaque / special database type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B14 | Key generation | SERIAL shorthand | N | none | no cell |
 | B59 | Composite | Struct / row / composite | N | none | no cell |
 | B67 | User-defined | Opaque / CLR / extension base type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
@@ -579,13 +594,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### MariaDb
 
-**New test needed: no fidelity cell covers the concept** (3)
+**New test needed: no fidelity cell covers the concept** (1)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | B05 | Integer | 24-bit signed/unsigned | N | none | no cell |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
-| B14 | Key generation | SERIAL shorthand | R | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (1)
 
@@ -620,13 +633,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### MySql
 
-**New test needed: no fidelity cell covers the concept** (3)
+**New test needed: no fidelity cell covers the concept** (1)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | B05 | Integer | 24-bit signed/unsigned | N | none | no cell |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
-| B14 | Key generation | SERIAL shorthand | R | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (2)
 
@@ -660,13 +671,12 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### Oracle
 
-**New test needed: no fidelity cell covers the concept** (6)
+**New test needed: no fidelity cell covers the concept** (5)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A74 | Specialized | opaque / special database type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
 | A77 | Specialized | cursor / table variable | A | cursor / table variable | no cell (cursor / table variable is not a fidelity cell) |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B59 | Composite | Struct / row / composite | N | none | no cell |
 | B67 | User-defined | Opaque / CLR / extension base type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
 | B75 | System | Pseudo / non-column types | R | none | no cell |
@@ -704,13 +714,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### PostgreSql
 
-**New test needed: no fidelity cell covers the concept** (5)
+**New test needed: no fidelity cell covers the concept** (3)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A76 | Specialized | spatial raster / other extensions | E | spatial raster / other extensions | no cell (spatial raster / other extensions is not a fidelity cell) |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
-| B14 | Key generation | SERIAL shorthand | R | none | no cell |
 | B67 | User-defined | Opaque / CLR / extension base type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
 | B75 | System | Pseudo / non-column types | R | none | no cell |
 
@@ -745,13 +753,12 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### SapHana
 
-**New test needed: no fidelity cell covers the concept** (4)
+**New test needed: no fidelity cell covers the concept** (3)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A74 | Specialized | opaque / special database type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
 | A77 | Specialized | cursor / table variable | A | cursor / table variable | no cell (cursor / table variable is not a fidelity cell) |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B75 | System | Pseudo / non-column types | R | none | no cell |
 
 **Version, extension or restriction check: documented V, E or R** (2)
@@ -782,12 +789,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### SingleStore
 
-**New test needed: no fidelity cell covers the concept** (2)
+**New test needed: no fidelity cell covers the concept** (1)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | B05 | Integer | 24-bit signed/unsigned | N | none | no cell |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (4)
 
@@ -826,12 +832,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### Snowflake
 
-**New test needed: no fidelity cell covers the concept** (3)
+**New test needed: no fidelity cell covers the concept** (2)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A74 | Specialized | opaque / special database type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B59 | Composite | Struct / row / composite | N | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (2)
@@ -906,13 +911,12 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### SqlServer
 
-**New test needed: no fidelity cell covers the concept** (6)
+**New test needed: no fidelity cell covers the concept** (5)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A74 | Specialized | opaque / special database type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
 | A77 | Specialized | cursor / table variable | A | cursor / table variable | no cell (cursor / table variable is not a fidelity cell) |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B30 | Character | System-name alias | A | none | no cell |
 | B67 | User-defined | Opaque / CLR / extension base type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
 | B75 | System | Pseudo / non-column types | R | none | no cell |
@@ -965,13 +969,12 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### SybaseASE
 
-**New test needed: no fidelity cell covers the concept** (4)
+**New test needed: no fidelity cell covers the concept** (3)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A74 | Specialized | opaque / special database type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
 | A77 | Specialized | cursor / table variable | A | cursor / table variable | no cell (cursor / table variable is not a fidelity cell) |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B30 | Character | System-name alias | A | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (1)
@@ -1003,13 +1006,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### TiDb
 
-**New test needed: no fidelity cell covers the concept** (3)
+**New test needed: no fidelity cell covers the concept** (1)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | B05 | Integer | 24-bit signed/unsigned | N | none | no cell |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
-| B14 | Key generation | SERIAL shorthand | R | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (1)
 
@@ -1042,13 +1043,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### YugabyteDb
 
-**New test needed: no fidelity cell covers the concept** (3)
+**New test needed: no fidelity cell covers the concept** (1)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A76 | Specialized | spatial raster / other extensions | E | spatial raster / other extensions | no cell (spatial raster / other extensions is not a fidelity cell) |
-| B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
-| B14 | Key generation | SERIAL shorthand | R | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (1)
 
