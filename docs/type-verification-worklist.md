@@ -13,11 +13,11 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 | # | Category | Rows | What closes a row |
 |---|---|---:|---|
-| 1 | New test needed: no fidelity cell covers the concept | 81 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
+| 1 | New test needed: no fidelity cell covers the concept | 78 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
 | 2 | Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column) | 29 | Find the spelling the server accepts and declare it, or record the refusal as by design, server or upstream. |
 | 3 | Version, extension or restriction check: documented V, E or R | 87 | Run the cell against another version or with the extension, or record why one version is enough. |
 | 4 | Classify first: the workbook marks it ? (unverified) | 275 | Decide the workbook status (supported, or unsupported with the reason); then test it if supported. |
-| | **Total** | **472** | |
+| | **Total** | **469** | |
 
 ## By database
 
@@ -36,7 +36,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 | MariaDb | 3 | 1 | 4 | 11 | 19 |
 | MySql | 3 | 2 | 1 | 12 | 18 |
 | Oracle | 6 | 0 | 8 | 13 | 27 |
-| PostgreSql | 8 | 2 | 7 | 5 | 22 |
+| PostgreSql | 5 | 2 | 7 | 5 | 19 |
 | SapHana | 4 | 0 | 2 | 14 | 20 |
 | SingleStore | 2 | 4 | 2 | 14 | 22 |
 | Snowflake | 3 | 2 | 5 | 10 | 20 |
@@ -46,7 +46,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 | SybaseASE | 4 | 1 | 1 | 10 | 16 |
 | TiDb | 3 | 1 | 1 | 12 | 17 |
 | YugabyteDb | 6 | 3 | 4 | 17 | 30 |
-| **All** | 81 | 29 | 87 | 275 | 472 |
+| **All** | 78 | 29 | 87 | 275 | 469 |
 
 ## Known open items (maintained by hand)
 
@@ -65,7 +65,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 ## Verified (closed with evidence)
 
-54 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
+57 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
 substitute because the native type is not available here (the native type is then still untested). They are not counted above.
 
 | Database | ID | Concept | State | Evidence |
@@ -117,6 +117,9 @@ substitute because the native type is not available here (the native type is the
 | FlatFile | B56 | Semi-structured: XML | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
 | FlatFile | B58 | Composite: Array | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
 | FlatFile | B66 | User-defined: Domain / distinct type | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| PostgreSql | B31 | Character: Case-insensitive text | verified | citext (CREATE EXTENSION citext), live: stored as citext, compares without case, keeps the case it was given. PostgreSqlFamilyOddTypeRoundTripTests.Citext_*. |
+| PostgreSql | B59 | Composite: Struct / row / composite | verified | A CREATE TYPE composite column, live: round-trips its row text and its fields are addressable. PostgreSqlFamilyOddTypeRoundTripTests.Composite_*. Written and read as text; there is no CLR composite mapping. |
+| PostgreSql | B70 | Spatial: Built-in 2-D geometric primitives | verified | point, line, lseg, box, path, polygon and circle, live: each stored as its type (pg_typeof) and read back as its text form. PostgreSqlFamilyOddTypeRoundTripTests.GeometricPrimitive_*. |
 | Sqlite | B13 | Key generation: Identity column (declaration, not a type) | covered | AUTOINCREMENT identity: InsertReturningTests.CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders (INSERT ... RETURNING). |
 | Sqlite | B49 | Identifier: Physical row id | substitute only | rowid is a pseudo-column that is always the INTEGER PRIMARY KEY; the cell declares a column labelled ROWID. SqliteDeclaredTypeNameTests.Rowid_IsAPseudoColumn_ThatIsTheIntegerPrimaryKey. |
 | Sqlite | B53 | Semi-structured: JSON (text-preserving) | substitute only | JSON is text with the json_* functions; the cell declares a column labelled JSON. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven. |
@@ -153,16 +156,16 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 |---|---|---|---|
 | B13 | Key generation | Identity column (declaration, not a type) | 18: AuroraMySql, AuroraPostgreSql, CockroachDb, Db2, DuckDB, Firebird, Informix, MariaDb, MySql, Oracle, PostgreSql, SapHana, SingleStore, Snowflake, SqlServer, SybaseASE, TiDb, YugabyteDb |
 | B14 | Key generation | SERIAL shorthand | 9: AuroraMySql, AuroraPostgreSql, CockroachDb, Informix, MariaDb, MySql, PostgreSql, TiDb, YugabyteDb |
-| B59 | Composite | Struct / row / composite | 8: AuroraPostgreSql, Db2, DuckDB, Informix, Oracle, PostgreSql, Snowflake, YugabyteDb |
+| B59 | Composite | Struct / row / composite | 7: AuroraPostgreSql, Db2, DuckDB, Informix, Oracle, Snowflake, YugabyteDb |
 | A74 | Specialized | opaque / special database type | 6: Informix, Oracle, SapHana, Snowflake, SqlServer, SybaseASE |
 | B67 | User-defined | Opaque / CLR / extension base type | 6: AuroraPostgreSql, Db2, Informix, Oracle, PostgreSql, SqlServer |
 | B75 | System | Pseudo / non-column types | 6: AuroraPostgreSql, Db2, Oracle, PostgreSql, SapHana, SqlServer |
 | A76 | Specialized | spatial raster / other extensions | 5: AuroraPostgreSql, CockroachDb, PostgreSql, Spanner, YugabyteDb |
 | A77 | Specialized | cursor / table variable | 5: Db2, Oracle, SapHana, SqlServer, SybaseASE |
 | B05 | Integer | 24-bit signed/unsigned | 5: AuroraMySql, MariaDb, MySql, SingleStore, TiDb |
-| B70 | Spatial | Built-in 2-D geometric primitives | 4: AuroraPostgreSql, CockroachDb, PostgreSql, YugabyteDb |
-| B31 | Character | Case-insensitive text | 3: AuroraPostgreSql, PostgreSql, YugabyteDb |
+| B70 | Spatial | Built-in 2-D geometric primitives | 3: AuroraPostgreSql, CockroachDb, YugabyteDb |
 | B30 | Character | System-name alias | 2: SqlServer, SybaseASE |
+| B31 | Character | Case-insensitive text | 2: AuroraPostgreSql, YugabyteDb |
 | B35 | Binary | Custom BLOB subtypes | 2: Firebird, InterBase |
 | B28 | Character | Double-byte GRAPHIC types | 1: Db2 |
 | B76 | System | Commit timestamp | 1: Spanner |
@@ -696,17 +699,14 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### PostgreSql
 
-**New test needed: no fidelity cell covers the concept** (8)
+**New test needed: no fidelity cell covers the concept** (5)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A76 | Specialized | spatial raster / other extensions | E | spatial raster / other extensions | no cell (spatial raster / other extensions is not a fidelity cell) |
 | B13 | Key generation | Identity column (declaration, not a type) | R | auto-increment integer | no cell (auto-increment integer is not a fidelity cell) |
 | B14 | Key generation | SERIAL shorthand | R | none | no cell |
-| B31 | Character | Case-insensitive text | E | none | no cell |
-| B59 | Composite | Struct / row / composite | N | none | no cell |
 | B67 | User-defined | Opaque / CLR / extension base type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
-| B70 | Spatial | Built-in 2-D geometric primitives | N | none | no cell |
 | B75 | System | Pseudo / non-column types | R | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (2)
