@@ -22,6 +22,9 @@
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
         <PackageReference Include="Npgsql" Version="9.0.3"/>
+        <!-- Native SQLite extensions the SqliteNativeExtensionTypeTests load: SpatiaLite (win-x64 only) and sqlite-vec. -->
+        <PackageReference Include="mod_spatialite" Version="4.3.0.100-rc1" ExcludeAssets="contentFiles;build" />
+        <PackageReference Include="HiraokaHyperTools.sqlite-vec" Version="0.1.9" ExcludeAssets="contentFiles" />
         <PackageReference Include="Testcontainers" Version="4.4.0"/>
         <PackageReference Include="coverlet.collector" Version="6.0.4">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

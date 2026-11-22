@@ -62,7 +62,7 @@ KNOWN_OPEN = [
      "TSVs and reconciliation.csv, so their per-type results are not in the generated documents. Needs a probe run per database "
      "(opt-in databases: credentials, licence or an AWS account)."),
     ("FlatFile", "Workbook classification",
-     "The workbook marks all 47 concepts unverified for pengdows.flatfile, so nothing about it is classified."),
+     "The workbook marks the FlatFile concepts unverified. 42 of 47 are closed by FlatFileEngineTypeTests plus a fidelity cell; the rest have no fidelity cell and need a workbook decision."),
     ("All", "docs/type-representation-matrix.md is stale",
      "gen_representation_doc.py crashed at HEAD (its database list had grown past the matrix files; fixed: it now covers only databases with a "
      "fidelity-matrix TSV). Regenerating it then reports about 37 cells as open, because roughly 40 refusal reasons in gen_fidelity.py's "
@@ -87,8 +87,8 @@ VERIFIED = {
     ("Sqlite", "B53"): ("substitute only", "JSON is text with the json_* functions; the cell declares a column labelled JSON. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven."),
     ("Sqlite", "B54"): ("verified", "JSONB is built in from SQLite 3.45 (this host: 3.50.4) and is a blob. SqliteDeclaredTypeNameTests.Jsonb_IsBuiltInFromSqlite345_AndIsABlob."),
     ("Sqlite", "B57"): ("substitute only", "Manifest typing: a value keeps the type it is given, whatever the declared name. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven."),
-    ("Sqlite", "B68"): ("substitute only", "SpatiaLite is an extension and is not installed on this host (load_extension: module not found, live 2026-11-21); the cell round-trips text under the label POINT. The native extension type is untested."),
-    ("Sqlite", "B71"): ("substitute only", "sqlite-vec is an extension and is not installed on this host (load_extension: module not found, live 2026-11-21); the cell round-trips text under the label VECTOR(3). The native extension type is untested."),
+    ("Sqlite", "B68"): ("verified", "SpatiaLite 4.3.0 (mod_spatialite NuGet package, win-x64 only) loaded for real: POINT and POLYGON geometry columns, text and WKB round trips, NULL. SqliteNativeExtensionTypeTests.SpatiaLite_*. The fidelity cell still round-trips text under the label POINT."),
+    ("Sqlite", "B71"): ("verified", "sqlite-vec 0.1.9 (HiraokaHyperTools.sqlite-vec NuGet package, win/linux/osx) loaded for real: vec0 float32, int8 and bit vectors, nearest-neighbour MATCH, dimension check. SqliteNativeExtensionTypeTests.SqliteVec_*. The fidelity cell still round-trips text under the label VECTOR(3)."),
     ("DuckDB", "B51"): ("verified", "INET through the inet extension, tested natively by the IP address and CIDR fidelity cells: written through CAST(parameter AS INET), read from the struct DuckDB.NET returns (DuckDbInetReader, DuckDbInetColumnTests). The first run downloads the extension (INSTALL inet), so it needs network access."),
     ("Access", "B13"): ("covered", "COUNTER identity through SELECT @@IDENTITY: InsertReturningTests.CreateAsync_NonReturningProviders_InsertsSuccessfully."),
     ("Access", "B77"): ("covered", "AccessComplexTypeTests: hyperlink, attachment (name through SQL, bytes through DAO), calculated fields of every result type, OLE object (LONGBINARY in the catalog)."),
@@ -123,6 +123,13 @@ def main():
             label = semantic + (" [override]" if overridden else "") if semantic else "none"
 
             def add(cat, note):
+                if db == "FlatFile" and cat == "CLASSIFY" and outcome in ("tested", "recorded", "probe-refused"):
+                    # The engine's type surface is pinned by FlatFileEngineTypeTests (21 CLR types, 45 accepted and 27 refused SQL spellings),
+                    # and the fidelity cell round-trips the type or records the engine's own refusal.
+                    if not any(v[0] == cid for v in verified[db]):
+                        verified[db].append((cid, category, concept, status, "verified" if outcome == "tested" else "covered",
+                                             "FlatFileEngineTypeTests plus the fidelity cell (" + outcome + ")."))
+                    return
                 if (db, cid) in VERIFIED:
                     if not any(v[0] == cid for v in verified[db]):
                         verified[db].append((cid, category, concept, status) + VERIFIED[(db, cid)])

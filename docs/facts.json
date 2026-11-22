@@ -129,19 +129,19 @@
     },
     "FlatFile": {
       "net10.0": {
-        "pass": 156,
-        "fail": 0,
+        "pass": 0,
+        "fail": 1,
         "skip": 0,
-        "runUtc": "2026-11-21 02:42Z",
-        "commit": "9e81cc53",
+        "runUtc": "2026-11-22 01:32Z",
+        "commit": "7eb03064",
         "dirtyTree": true
       },
       "net8.0": {
-        "pass": 156,
-        "fail": 0,
+        "pass": 124,
+        "fail": 32,
         "skip": 0,
-        "runUtc": "2026-11-21 02:21Z",
-        "commit": "9e81cc53",
+        "runUtc": "2026-11-22 01:29Z",
+        "commit": "7eb03064",
         "dirtyTree": true
       }
     },
@@ -348,16 +348,16 @@
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-21 22:42Z",
-        "commit": "e751def1",
+        "runUtc": "2026-11-22 01:30Z",
+        "commit": "7eb03064",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-21 22:42Z",
-        "commit": "e751def1",
+        "runUtc": "2026-11-22 01:28Z",
+        "commit": "7eb03064",
         "dirtyTree": true
       }
     },

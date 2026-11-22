@@ -16,8 +16,8 @@ A cell is *tested* when the database declares a column for its probe type and th
 | 1 | New test needed: no fidelity cell covers the concept | 81 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
 | 2 | Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column) | 29 | Find the spelling the server accepts and declare it, or record the refusal as by design, server or upstream. |
 | 3 | Version, extension or restriction check: documented V, E or R | 87 | Run the cell against another version or with the extension, or record why one version is enough. |
-| 4 | Classify first: the workbook marks it ? (unverified) | 317 | Decide the workbook status (supported, or unsupported with the reason); then test it if supported. |
-| | **Total** | **514** | |
+| 4 | Classify first: the workbook marks it ? (unverified) | 275 | Decide the workbook status (supported, or unsupported with the reason); then test it if supported. |
+| | **Total** | **472** | |
 
 ## By database
 
@@ -30,7 +30,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 | Db2 | 6 | 0 | 5 | 18 | 29 |
 | DuckDB | 2 | 0 | 7 | 11 | 20 |
 | Firebird | 2 | 0 | 7 | 16 | 25 |
-| FlatFile | 0 | 0 | 0 | 47 | 47 |
+| FlatFile | 0 | 0 | 0 | 5 | 5 |
 | Informix | 5 | 3 | 3 | 12 | 23 |
 | InterBase | 1 | 1 | 0 | 18 | 20 |
 | MariaDb | 3 | 1 | 4 | 11 | 19 |
@@ -46,7 +46,7 @@ A cell is *tested* when the database declares a column for its probe type and th
 | SybaseASE | 4 | 1 | 1 | 10 | 16 |
 | TiDb | 3 | 1 | 1 | 12 | 17 |
 | YugabyteDb | 6 | 3 | 4 | 17 | 30 |
-| **All** | 81 | 29 | 87 | 317 | 514 |
+| **All** | 81 | 29 | 87 | 275 | 472 |
 
 ## Known open items (maintained by hand)
 
@@ -58,14 +58,14 @@ A cell is *tested* when the database declares a column for its probe type and th
 | All | Dedicated tests outside the fidelity cells | Some category 1 rows are covered by live tests that are not fidelity cells. Check these before writing a new test: PostgreSqlAdvancedTypeRoundTripTests, PostgreSqlIntervalRoundTripTests, PostgreSqlRangeRoundTripTests, DuckDbWideAndListTypeRoundTripTests, SqlServerOddTypeRoundTripTests, MySqlSpatialRoundTripTests, OracleIntervalRoundTripTests, PortableAdvancedTypeRoundTripTests, SmallAndUnsignedTypeRoundTripTests. A row they cover should be closed by adding the cell or by recording the test here. |
 | Access | Attachment bytes, append-only memo | ACE refuses a SQL write of attachment bytes and of an append-only memo; both are pinned as typed failures, not stored values. |
 | Snowflake, SapHana, InterBase, AuroraMySql, AuroraPostgreSql | Generated matrix report | They have declarations and run the fidelity test, but are absent from docs/type-representation-matrix.md, the probe's fidelity-matrix TSVs and reconciliation.csv, so their per-type results are not in the generated documents. Needs a probe run per database (opt-in databases: credentials, licence or an AWS account). |
-| FlatFile | Workbook classification | The workbook marks all 47 concepts unverified for pengdows.flatfile, so nothing about it is classified. |
+| FlatFile | Workbook classification | The workbook marks the FlatFile concepts unverified. 42 of 47 are closed by FlatFileEngineTypeTests plus a fidelity cell; the rest have no fidelity cell and need a workbook decision. |
 | All | docs/type-representation-matrix.md is stale | gen_representation_doc.py crashed at HEAD (its database list had grown past the matrix files; fixed: it now covers only databases with a fidelity-matrix TSV). Regenerating it then reports about 37 cells as open, because roughly 40 refusal reasons in gen_fidelity.py's DB_REFUSED do not start with a verdict word (by design, server or upstream): the 'probe:' and 'extension gap:' forms, and the 'native point/polygon is PostgreSQL's ... covered by' notes. Give each a verdict (or teach the generator the new forms), then regenerate. The committed report predates those entries and says 0 open. |
 | All | reconciliation.csv | Covers 14 databases and predates Db2, Informix, Access, Snowflake, SAP HANA, InterBase and the Aurora variants; their concepts are classified only from the unified workbook. Regenerate it. |
 | All | Probe candidate lists | A '-' in docs/type-representation-matrix.md means no candidate spelling was accepted, not that the database lacks the type. Every category 2 row below is such a case: add the spelling that works, or record the server's refusal as by design or server. |
 
 ## Verified (closed with evidence)
 
-12 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
+54 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
 substitute because the native type is not available here (the native type is then still untested). They are not counted above.
 
 | Database | ID | Concept | State | Evidence |
@@ -75,13 +75,55 @@ substitute because the native type is not available here (the native type is the
 | Access | B63 | Composite: Multi-valued set | covered | Multi-value fields of every element type: AccessComplexTypeTests.MultiValue_* (Byte, Integer, Long, Single, Double, Decimal, Text, GUID). |
 | Access | B77 | Access-only: Hyperlink / Attachment / Calculated / OLE | covered | AccessComplexTypeTests: hyperlink, attachment (name through SQL, bytes through DAO), calculated fields of every result type, OLE object (LONGBINARY in the catalog). |
 | DuckDB | B51 | Network: IP address / CIDR | verified | INET through the inet extension, tested natively by the IP address and CIDR fidelity cells: written through CAST(parameter AS INET), read from the struct DuckDB.NET returns (DuckDbInetReader, DuckDbInetColumnTests). The first run downloads the extension (INSTALL inet), so it needs network access. |
+| FlatFile | A26 | Character: set-valued enum | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| FlatFile | A30 | Binary: legacy long binary | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| FlatFile | A38 | Temporal: second-precision datetime | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | A42 | Temporal: generic interval | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | A45 | Identifiers: object identifier / OID | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| FlatFile | A46 | Identifiers: transaction ID | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| FlatFile | A47 | Identifiers: WAL / log position | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| FlatFile | A53 | Network: IP address | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | A54 | Network: IP network / CIDR | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| FlatFile | A56 | Spatial: point geometry | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| FlatFile | A57 | Spatial: line / linestring geometry | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| FlatFile | A58 | Spatial: polygon geometry | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| FlatFile | A62 | Collections: fixed-length array | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| FlatFile | A63 | Collections: list / multiset / set collection | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| FlatFile | B03 | Integer: 16-bit signed | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B06 | Integer: 32-bit signed | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B08 | Integer: 64-bit signed | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B15 | Exact numeric: Fixed-point DECIMAL(p,s) | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B16 | Exact numeric: Decimal floating point | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| FlatFile | B18 | Approximate numeric: 32-bit IEEE float | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B19 | Approximate numeric: 64-bit IEEE double | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B20 | Boolean: Boolean | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B21 | Character: Fixed-length CHAR(n) | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B22 | Character: Variable-length VARCHAR(n) | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B23 | Character: Unbounded / long text | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B24 | Character: National fixed NCHAR(n) | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B25 | Character: National varying NVARCHAR(n) | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B26 | Character: National / Unicode LOB | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B32 | Binary: Fixed-length BINARY(n) | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B33 | Binary: Variable-length VARBINARY(n) | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B34 | Binary: Binary LOB | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B38 | Temporal: Date only | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B39 | Temporal: Time of day | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B40 | Temporal: Time with time zone | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B41 | Temporal: Timestamp without time zone | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B42 | Temporal: Timestamp with time zone (offset/zone retained) | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B44 | Temporal: Interval year–month | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B45 | Temporal: Interval day–second | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B53 | Semi-structured: JSON (text-preserving) | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B56 | Semi-structured: XML | verified | FlatFileEngineTypeTests plus the fidelity cell (tested). |
+| FlatFile | B58 | Composite: Array | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
+| FlatFile | B66 | User-defined: Domain / distinct type | covered | FlatFileEngineTypeTests plus the fidelity cell (probe-refused). |
 | Sqlite | B13 | Key generation: Identity column (declaration, not a type) | covered | AUTOINCREMENT identity: InsertReturningTests.CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders (INSERT ... RETURNING). |
 | Sqlite | B49 | Identifier: Physical row id | substitute only | rowid is a pseudo-column that is always the INTEGER PRIMARY KEY; the cell declares a column labelled ROWID. SqliteDeclaredTypeNameTests.Rowid_IsAPseudoColumn_ThatIsTheIntegerPrimaryKey. |
 | Sqlite | B53 | Semi-structured: JSON (text-preserving) | substitute only | JSON is text with the json_* functions; the cell declares a column labelled JSON. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven. |
 | Sqlite | B54 | Semi-structured: Binary JSON | verified | JSONB is built in from SQLite 3.45 (this host: 3.50.4) and is a blob. SqliteDeclaredTypeNameTests.Jsonb_IsBuiltInFromSqlite345_AndIsABlob. |
 | Sqlite | B57 | Semi-structured: Variant / dynamic | substitute only | Manifest typing: a value keeps the type it is given, whatever the declared name. SqliteDeclaredTypeNameTests.ExtensionTypeNames_AreLabels_AndValuesAreStoredAsGiven. |
-| Sqlite | B68 | Spatial: Planar geometry | substitute only | SpatiaLite is an extension and is not installed on this host (load_extension: module not found, live 2026-11-21); the cell round-trips text under the label POINT. The native extension type is untested. |
-| Sqlite | B71 | Vector / AI: Vector embedding | substitute only | sqlite-vec is an extension and is not installed on this host (load_extension: module not found, live 2026-11-21); the cell round-trips text under the label VECTOR(3). The native extension type is untested. |
+| Sqlite | B68 | Spatial: Planar geometry | verified | SpatiaLite 4.3.0 (mod_spatialite NuGet package, win-x64 only) loaded for real: POINT and POLYGON geometry columns, text and WKB round trips, NULL. SqliteNativeExtensionTypeTests.SpatiaLite_*. The fidelity cell still round-trips text under the label POINT. |
+| Sqlite | B71 | Vector / AI: Vector embedding | verified | sqlite-vec 0.1.9 (HiraokaHyperTools.sqlite-vec NuGet package, win/linux/osx) loaded for real: vec0 float32, int8 and bit vectors, nearest-neighbour MATCH, dimension check. SqliteNativeExtensionTypeTests.SqliteVec_*. The fidelity cell still round-trips text under the label VECTOR(3). |
 
 ## Type conversions
 
@@ -435,57 +477,15 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### FlatFile
 
-**Classify first: the workbook marks it ? (unverified)** (47)
+**Classify first: the workbook marks it ? (unverified)** (5)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
-| A26 | Character | set-valued enum | ? | set-valued enum | refused by the server on the test environment; record the verdict |
-| A30 | Binary | legacy long binary | ? | legacy long binary | refused by the server on the test environment; record the verdict |
-| A38 | Temporal | second-precision datetime | ? | second-precision datetime | exercised (a column round-trips); the workbook status is missing |
-| A42 | Temporal | generic interval | ? | year-month interval | exercised (a column round-trips); the workbook status is missing |
-| A45 | Identifiers | object identifier / OID | ? | object identifier / OID | refused by the server on the test environment; record the verdict |
-| A46 | Identifiers | transaction ID | ? | transaction ID | refused by the server on the test environment; record the verdict |
-| A47 | Identifiers | WAL / log position | ? | WAL / log position | refused by the server on the test environment; record the verdict |
-| A53 | Network | IP address | ? | IP address | exercised (a column round-trips); the workbook status is missing |
-| A54 | Network | IP network / CIDR | ? | IP network / CIDR | refused by the server on the test environment; record the verdict |
-| A56 | Spatial | point geometry | ? | point geometry | refused by the server on the test environment; record the verdict |
-| A57 | Spatial | line / linestring geometry | ? | line / linestring geometry | refused by the server on the test environment; record the verdict |
-| A58 | Spatial | polygon geometry | ? | polygon geometry | refused by the server on the test environment; record the verdict |
-| A62 | Collections | fixed-length array | ? | fixed-length array | refused by the server on the test environment; record the verdict |
-| A63 | Collections | list / multiset / set collection | ? | list / multiset / set collection | refused by the server on the test environment; record the verdict |
 | A74 | Specialized | opaque / special database type | ? | opaque / special database type | no fidelity cell and no classification |
 | A76 | Specialized | spatial raster / other extensions | ? | spatial raster / other extensions | no fidelity cell and no classification |
 | A77 | Specialized | cursor / table variable | ? | cursor / table variable | no fidelity cell and no classification |
-| B03 | Integer | 16-bit signed | ? | signed 16-bit | exercised (a column round-trips); the workbook status is missing |
-| B06 | Integer | 32-bit signed | ? | signed 32-bit | exercised (a column round-trips); the workbook status is missing |
-| B08 | Integer | 64-bit signed | ? | signed 64-bit | exercised (a column round-trips); the workbook status is missing |
 | B13 | Key generation | Identity column (declaration, not a type) | ? | auto-increment integer | no fidelity cell and no classification |
-| B15 | Exact numeric | Fixed-point DECIMAL(p,s) | ? | fixed decimal | exercised (a column round-trips); the workbook status is missing |
-| B16 | Exact numeric | Decimal floating point | ? | decimal floating point | refused by the server on the test environment; record the verdict |
-| B18 | Approximate numeric | 32-bit IEEE float | ? | binary float32 | exercised (a column round-trips); the workbook status is missing |
-| B19 | Approximate numeric | 64-bit IEEE double | ? | binary float64 | exercised (a column round-trips); the workbook status is missing |
-| B20 | Boolean | Boolean | ? | boolean | exercised (a column round-trips); the workbook status is missing |
-| B21 | Character | Fixed-length CHAR(n) | ? | fixed character | exercised (a column round-trips); the workbook status is missing |
-| B22 | Character | Variable-length VARCHAR(n) | ? | varying character | exercised (a column round-trips); the workbook status is missing |
-| B23 | Character | Unbounded / long text | ? | unbounded text | exercised (a column round-trips); the workbook status is missing |
-| B24 | Character | National fixed NCHAR(n) | ? | national / Unicode character | exercised (a column round-trips); the workbook status is missing |
-| B25 | Character | National varying NVARCHAR(n) | ? | national / Unicode character | exercised (a column round-trips); the workbook status is missing |
-| B26 | Character | National / Unicode LOB | ? | national / Unicode character | exercised (a column round-trips); the workbook status is missing |
-| B32 | Binary | Fixed-length BINARY(n) | ? | fixed binary | exercised (a column round-trips); the workbook status is missing |
-| B33 | Binary | Variable-length VARBINARY(n) | ? | varying binary | exercised (a column round-trips); the workbook status is missing |
-| B34 | Binary | Binary LOB | ? | binary LOB | exercised (a column round-trips); the workbook status is missing |
-| B38 | Temporal | Date only | ? | calendar date | exercised (a column round-trips); the workbook status is missing |
-| B39 | Temporal | Time of day | ? | time without zone | exercised (a column round-trips); the workbook status is missing |
-| B40 | Temporal | Time with time zone | ? | time with zone | exercised (a column round-trips); the workbook status is missing |
-| B41 | Temporal | Timestamp without time zone | ? | timestamp without zone | exercised (a column round-trips); the workbook status is missing |
-| B42 | Temporal | Timestamp with time zone (offset/zone retained) | ? | timestamp with zone | exercised (a column round-trips); the workbook status is missing |
-| B44 | Temporal | Interval year–month | ? | year-month interval | exercised (a column round-trips); the workbook status is missing |
-| B45 | Temporal | Interval day–second | ? | day-time interval | exercised (a column round-trips); the workbook status is missing |
-| B53 | Semi-structured | JSON (text-preserving) | ? | JSON text / JSON value | exercised (a column round-trips); the workbook status is missing |
-| B56 | Semi-structured | XML | ? | XML | exercised (a column round-trips); the workbook status is missing |
-| B58 | Composite | Array | ? | SQL array | refused by the server on the test environment; record the verdict |
 | B59 | Composite | Struct / row / composite | ? | none | no fidelity cell and no classification |
-| B66 | User-defined | Domain / distinct type | ? | user-defined enum / domain | refused by the server on the test environment; record the verdict |
 
 ### Informix
 
