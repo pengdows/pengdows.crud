@@ -13,11 +13,11 @@ A cell is *tested* when the database declares a column for its probe type and th
 
 | # | Category | Rows | What closes a row |
 |---|---|---:|---|
-| 1 | New test needed: no fidelity cell covers the concept | 33 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
+| 1 | New test needed: no fidelity cell covers the concept | 30 | Add a fidelity cell (or a dedicated live test) and declare or refuse it per database. |
 | 2 | Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column) | 27 | Find the spelling the server accepts and declare it, or record the refusal as by design, server or upstream. |
 | 3 | Version, extension or restriction check: documented V, E or R | 87 | Run the cell against another version or with the extension, or record why one version is enough. |
 | 4 | Classify first: the workbook marks it ? (unverified) | 275 | Decide the workbook status (supported, or unsupported with the reason); then test it if supported. |
-| | **Total** | **422** | |
+| | **Total** | **419** | |
 
 ## By database
 
@@ -36,17 +36,17 @@ A cell is *tested* when the database declares a column for its probe type and th
 | MariaDb | 0 | 1 | 4 | 11 | 16 |
 | MySql | 0 | 2 | 1 | 12 | 15 |
 | Oracle | 0 | 0 | 8 | 13 | 21 |
-| PostgreSql | 3 | 2 | 7 | 5 | 17 |
+| PostgreSql | 1 | 2 | 7 | 5 | 15 |
 | SapHana | 3 | 0 | 2 | 14 | 19 |
 | SingleStore | 1 | 4 | 2 | 14 | 21 |
 | Snowflake | 2 | 2 | 5 | 10 | 19 |
-| Spanner | 2 | 2 | 5 | 7 | 16 |
+| Spanner | 1 | 2 | 5 | 7 | 15 |
 | SqlServer | 0 | 0 | 2 | 10 | 12 |
 | Sqlite | 0 | 0 | 0 | 17 | 17 |
 | SybaseASE | 0 | 1 | 1 | 10 | 12 |
 | TiDb | 0 | 1 | 1 | 12 | 14 |
 | YugabyteDb | 1 | 1 | 4 | 17 | 23 |
-| **All** | 33 | 27 | 87 | 275 | 422 |
+| **All** | 30 | 27 | 87 | 275 | 419 |
 
 ## Known open items (maintained by hand)
 
@@ -59,13 +59,14 @@ A cell is *tested* when the database declares a column for its probe type and th
 | Access | Attachment bytes, append-only memo | ACE refuses a SQL write of attachment bytes and of an append-only memo; both are pinned as typed failures, not stored values. |
 | Snowflake, SapHana, InterBase, AuroraMySql, AuroraPostgreSql | Generated matrix report | They have declarations and run the fidelity test, but are absent from docs/type-representation-matrix.md, the probe's fidelity-matrix TSVs and reconciliation.csv, so their per-type results are not in the generated documents. Needs a probe run per database (opt-in databases: credentials, licence or an AWS account). |
 | FlatFile | Workbook classification | The workbook marks the FlatFile concepts unverified. 42 of 47 are closed by FlatFileEngineTypeTests plus a fidelity cell; the rest have no fidelity cell and need a workbook decision. |
+| All | Tests written, not yet run | Written for the remaining category 1 rows but never run, because they need a Linux host or an opt-in service: Db2SpecialTypeTests (B28, B59, B67, B75, A77), InformixSpecialTypeTests (A74, B59, B67), SapHanaAndSnowflakeSpecialTypeTests (SapHana A74, A77, B75; Snowflake A74, B59), PostGisRasterTests (A76, needs the postgis/postgis:17-3.5 image), and the AuroraPostgreSql, AuroraMySql and SingleStore cases that PostgreSqlFamilyOddTypeRoundTripTests, SerialShorthandTests and MySqlFamilyMediumIntTests now include. Their rows stay open until a run records a result; expect to fix SQL syntax on first run. |
 | All | docs/type-representation-matrix.md is stale | gen_representation_doc.py crashed at HEAD (its database list had grown past the matrix files; fixed: it now covers only databases with a fidelity-matrix TSV). Regenerating it then reports about 37 cells as open, because roughly 40 refusal reasons in gen_fidelity.py's DB_REFUSED do not start with a verdict word (by design, server or upstream): the 'probe:' and 'extension gap:' forms, and the 'native point/polygon is PostgreSQL's ... covered by' notes. Give each a verdict (or teach the generator the new forms), then regenerate. The committed report predates those entries and says 0 open. |
 | All | reconciliation.csv | Covers 14 databases and predates Db2, Informix, Access, Snowflake, SAP HANA, InterBase and the Aurora variants; their concepts are classified only from the unified workbook. Regenerate it. |
 | All | Probe candidate lists | A '-' in docs/type-representation-matrix.md means no candidate spelling was accepted, not that the database lacks the type. Every category 2 row below is such a case: add the spelling that works, or record the server's refusal as by design or server. |
 
 ## Verified (closed with evidence)
 
-104 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
+107 rows that would be work are closed: a dedicated test covers them, they were checked live on the test host, or the cell tests a
 substitute because the native type is not available here (the native type is then still untested). They are not counted above.
 
 | Database | ID | Concept | State | Evidence |
@@ -143,10 +144,13 @@ substitute because the native type is not available here (the native type is the
 | PostgreSql | B14 | Key generation: SERIAL shorthand | verified | SERIAL as the column spelling, live: the server fills the id and the gateway reads it back; ids are distinct (and consecutive except on CockroachDB, whose unique_rowid() is not). SerialShorthandTests. |
 | PostgreSql | B31 | Character: Case-insensitive text | verified | citext (CREATE EXTENSION citext), live: stored as citext, compares without case, keeps the case it was given. PostgreSqlFamilyOddTypeRoundTripTests.Citext_*. |
 | PostgreSql | B59 | Composite: Struct / row / composite | verified | A CREATE TYPE composite column, live: round-trips its row text and its fields are addressable. PostgreSqlFamilyOddTypeRoundTripTests.Composite_*. Written and read as text; there is no CLR composite mapping. |
+| PostgreSql | B67 | User-defined: Opaque / CLR / extension base type | covered | Extension base types: hstore, citext and pgvector are created with CREATE EXTENSION and round-trip. PostgreSqlHStoreMacAddrRoundTripTests, PostgreSqlFamilyOddTypeRoundTripTests.Citext_*, PgvectorRoundTripTests. |
 | PostgreSql | B70 | Spatial: Built-in 2-D geometric primitives | verified | point, line, lseg, box, path, polygon and circle, live: each stored as its type (pg_typeof) and read back as its text form. PostgreSqlFamilyOddTypeRoundTripTests.GeometricPrimitive_*. |
+| PostgreSql | B75 | System: Pseudo / non-column types | verified | Pseudo-types (anyelement, record, void, cstring) are refused as column types, live; record works as a result shape. PostgreSqlFamilyOddTypeRoundTripTests.PseudoType_*, Record_*. |
 | SapHana | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | SingleStore | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
 | Snowflake | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
+| Spanner | B76 | System: Commit timestamp | verified | SPANNER.COMMIT_TIMESTAMP, live on the pgadapter and emulator: SPANNER.PENDING_COMMIT_TIMESTAMP() fills the commit time, two commits increase, a future value is refused. SpannerCommitTimestampTests. |
 | SqlServer | A74 | Specialized: opaque / special database type | verified | sql_variant, live: each value keeps its base type (int, nvarchar, decimal) and NULL reads as NULL. SqlServerAndOracleSpecialTypeTests.SqlServer_SqlVariant_*. |
 | SqlServer | A77 | Specialized: cursor / table variable | verified | Table variable and cursor variable, live, in a batch. SqlServerAndOracleSpecialTypeTests.SqlServer_TableVariableAndCursorVariable_*. |
 | SqlServer | B13 | Key generation: Identity column (declaration, not a type) | covered | The database's own generated-key declaration (IDENTITY, AUTO_INCREMENT, sequence default or generator, per its DDL in InsertReturningTests): InsertReturningTests creates rows without an id and reads the generated id back into the entity. |
@@ -203,17 +207,16 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 |---|---|---|---|
 | A76 | Specialized | spatial raster / other extensions | 5: AuroraPostgreSql, CockroachDb, PostgreSql, Spanner, YugabyteDb |
 | B59 | Composite | Struct / row / composite | 5: AuroraPostgreSql, Db2, DuckDB, Informix, Snowflake |
-| B67 | User-defined | Opaque / CLR / extension base type | 4: AuroraPostgreSql, Db2, Informix, PostgreSql |
-| B75 | System | Pseudo / non-column types | 4: AuroraPostgreSql, Db2, PostgreSql, SapHana |
 | A74 | Specialized | opaque / special database type | 3: Informix, SapHana, Snowflake |
 | B14 | Key generation | SERIAL shorthand | 3: AuroraMySql, AuroraPostgreSql, Informix |
+| B67 | User-defined | Opaque / CLR / extension base type | 3: AuroraPostgreSql, Db2, Informix |
+| B75 | System | Pseudo / non-column types | 3: AuroraPostgreSql, Db2, SapHana |
 | A77 | Specialized | cursor / table variable | 2: Db2, SapHana |
 | B05 | Integer | 24-bit signed/unsigned | 2: AuroraMySql, SingleStore |
 | B28 | Character | Double-byte GRAPHIC types | 1: Db2 |
 | B31 | Character | Case-insensitive text | 1: AuroraPostgreSql |
 | B35 | Binary | Custom BLOB subtypes | 1: InterBase |
 | B70 | Spatial | Built-in 2-D geometric primitives | 1: AuroraPostgreSql |
-| B76 | System | Commit timestamp | 1: Spanner |
 
 ### Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)
 
@@ -702,13 +705,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### PostgreSql
 
-**New test needed: no fidelity cell covers the concept** (3)
+**New test needed: no fidelity cell covers the concept** (1)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A76 | Specialized | spatial raster / other extensions | E | spatial raster / other extensions | no cell (spatial raster / other extensions is not a fidelity cell) |
-| B67 | User-defined | Opaque / CLR / extension base type | N | opaque / special database type | no cell (opaque / special database type is not a fidelity cell) |
-| B75 | System | Pseudo / non-column types | R | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (2)
 
@@ -861,12 +862,11 @@ Categories 1 and 2 only (a type nothing tests, or whose spelling is unknown), gr
 
 ### Spanner
 
-**New test needed: no fidelity cell covers the concept** (2)
+**New test needed: no fidelity cell covers the concept** (1)
 
 | ID | Category | Concept | Doc | Probe type | Note |
 |---|---|---|:--:|---|---|
 | A76 | Specialized | spatial raster / other extensions | E | spatial raster / other extensions | no cell (spatial raster / other extensions is not a fidelity cell) |
-| B76 | System | Commit timestamp | R | none | no cell |
 
 **Spelling check: documented native or alias, but the probe found no accepted spelling (or only a wider column)** (2)
 

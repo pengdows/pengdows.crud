@@ -63,6 +63,11 @@ KNOWN_OPEN = [
      "(opt-in databases: credentials, licence or an AWS account)."),
     ("FlatFile", "Workbook classification",
      "The workbook marks the FlatFile concepts unverified. 42 of 47 are closed by FlatFileEngineTypeTests plus a fidelity cell; the rest have no fidelity cell and need a workbook decision."),
+    ("All", "Tests written, not yet run",
+     "Written for the remaining category 1 rows but never run, because they need a Linux host or an opt-in service: Db2SpecialTypeTests (B28, B59, B67, B75, A77), "
+     "InformixSpecialTypeTests (A74, B59, B67), SapHanaAndSnowflakeSpecialTypeTests (SapHana A74, A77, B75; Snowflake A74, B59), PostGisRasterTests (A76, needs the "
+     "postgis/postgis:17-3.5 image), and the AuroraPostgreSql, AuroraMySql and SingleStore cases that PostgreSqlFamilyOddTypeRoundTripTests, SerialShorthandTests and "
+     "MySqlFamilyMediumIntTests now include. Their rows stay open until a run records a result; expect to fix SQL syntax on first run."),
     ("All", "docs/type-representation-matrix.md is stale",
      "gen_representation_doc.py crashed at HEAD (its database list had grown past the matrix files; fixed: it now covers only databases with a "
      "fidelity-matrix TSV). Regenerating it then reports about 37 cells as open, because roughly 40 refusal reasons in gen_fidelity.py's "
@@ -140,6 +145,9 @@ VERIFIED = {
     ("SybaseASE", "A74"): ("verified", "timestamp, live: an 8-byte value the server generates and changes on UPDATE. SybaseAndFirebirdSpecialTypeTests.Sybase_Timestamp_*."),
     ("SybaseASE", "A77"): ("verified", "A cursor, live, inside a stored procedure (ASE requires DECLARE CURSOR to be the only statement of a batch). There is no table variable: a #temp table is the alias. SybaseAndFirebirdSpecialTypeTests.Sybase_CursorInsideAProcedure_*."),
     ("Firebird", "B35"): ("verified", "BLOB SUB_TYPE 0 (binary), TEXT and a user-defined negative subtype, live: values round-trip and the subtype is recorded on the column's domain. SybaseAndFirebirdSpecialTypeTests.Firebird_BlobSubtypes_*."),
+    ("PostgreSql", "B75"): ("verified", "Pseudo-types (anyelement, record, void, cstring) are refused as column types, live; record works as a result shape. PostgreSqlFamilyOddTypeRoundTripTests.PseudoType_*, Record_*."),
+    ("PostgreSql", "B67"): ("covered", "Extension base types: hstore, citext and pgvector are created with CREATE EXTENSION and round-trip. PostgreSqlHStoreMacAddrRoundTripTests, PostgreSqlFamilyOddTypeRoundTripTests.Citext_*, PgvectorRoundTripTests."),
+    ("Spanner", "B76"): ("verified", "SPANNER.COMMIT_TIMESTAMP, live on the pgadapter and emulator: SPANNER.PENDING_COMMIT_TIMESTAMP() fills the commit time, two commits increase, a future value is refused. SpannerCommitTimestampTests."),
     ("Access", "B13"): ("covered", "COUNTER identity through SELECT @@IDENTITY: InsertReturningTests.CreateAsync_NonReturningProviders_InsertsSuccessfully."),
     ("Access", "B77"): ("covered", "AccessComplexTypeTests: hyperlink, attachment (name through SQL, bytes through DAO), calculated fields of every result type, OLE object (LONGBINARY in the catalog)."),
     ("Access", "B08"): ("verified", "Large Number needs a current ACE build (16.0.5320 refused it, this host accepts it): AccessComplexTypeTests.NativeLargeNumber_CanBeCreatedWithTheInstalledAceProvider, and the catalog's BIGINT full-range entry."),

@@ -20,7 +20,7 @@ public sealed class PostgreSqlFamilyOddTypeRoundTripTests : DatabaseTestBase
     }
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders() =>
-        base.GetSupportedProviders().Where(p => p is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb or SupportedDatabase.CockroachDb).ToArray();
+        base.GetSupportedProviders().Where(p => p is SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql or SupportedDatabase.YugabyteDb or SupportedDatabase.CockroachDb).ToArray();
 
     private static async Task Exec(IDatabaseContext context, string sql)
     {
@@ -180,6 +180,36 @@ public sealed class PostgreSqlFamilyOddTypeRoundTripTests : DatabaseTestBase
 
             await Exec(context, "DROP TABLE pg_domain_doc");
             await Exec(context, "DROP DOMAIN pg_percent_d");
+        });
+    }
+
+    [SkippableTheory]
+    [InlineData("anyelement")]
+    [InlineData("record")]
+    [InlineData("void")]
+    [InlineData("cstring")]
+    public async Task PseudoType_IsRefusedAsAColumnType(string type)
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // B75: a pseudo-type describes a function argument or result, never stored data. CockroachDB has no such types and
+            // refuses the name; the PostgreSQL family refuses the column.
+            await Assert.ThrowsAnyAsync<Exception>(() => Exec(context, $"CREATE TABLE pg_pseudo_doc (c {type})"));
+        });
+    }
+
+    [SkippableFact]
+    public async Task Record_IsAUsableResultShape_ButNotAColumn()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (provider == SupportedDatabase.CockroachDb)
+            {
+                return; // CockroachDB has no record pseudo-type
+            }
+
+            await using var row = context.CreateSqlContainer("SELECT (ROW(1, 'a')).f1");
+            Assert.Equal(1, await row.ExecuteScalarRequiredAsync<int>());
         });
     }
 }
