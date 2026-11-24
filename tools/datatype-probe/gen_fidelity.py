@@ -269,6 +269,8 @@ DB_PREFER = {
     ("Oracle", "fixed-length array"): ("probe_varray", "Array"),
     # Oracle's nested table (CREATE TYPE ... AS TABLE OF) is its list / multiset collection (prerequisites.json creates it).
     ("Oracle", "list / multiset / set collection"): ("probe_nested", "Array"),
+    # SAP ASE has no BOOLEAN: its BIT is the boolean type (the harness gives the BIT column a NOT NULL default for its table).
+    ("SybaseASE", "boolean"): ("BIT", "bit"),
     ("YugabyteDb", "user-defined enum / domain"): ("probe_domain", "probe_domain"),
     # DuckDB has no VECTOR type; its vector is a fixed-size FLOAT array (live, DuckDB 2.0.1: FLOAT[3] is accepted).
     ("DuckDB", "vector embedding"): ("FLOAT[3]", "Array"),

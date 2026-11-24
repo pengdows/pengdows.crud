@@ -664,6 +664,7 @@ internal static class TypeFidelityDeclarations
                 ["binary float32"] = ("REAL", "real"),
                 ["binary float64"] = ("DOUBLE PRECISION", "float"),
                 ["fixed decimal"] = ("DECIMAL(18,4)", "decimal"),
+                ["boolean"] = ("BIT", "bit"),
                 ["varying character"] = ("VARCHAR(100)", "varchar"),
                 ["unbounded text"] = ("TEXT", "text"),
                 ["UUID / GUID"] = ("BINARY(16)", "binary"),
@@ -1462,7 +1463,6 @@ internal static class TypeFidelityDeclarations
             },
             [SupportedDatabase.SybaseASE] = new Dictionary<string, string>
             {
-                ["boolean"] = "refused: Can't find type 'BOOLEAN'.",
                 ["bit / bitstring"] = "refused: Can't specify a length, scale or storage property on type 'bit'.",
                 ["day-time interval"] = "refused: Incorrect syntax near 'DAY'.",
                 ["timestamp with zone"] = "refused: Incorrect syntax near the keyword 'WITH'.",

@@ -469,3 +469,10 @@ class OracleNestedTableTests(unittest.TestCase):
         prereqs = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prerequisites.json"), encoding="utf-8"))
         self.assertEqual("probe_nested", prereqs["Oracle"][sem]["decl"])
 
+
+class SybaseAseBitBooleanTests(unittest.TestCase):
+    # SAP ASE has no BOOLEAN; its BIT is the boolean type. The cell creates its BIT column under a NOT NULL default, which the
+    # fidelity harness sets for that table only and restores after it (the testbed's nullable default refuses every BIT column).
+    def test_sybase_ase_declares_bit_as_boolean(self):
+        self.assertEqual("BIT", g.DB_PREFER[("SybaseASE", "boolean")][0])
+
