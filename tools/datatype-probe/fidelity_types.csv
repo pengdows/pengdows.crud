@@ -790,7 +790,7 @@ enumeration,enumeration,string,String,MariaDb,declared,"ENUM('active','inactive'
 enumeration,enumeration,string,String,MySql,declared,"ENUM('active','inactive')",ENUM,
 enumeration,enumeration,string,String,Sqlite,declared,ENUM,ENUM,
 enumeration,enumeration,string,String,DuckDB,declared,VARCHAR(20),VARCHAR,
-enumeration,enumeration,string,String,YugabyteDb,unsupported,,,"42704: type ""enum"" does not exist POSITION: 56"
+enumeration,enumeration,string,String,YugabyteDb,declared,probe_enum,probe_enum,
 enumeration,enumeration,string,String,TiDb,declared,"ENUM('active','inactive')",ENUM,
 enumeration,enumeration,string,String,SingleStore,declared,"ENUM('active','inactive')",ENUM,
 enumeration,enumeration,string,String,SybaseASE,unsupported,,,Incorrect syntax near '('.
@@ -1295,7 +1295,7 @@ point geometry,point,Geometry,Object,CockroachDb,declared,"GEOMETRY(POINT,4326)"
 point geometry,point,Geometry,Object,MariaDb,declared,POINT,GEOMETRY,
 point geometry,point,Geometry,Object,MySql,declared,POINT,GEOMETRY,
 point geometry,point,Geometry,Object,Sqlite,declared,POINT,POINT,
-point geometry,point,Geometry,Object,DuckDB,unsupported,,,"Catalog Error: Type with name POINT does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr276 (id INTEGER NOT NULL PRIMARY KEY, c POINT)"
+point geometry,point,Geometry,Object,DuckDB,declared,GEOMETRY,GEOMETRY,
 point geometry,point,Geometry,Object,YugabyteDb,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 point geometry,point,Geometry,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 60 near ""POINT)"""
 point geometry,point,Geometry,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'POINT)' at line 1
@@ -1318,7 +1318,7 @@ line / linestring geometry,linestring,Geometry,Object,CockroachDb,declared,GEOME
 line / linestring geometry,linestring,Geometry,Object,MariaDb,declared,LINESTRING,GEOMETRY,
 line / linestring geometry,linestring,Geometry,Object,MySql,declared,LINESTRING,GEOMETRY,
 line / linestring geometry,linestring,Geometry,Object,Sqlite,declared,LINESTRING,LINESTRING,
-line / linestring geometry,linestring,Geometry,Object,DuckDB,unsupported,,,"Catalog Error: Type with name LINESTRING does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr285 (id INTEGER NOT NULL PRIMARY KEY, c LINESTRING)"
+line / linestring geometry,linestring,Geometry,Object,DuckDB,declared,GEOMETRY,GEOMETRY,
 line / linestring geometry,linestring,Geometry,Object,YugabyteDb,unsupported,,,"42704: type ""linestring"" does not exist POSITION: 56"
 line / linestring geometry,linestring,Geometry,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 65 near ""LINESTRING)"""
 line / linestring geometry,linestring,Geometry,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'LINESTRING)' at line 1
@@ -1341,7 +1341,7 @@ polygon geometry,polygon,Geometry,Object,CockroachDb,declared,GEOMETRY(POLYGON),
 polygon geometry,polygon,Geometry,Object,MariaDb,declared,POLYGON,GEOMETRY,
 polygon geometry,polygon,Geometry,Object,MySql,declared,POLYGON,GEOMETRY,
 polygon geometry,polygon,Geometry,Object,Sqlite,declared,POLYGON,POLYGON,
-polygon geometry,polygon,Geometry,Object,DuckDB,unsupported,,,"Catalog Error: Type with name POLYGON does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr291 (id INTEGER NOT NULL PRIMARY KEY, c POLYGON)"
+polygon geometry,polygon,Geometry,Object,DuckDB,declared,GEOMETRY,GEOMETRY,
 polygon geometry,polygon,Geometry,Object,YugabyteDb,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 polygon geometry,polygon,Geometry,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near ""POLYGON)"""
 polygon geometry,polygon,Geometry,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'POLYGON)' at line 1
@@ -1364,7 +1364,7 @@ general geometry,geometry,Geometry,Object,CockroachDb,declared,GEOMETRY,geometry
 general geometry,geometry,Geometry,Object,MariaDb,declared,GEOMETRY,GEOMETRY,
 general geometry,geometry,Geometry,Object,MySql,declared,GEOMETRY,GEOMETRY,
 general geometry,geometry,Geometry,Object,Sqlite,declared,GEOMETRY,GEOMETRY,
-general geometry,geometry,Geometry,Object,DuckDB,unsupported,,,Unrecognised type 40 (40) for column c
+general geometry,geometry,Geometry,Object,DuckDB,declared,GEOMETRY,GEOMETRY,
 general geometry,geometry,Geometry,Object,YugabyteDb,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 general geometry,geometry,Geometry,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 63 near ""GEOMETRY)"""
 general geometry,geometry,Geometry,Object,SingleStore,unsupported,,,Feature 'GEOMETRY types (try GEOGRAPHY or GEOGRAPHYPOINT)' is not supported by SingleStore.
@@ -1404,7 +1404,7 @@ geography / geodetic,geography,Geography,Object,AuroraPostgreSql,declared,"geogr
 geography / geodetic,geography,Geography,Object,Snowflake,declared,GEOGRAPHY,TEXT,
 fixed-length array,fixed_array,int[],Object,PostgreSql,declared,INTEGER ARRAY[10],integer[],
 fixed-length array,fixed_array,int[],Object,SqlServer,unsupported,,,Incorrect syntax near 'ARRAY'.
-fixed-length array,fixed_array,int[],Object,Oracle,unsupported,,,ORA-03099: unexpected item ARRAY in a column definition https://docs.oracle.com/error-help/db/ora-03099/
+fixed-length array,fixed_array,int[],Object,Oracle,declared,probe_varray,Array,
 fixed-length array,fixed_array,int[],Object,Firebird,declared,INTEGER[10],ARRAY,
 fixed-length array,fixed_array,int[],Object,CockroachDb,declared,INTEGER ARRAY[10],bigint[],
 fixed-length array,fixed_array,int[],Object,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '[10])' at line 1
@@ -1427,7 +1427,7 @@ fixed-length array,fixed_array,int[],Object,AuroraPostgreSql,declared,INTEGER AR
 fixed-length array,fixed_array,int[],Object,Snowflake,unsupported,,,"Error: SQL compilation error: syntax error line 1 at position 63 unexpected 'ARRAY'. syntax error line 1 at position 68 unexpected '['. SqlState: 42000, VendorCode: 1003, QueryId: 01c85348-02"
 list / multiset / set collection,list_collection,int[],Object,PostgreSql,unsupported,,,"42601: syntax error at or near ""MULTISET"" POSITION: 64"
 list / multiset / set collection,list_collection,int[],Object,SqlServer,unsupported,,,Incorrect syntax near 'MULTISET'.
-list / multiset / set collection,list_collection,int[],Object,Oracle,unsupported,,,ORA-03099: unexpected item MULTISET in a column definition https://docs.oracle.com/error-help/db/ora-03099/
+list / multiset / set collection,list_collection,int[],Object,Oracle,declared,probe_nested,Array,
 list / multiset / set collection,list_collection,int[],Object,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 64 MULTISET"
 list / multiset / set collection,list_collection,int[],Object,CockroachDb,unsupported,,,"42601: at or near ""multiset"": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
 list / multiset / set collection,list_collection,int[],Object,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near ')' at line 1
@@ -1526,7 +1526,7 @@ user-defined enum / domain,domain,string,String,MariaDb,unsupported,,,Unknown da
 user-defined enum / domain,domain,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
 user-defined enum / domain,domain,string,String,Sqlite,declared,ENUM,ENUM,
 user-defined enum / domain,domain,string,String,DuckDB,declared,probe_domain,VARCHAR,
-user-defined enum / domain,domain,string,String,YugabyteDb,unsupported,,,"42601: syntax error at or near ""CREATE"" POSITION: 56"
+user-defined enum / domain,domain,string,String,YugabyteDb,declared,probe_domain,probe_domain,
 user-defined enum / domain,domain,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 61 near ""CREATE TYPE)"""
 user-defined enum / domain,domain,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
 user-defined enum / domain,domain,string,String,SybaseASE,unsupported,,,The definition for column 'c' must include a datatype.
@@ -1609,6 +1609,29 @@ native polygon,native_polygon,PostgreSqlPolygon,Object,SapHana,unsupported,,,"sq
 native polygon,native_polygon,PostgreSqlPolygon,Object,AuroraMySql,unsupported,,,no candidate was tried
 native polygon,native_polygon,PostgreSqlPolygon,Object,AuroraPostgreSql,declared,POLYGON,polygon,
 native polygon,native_polygon,PostgreSqlPolygon,Object,Snowflake,unsupported,,,"Error: SQL compilation error: Unsupported data type 'POLYGON'. SqlState: 42601, VendorCode: 2040, QueryId: 01c85348-0209-c364-0012-e67e00013b3e"
+native line,native_line,PostgreSqlLine,Object,PostgreSql,declared,LINE,line,
+native line,native_line,PostgreSqlLine,Object,SqlServer,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,Oracle,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,Firebird,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,CockroachDb,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,MariaDb,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,MySql,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,Sqlite,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,DuckDB,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,YugabyteDb,declared,LINE,line,
+native line,native_line,PostgreSqlLine,Object,TiDb,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,SingleStore,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,SybaseASE,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,Spanner,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,FlatFile,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,Access,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,Db2,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,Informix,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,InterBase,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,SapHana,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,AuroraMySql,unsupported,,,no candidate was tried
+native line,native_line,PostgreSqlLine,Object,AuroraPostgreSql,declared,LINE,line,
+native line,native_line,PostgreSqlLine,Object,Snowflake,unsupported,,,no candidate was tried
 32-bit transaction ID,xid32,uint,UInt32,PostgreSql,declared,XID,xid,
 32-bit transaction ID,xid32,uint,UInt32,SqlServer,declared,BIGINT,bigint,
 32-bit transaction ID,xid32,uint,UInt32,Oracle,declared,"NUMERIC(10,0)",Int64,

@@ -51,6 +51,20 @@
         "DROP TYPE probe_varray",
         "CREATE OR REPLACE TYPE probe_varray AS VARRAY(10) OF NUMBER(10)"
       ]
+    },
+    "fixed-length array": {
+      "decl": "probe_varray",
+      "ddl": [
+        "DROP TYPE probe_varray",
+        "CREATE OR REPLACE TYPE probe_varray AS VARRAY(10) OF NUMBER(10)"
+      ]
+    },
+    "list / multiset / set collection": {
+      "decl": "probe_nested",
+      "ddl": [
+        "DROP TYPE probe_nested",
+        "CREATE OR REPLACE TYPE probe_nested AS TABLE OF NUMBER(10)"
+      ]
     }
   },
   "Firebird": {
@@ -126,6 +140,50 @@
       "ddl": [
         "INSTALL inet",
         "LOAD inet"
+      ]
+    },
+    "point geometry": {
+      "decl": "GEOMETRY",
+      "ddl": [
+        "INSTALL spatial",
+        "LOAD spatial"
+      ]
+    },
+    "line / linestring geometry": {
+      "decl": "GEOMETRY",
+      "ddl": [
+        "INSTALL spatial",
+        "LOAD spatial"
+      ]
+    },
+    "polygon geometry": {
+      "decl": "GEOMETRY",
+      "ddl": [
+        "INSTALL spatial",
+        "LOAD spatial"
+      ]
+    },
+    "general geometry": {
+      "decl": "GEOMETRY",
+      "ddl": [
+        "INSTALL spatial",
+        "LOAD spatial"
+      ]
+    }
+  },
+  "YugabyteDb": {
+    "enumeration": {
+      "decl": "probe_enum",
+      "ddl": [
+        "DROP TYPE IF EXISTS probe_enum CASCADE",
+        "CREATE TYPE probe_enum AS ENUM ('active','inactive')"
+      ]
+    },
+    "user-defined enum / domain": {
+      "decl": "probe_domain",
+      "ddl": [
+        "DROP DOMAIN IF EXISTS probe_domain CASCADE",
+        "CREATE DOMAIN probe_domain AS VARCHAR(100)"
       ]
     }
   }

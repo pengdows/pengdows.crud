@@ -262,9 +262,17 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
             await DropTableIfExistsAsync(context, TableName);
             // A Db2 LBAC table names its policy at table level: the security-label cell's table takes POL.
             var suffix = context.Dialect.DatabaseType == SupportedDatabase.Db2 && column == "security_label" ? " SECURITY POLICY POL" : string.Empty;
+            // An Oracle nested table column stores its rows in a table of their own, named in a NESTED TABLE clause, and takes
+            // no NOT NULL constraint (ORA-02331).
+            var nestedTable = context.Dialect.DatabaseType == SupportedDatabase.Oracle && declaration.Equals("probe_nested", StringComparison.OrdinalIgnoreCase);
+            if (nestedTable)
+            {
+                suffix = $" NESTED TABLE {context.WrapObjectName(column)} STORE AS {TableName}_nt";
+            }
+            var notNull = nestedTable ? string.Empty : " NOT NULL";
             await using (var create = context.CreateSqlContainer(
                              CreateTableSql(context, $"{context.WrapObjectName("id")} INTEGER NOT NULL PRIMARY KEY, " +
-                                                    $"{context.WrapObjectName(column)} {declaration} NOT NULL", suffix)))
+                                                    $"{context.WrapObjectName(column)} {declaration}{notNull}", suffix)))
             {
                 await create.ExecuteNonQueryAsync();
             }

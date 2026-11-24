@@ -60,16 +60,16 @@
         "pass": 187,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:06Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 20:00Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 187,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:43Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:01Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -78,16 +78,16 @@
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:59Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:55Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:36Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 18:55Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -96,16 +96,16 @@
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:09Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 20:03Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:47Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:04Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -114,16 +114,16 @@
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:01Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:57Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:38Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 18:58Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -132,16 +132,16 @@
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:15Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 20:08Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:53Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:10Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -150,16 +150,16 @@
         "pass": 158,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:12Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 20:05Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 158,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:49Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:06Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -168,16 +168,16 @@
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:15Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 20:08Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:52Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:09Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -186,16 +186,16 @@
         "pass": 169,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:10Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 20:03Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 169,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:47Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:04Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -204,16 +204,16 @@
         "pass": 169,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:10Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 20:03Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 169,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:47Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:04Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -222,16 +222,16 @@
         "pass": 159,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:07Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 20:01Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 159,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:44Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:02Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -240,16 +240,16 @@
         "pass": 191,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:11Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 20:04Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 191,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:48Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:05Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -276,17 +276,17 @@
         "pass": 169,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:08Z",
-        "commit": "fc4a1a01",
-        "dirtyTree": true
+        "runUtc": "2026-11-24 12:25Z",
+        "commit": "0c482bca",
+        "dirtyTree": false
       },
       "net8.0": {
         "pass": 169,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:45Z",
-        "commit": "fc4a1a01",
-        "dirtyTree": true
+        "runUtc": "2026-11-24 11:59Z",
+        "commit": "0c482bca",
+        "dirtyTree": false
       }
     },
     "Snowflake": {
@@ -309,19 +309,19 @@
     },
     "Spanner": {
       "net10.0": {
-        "pass": 156,
-        "fail": 1,
+        "pass": 157,
+        "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:19Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:52Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 18:10Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 18:53Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -330,16 +330,16 @@
         "pass": 161,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:05Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:59Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 161,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:42Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 18:59Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -348,16 +348,16 @@
         "pass": 158,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:11Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 20:04Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 158,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:48Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:05Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -366,16 +366,16 @@
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:07Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 20:00Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 157,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:44Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:01Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -384,16 +384,16 @@
         "pass": 169,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:12Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 20:05Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       },
       "net8.0": {
         "pass": 169,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:49Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 19:06Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     },
@@ -402,16 +402,16 @@
         "pass": 191,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 17:03Z",
-        "commit": "fc4a1a01",
-        "dirtyTree": true
+        "runUtc": "2026-11-24 12:18Z",
+        "commit": "0c482bca",
+        "dirtyTree": false
       },
       "net8.0": {
-        "pass": 191,
+        "pass": 1,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-11-23 16:41Z",
-        "commit": "fc4a1a01",
+        "runUtc": "2026-11-24 17:07Z",
+        "commit": "0c482bca",
         "dirtyTree": true
       }
     }

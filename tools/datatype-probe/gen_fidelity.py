@@ -96,6 +96,7 @@ SPEC = [
     ("full_text", "full-text search vector / query", "string", "String", "\"'fat' & 'rat'\"", "eq"),
     ("native_point", "native point", "PostgreSqlPoint", "Object", "new PostgreSqlPoint(1, 2)", "eq"),
     ("native_polygon", "native polygon", "PostgreSqlPolygon", "Object", "PostgreSqlPolygon.Parse(\"((0,0),(1,0),(1,1),(0,0))\")", "eq"),
+    ("native_line", "native line", "PostgreSqlLine", "Object", "PostgreSqlLine.Parse(\"{1,-2,3}\")", "eq"),
     ("xid32", "32-bit transaction ID", "uint", "UInt32", "4000000000u", "eq"),
     ("vector", "vector embedding", "float[]", "Object", "new float[] { 1f, 2.5f, 3f }", "sequence"),
     ("hierarchy", "hierarchical path", "HierarchyId", "Object", "HierarchyId.Parse(\"/1/2/\")", "eq"),
@@ -217,6 +218,8 @@ DB_PREFER = {
     ("PostgreSql", "full-text search vector / query"): ("TSQUERY", "tsquery"),
     ("YugabyteDb", "native point"): ("POINT", "point"),
     ("YugabyteDb", "native polygon"): ("POLYGON", "polygon"),
+    ("PostgreSql", "native line"): ("LINE", "line"),
+    ("YugabyteDb", "native line"): ("LINE", "line"),
     ("YugabyteDb", "transaction ID"): ("XID8", "xid8"),
     ("YugabyteDb", "32-bit transaction ID"): ("XID", "xid"),
     ("YugabyteDb", "full-text search vector / query"): ("TSQUERY", "tsquery"),
@@ -255,6 +258,18 @@ DB_PREFER = {
     # inet extension's INET (the entry below, NATIVE_TYPE and prerequisites.json): written through CAST(parameter AS INET), read
     # from the struct DuckDB.NET returns (DuckDbInetReader).
     ("DuckDB", "enumeration"): ("VARCHAR(20)", "VARCHAR"),
+    # YugabyteDB takes PostgreSQL's CREATE TYPE and CREATE DOMAIN (prerequisites.json creates both before the cell).
+    ("YugabyteDb", "enumeration"): ("probe_enum", "probe_enum"),
+    # DuckDB's GEOMETRY (spatial extension, loaded on first use) is the planar type for points, lines and polygons.
+    ("DuckDB", "point geometry"): ("GEOMETRY", "GEOMETRY"),
+    ("DuckDB", "line / linestring geometry"): ("GEOMETRY", "GEOMETRY"),
+    ("DuckDB", "polygon geometry"): ("GEOMETRY", "GEOMETRY"),
+    ("DuckDB", "general geometry"): ("GEOMETRY", "GEOMETRY"),
+    # Oracle's VARRAY(10) is its fixed-length array: the same probe_varray type the SQL array cell uses (prerequisites.json).
+    ("Oracle", "fixed-length array"): ("probe_varray", "Array"),
+    # Oracle's nested table (CREATE TYPE ... AS TABLE OF) is its list / multiset collection (prerequisites.json creates it).
+    ("Oracle", "list / multiset / set collection"): ("probe_nested", "Array"),
+    ("YugabyteDb", "user-defined enum / domain"): ("probe_domain", "probe_domain"),
     # DuckDB has no VECTOR type; its vector is a fixed-size FLOAT array (live, DuckDB 2.0.1: FLOAT[3] is accepted).
     ("DuckDB", "vector embedding"): ("FLOAT[3]", "Array"),
     # DuckDB's collection is its LIST type (INTEGER[], live DuckDB 2.0.1), not the MULTISET keyword the probe tried; its user-defined type
@@ -338,6 +353,10 @@ DB_REFUSED = {
        for db in ("MySql", "MariaDb", "Oracle", "SqlServer", "Sqlite", "Db2", "Informix", "SapHana", "SingleStore", "TiDb", "DuckDB",
                   "FlatFile", "Firebird", "CockroachDb", "SybaseASE", "Spanner", "InterBase")
        for sem in ("native polygon",)},
+    **{(db, sem): "native line is PostgreSQL's line (CLR PostgreSqlLine); this database has no native line type"
+       for db in ("MySql", "MariaDb", "Oracle", "SqlServer", "Sqlite", "Db2", "Informix", "SapHana", "SingleStore", "TiDb", "DuckDB",
+                  "FlatFile", "Firebird", "CockroachDb", "SybaseASE", "Spanner", "InterBase")
+       for sem in ("native line",)},
     # The probe's "accepted" for ST_GEOMETRY (provider type SQLUDTVAR) is a false positive: the test database's catalog (sysxtdtypes)
     # has no st_geometry type, and a CREATE TABLE with it fails with "Type (st_geometry) not found". The cell is refused until a
     # spatial DataBlade is installed in that database.
@@ -375,10 +394,6 @@ DB_REFUSED = {
     # DuckDB 2.0.1 (live): BLOB takes no length, the spatial extension has one GEOMETRY type that DuckDB.NET cannot read, and VARIANT
     # needs a newer storage version than the testbed's database file.
     ("DuckDB", "fixed binary"): "server: DuckDB's BLOB (aliases BINARY and VARBINARY) takes no length: BINARY(16) and BLOB(16) are refused (Binder Error: does not take any type parameters, confirmed live); the bytes go in a BLOB",
-    ("DuckDB", "point geometry"): "by design: DuckDB has no POINT type; the spatial extension has one GEOMETRY type, which DuckDB.NET cannot read (see general geometry)",
-    ("DuckDB", "line / linestring geometry"): "by design: DuckDB has no LINESTRING type; the spatial extension has one GEOMETRY type, which DuckDB.NET cannot read (see general geometry)",
-    ("DuckDB", "polygon geometry"): "by design: DuckDB has no POLYGON type; the spatial extension has one GEOMETRY type, which DuckDB.NET cannot read (see general geometry)",
-    ("DuckDB", "general geometry"): "upstream: DuckDB.NET names a GEOMETRY column (spatial extension) and throws \"Unrecognised type Geometry\" when it reads it (confirmed live); the library refuses such a result set by column name, and ST_AsText(column) reads it",
     ("DuckDB", "geography / geodetic"): "server: DuckDB has no GEOGRAPHY type (Catalog Error: Type with name GEOGRAPHY does not exist, confirmed live)",
     ("DuckDB", "variant / dynamic value"): "server: VARIANT needs storage version v1.5.0 or later and the testbed's database file is v1.0.0 (an in-memory database accepts it, confirmed live)",
 }
@@ -464,6 +479,8 @@ NATIVE_TYPE = {
     ("Snowflake", "variant / dynamic value"): "VARIANT",
     # The VARRAY's native type: the library builds it from the elements' JSON (OracleDialect.CollectionArgument).
     ("Oracle", "SQL array"): "probe_varray",
+    ("Oracle", "fixed-length array"): "probe_varray",
+    ("Oracle", "list / multiset / set collection"): "probe_nested",
     # DuckDB's INET (the inet extension) is written through CAST(parameter AS INET) and read through CAST(column AS VARCHAR)
     # (DuckDbDialect.NativeTypeArgument and RenderColumnSelect); the fidelity test installs the extension first (prerequisites.json).
     ("DuckDB", "IP address"): "INET",
@@ -479,7 +496,13 @@ NATIVE_TYPE = {
     **{(db, "transaction ID"): "xid8" for db in ("PostgreSql", "YugabyteDb")},
     **{(db, "32-bit transaction ID"): "xid" for db in ("PostgreSql", "YugabyteDb")},
     **{(db, "native point"): "point" for db in ("PostgreSql", "YugabyteDb")},
+    **{(db, "native line"): "line" for db in ("PostgreSql", "YugabyteDb")},
     **{(db, "native polygon"): "polygon" for db in ("PostgreSql", "YugabyteDb")},
+    # DuckDB's planar geometry column (the spatial extension's GEOMETRY), per semantic type.
+    ("DuckDB", "point geometry"): "GEOMETRY",
+    ("DuckDB", "line / linestring geometry"): "GEOMETRY",
+    ("DuckDB", "polygon geometry"): "GEOMETRY",
+    ("DuckDB", "general geometry"): "GEOMETRY",
 }
 
 
@@ -545,6 +568,11 @@ NATIVE_SAMPLE = {
     # Db2 LBAC: the fixture grants db2inst1 the LOW label; SECLABEL('POL', 'LOW') writes it and SECLABEL_TO_CHAR reads back LOW.
     ("Db2", "specialized security label"): "\"LOW\"",
     ("Snowflake", "external-file reference"): "\"@FIDELITY_STAGE/file.bin\"",
+    # DuckDB's GEOMETRY has no SRID (the library refuses a non-zero one), so its samples are SRID 0.
+    ("DuckDB", "point geometry"): "Geometry.FromWellKnownText(\"POINT (1 2)\", 0)",
+    ("DuckDB", "line / linestring geometry"): "Geometry.FromWellKnownText(\"LINESTRING (0 0, 1 1)\", 0)",
+    ("DuckDB", "polygon geometry"): "Geometry.FromWellKnownText(\"POLYGON ((0 0, 1 0, 1 1, 0 0))\", 0)",
+    ("DuckDB", "general geometry"): "Geometry.FromWellKnownText(\"POINT (1 2)\", 0)",
 }
 
 
@@ -714,6 +742,20 @@ EDGE_LIMITS = {
     ("FlatFile", "signed 128-bit", 2): "server: NUMERIC(38,0) can't hold 2^127-1: the value exceeds the declared precision",
     ("SybaseASE", "signed 128-bit", 2): "server: NUMERIC can't hold 2^127-1: arithmetic overflow converting the text",
     ("Snowflake", "signed 128-bit", 2): "server: NUMBER(38,0) can't hold 2^127-1: Numeric value is out of range (SqlState 22003)",
+    ("SapHana", 'binary float32', 2): "server: HANA REAL reads 1E-45 back as 0 (observed: read as Single 0)",
+    ("SapHana", 'binary float32', 3): "server: HANA REAL has no NaN (observed: Conversion of parameter from FLOAT to REAL failed, '-nan')",
+    ("SapHana", 'binary float32', 4): "server: HANA REAL has no infinity (observed: Conversion of parameter from FLOAT to REAL failed, 'inf')",
+    ("SapHana", 'binary float32', 5): "server: HANA REAL has no -infinity (observed: Conversion of parameter from FLOAT to REAL failed, '-inf')",
+    ("SapHana", 'binary float32', 6): "server: HANA REAL reads -0 back as 0 (observed: read as Single 0)",
+    ("SapHana", 'binary float64', 3): "server: HANA DOUBLE has no NaN (observed: Conversion of parameter from DOUBLE to DOUBLE failed, '-nan')",
+    ("SapHana", 'binary float64', 4): "server: HANA DOUBLE has no infinity (observed: Conversion of parameter from DOUBLE to DOUBLE failed, 'inf')",
+    ("SapHana", 'binary float64', 5): "server: HANA DOUBLE has no -infinity (observed: Conversion of parameter from DOUBLE to DOUBLE failed, '-inf')",
+    ("SapHana", 'binary float64', 6): "server: HANA DOUBLE reads -0 back as 0 (observed: read as Double 0)",
+    ("SapHana", 'fixed decimal', 1): "declared DECIMAL(19,4) scale is too small: 1E-28 is stored as 0 (observed)",
+    ("SapHana", 'fixed decimal', 4): "declared DECIMAL(19,4) can't hold the decimal maximum: Numeric overflow, precision 19 scale 4 (observed)",
+    ("SapHana", 'fixed decimal', 5): "declared DECIMAL(19,4) can't hold the negative decimal maximum: Numeric overflow, precision 19 scale 4 (observed)",
+    ("SapHana", 'signed 128-bit', 1): "server: HANA FIXED16 can't hold -2^127: Numeric overflow for FIXED16 (observed)",
+    ("SapHana", 'signed 128-bit', 2): "server: HANA FIXED16 can't hold 2^127-1: Numeric overflow for FIXED16 (observed)",
 }
 
 

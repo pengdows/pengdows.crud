@@ -376,3 +376,96 @@ class ResolveTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EdgeLimitSourceTests(unittest.TestCase):
+    # The SAP HANA edge limits were first recorded by hand in TypeFidelityDeclarations.cs. The generator must own them,
+    # or regenerating the declarations silently drops them.
+    def test_sap_hana_decimal_edge_limits_come_from_the_generator(self):
+        self.assertIn(("SapHana", "fixed decimal", 1), g.EDGE_LIMITS)
+        self.assertIn(("SapHana", "fixed decimal", 4), g.EDGE_LIMITS)
+        self.assertIn(("SapHana", "signed 128-bit", 1), g.EDGE_LIMITS)
+
+
+class NativeLineSpecTests(unittest.TestCase):
+    # PostgreSQL and YugabyteDB have a native line (CLR PostgreSqlLine); a cell has to exist for it, or the vendor's line
+    # type goes untested and the gap report keeps calling it unsupported.
+    def test_native_line_is_a_fidelity_spec(self):
+        self.assertTrue(any(row[0] == "native_line" for row in g.SPEC))
+
+    def test_native_line_is_declared_on_postgresql_and_yugabytedb(self):
+        self.assertIn(("PostgreSql", "native line"), g.DB_PREFER)
+        self.assertIn(("YugabyteDb", "native line"), g.DB_PREFER)
+
+
+class YugabyteDbPrerequisiteTests(unittest.TestCase):
+    # YugabyteDB speaks PostgreSQL's type DDL: its enum and domain cells need the same CREATE TYPE / CREATE DOMAIN
+    # prerequisites as PostgreSQL's, or the cells refuse "type enum does not exist" and "syntax error at or near CREATE".
+    def test_yugabytedb_has_the_enum_and_domain_prerequisites(self):
+        import json
+        prereqs = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prerequisites.json"), encoding="utf-8"))
+        self.assertIn("enumeration", prereqs.get("YugabyteDb", {}))
+        self.assertIn("user-defined enum / domain", prereqs.get("YugabyteDb", {}))
+
+
+
+class FixedLengthArrayMappingTests(unittest.TestCase):
+    # Firebird's and InterBase's arrays are fixed-length (INTEGER[10]); the fixed-length cell passes on both. The vendor's
+    # "Array" concept must reach that cell, not the variable-length SQL array cell both refuse by design.
+    def test_firebird_and_interbase_array_concept_maps_to_the_fixed_length_cell(self):
+        import csv
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reconciliation.csv")
+        rows = {(r["db"], r["unified_id"]): r["probe_semantic"] for r in csv.DictReader(open(path, encoding="utf-8"))}
+        self.assertEqual("fixed-length array", rows[("FB", "B58")])
+
+
+class DuckDbSpatialTests(unittest.TestCase):
+    # DuckDB's GEOMETRY comes from its spatial extension (loaded automatically on first use, confirmed by the live probe). It
+    # is the planar geometry for points, lines and polygons; the cells must run it, not refuse it "by design".
+    def test_duckdb_declares_geometry_for_point_line_and_polygon(self):
+        for sem in ("point geometry", "line / linestring geometry", "polygon geometry"):
+            self.assertIn(("DuckDB", sem), g.DB_PREFER, sem)
+
+
+class DuckDbSpatialPrerequisiteTests(unittest.TestCase):
+    # DuckDB's GEOMETRY functions live in the spatial extension, which a session must load first (the probe's INET cells do
+    # the same for the inet extension).
+    def test_duckdb_geometry_cells_load_the_spatial_extension_first(self):
+        import json
+        prereqs = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prerequisites.json"), encoding="utf-8"))
+        for sem in ("point geometry", "line / linestring geometry", "polygon geometry", "general geometry"):
+            self.assertIn(sem, prereqs.get("DuckDB", {}), sem)
+
+
+class DuckDbGeometrySampleTests(unittest.TestCase):
+    # DuckDB's GEOMETRY has no SRID, and the library refuses a value that carries one. The DuckDB cells therefore use SRID 0 and
+    # a native GEOMETRY column (a per-database row), not the shared SRID-4326 sample.
+    def test_duckdb_geometry_cells_use_srid_zero_and_a_native_geometry_column(self):
+        for sem in ("point geometry", "line / linestring geometry", "polygon geometry", "general geometry"):
+            self.assertEqual("GEOMETRY", g.NATIVE_TYPE.get(("DuckDB", sem)), sem)
+            clr, sample = g.native_clr("DuckDB", sem, "Geometry", "x")
+            self.assertIn(", 0)", sample, sem)
+
+
+class OracleFixedArrayTests(unittest.TestCase):
+    # Oracle's VARRAY(10) is a fixed-length array: the SQL array cell already passes with the probe_varray type, so the
+    # fixed-length cell declares the same type, created by the same prerequisite.
+    def test_oracle_declares_the_fixed_length_varray(self):
+        import json
+        self.assertIn(("Oracle", "fixed-length array"), g.DB_PREFER)
+        prereqs = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prerequisites.json"), encoding="utf-8"))
+        self.assertEqual("probe_varray", prereqs["Oracle"]["fixed-length array"]["decl"])
+        self.assertEqual("probe_varray", g.NATIVE_TYPE.get(("Oracle", "fixed-length array")))
+
+
+class OracleNestedTableTests(unittest.TestCase):
+    # Oracle's nested table (CREATE TYPE ... AS TABLE OF) is the list / multiset collection: a named type the prerequisite
+    # creates, declared as its column type, with the NESTED TABLE storage clause the fidelity harness adds for it.
+    def test_oracle_declares_the_nested_table_collection(self):
+        import json
+        sem = "list / multiset / set collection"
+        self.assertEqual("probe_nested", g.DB_PREFER[("Oracle", sem)][0])
+        self.assertEqual("probe_nested", g.NATIVE_TYPE.get(("Oracle", sem)))
+        prereqs = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prerequisites.json"), encoding="utf-8"))
+        self.assertEqual("probe_nested", prereqs["Oracle"][sem]["decl"])
+

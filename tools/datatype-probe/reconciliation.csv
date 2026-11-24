@@ -317,7 +317,7 @@ B57,Variant / dynamic,MYSQL,MySql,X,variant / dynamic value,agree: unsupported,
 B58,Array,PG,PostgreSql,N,SQL array,agree: supported,INTEGER ARRAY; INTEGER[]; INT[]
 B58,Array,MSSQL,SqlServer,X,SQL array,agree: unsupported,
 B58,Array,ORA,Oracle,R,SQL array,"workbook supported, live refused all candidates",
-B58,Array,FB,Firebird,N,SQL array,"workbook supported, live refused all candidates",
+B58,Array,FB,Firebird,N,fixed-length array,"workbook supported, live refused all candidates",
 B58,Array,CRDB,CockroachDb,N,SQL array,agree: supported,INTEGER ARRAY; INTEGER[]; INT[]
 B58,Array,MDB,MariaDb,X,SQL array,agree: unsupported,
 B58,Array,MYSQL,MySql,X,SQL array,agree: unsupported,
@@ -468,21 +468,21 @@ A54,IP network / CIDR,FB,Firebird,?,IP network / CIDR,unverified (workbook),
 A54,IP network / CIDR,CRDB,CockroachDb,A,IP network / CIDR,agree: supported,INET
 A54,IP network / CIDR,MDB,MariaDb,?,IP network / CIDR,unverified (workbook),
 A54,IP network / CIDR,MYSQL,MySql,?,IP network / CIDR,unverified (workbook),
-A56,point geometry,PG,PostgreSql,N,point geometry,agree: supported,POINT
+A56,point geometry,PG,PostgreSql,N,native point,agree: supported,POINT
 A56,point geometry,MSSQL,SqlServer,N,point geometry,agree: supported,GEOMETRY
 A56,point geometry,ORA,Oracle,?,point geometry,unverified (workbook),POINT; SDO_GEOMETRY; GEOMETRY
 A56,point geometry,FB,Firebird,?,point geometry,unverified (workbook),
 A56,point geometry,CRDB,CockroachDb,N,point geometry,agree: supported,"GEOMETRY(POINT,4326); GEOMETRY(POINT); GEOMETRY"
 A56,point geometry,MDB,MariaDb,N,point geometry,agree: supported,POINT; GEOMETRY
 A56,point geometry,MYSQL,MySql,N,point geometry,agree: supported,POINT; GEOMETRY
-A57,line / linestring geometry,PG,PostgreSql,N,line / linestring geometry,"workbook supported, live refused all candidates",
+A57,line / linestring geometry,PG,PostgreSql,N,native line,"workbook supported, live refused all candidates",
 A57,line / linestring geometry,MSSQL,SqlServer,N,line / linestring geometry,agree: supported,GEOMETRY
 A57,line / linestring geometry,ORA,Oracle,?,line / linestring geometry,unverified (workbook),LINESTRING; GEOMETRY; ST_GEOMETRY
 A57,line / linestring geometry,FB,Firebird,?,line / linestring geometry,unverified (workbook),
 A57,line / linestring geometry,CRDB,CockroachDb,N,line / linestring geometry,agree: supported,GEOMETRY(LINESTRING); GEOMETRY
 A57,line / linestring geometry,MDB,MariaDb,N,line / linestring geometry,agree: supported,LINESTRING; GEOMETRY
 A57,line / linestring geometry,MYSQL,MySql,N,line / linestring geometry,agree: supported,LINESTRING; GEOMETRY
-A58,polygon geometry,PG,PostgreSql,N,polygon geometry,agree: supported,POLYGON
+A58,polygon geometry,PG,PostgreSql,N,native polygon,agree: supported,POLYGON
 A58,polygon geometry,MSSQL,SqlServer,N,polygon geometry,agree: supported,GEOMETRY
 A58,polygon geometry,ORA,Oracle,?,polygon geometry,unverified (workbook),POLYGON; GEOMETRY; ST_GEOMETRY
 A58,polygon geometry,FB,Firebird,?,polygon geometry,unverified (workbook),
@@ -496,11 +496,11 @@ A62,fixed-length array,FB,Firebird,N,fixed-length array,agree: supported,INTEGER
 A62,fixed-length array,CRDB,CockroachDb,A,fixed-length array,agree: supported,INTEGER ARRAY[10]; INTEGER[10]
 A62,fixed-length array,MDB,MariaDb,?,fixed-length array,unverified (workbook),
 A62,fixed-length array,MYSQL,MySql,?,fixed-length array,unverified (workbook),
-A63,list / multiset / set collection,PG,PostgreSql,A,list / multiset / set collection,"workbook supported, live refused all candidates",
+A63,list / multiset / set collection,PG,PostgreSql,A,SQL array,"workbook supported, live refused all candidates",
 A63,list / multiset / set collection,MSSQL,SqlServer,?,list / multiset / set collection,unverified (workbook),
 A63,list / multiset / set collection,ORA,Oracle,?,list / multiset / set collection,unverified (workbook),
 A63,list / multiset / set collection,FB,Firebird,?,list / multiset / set collection,unverified (workbook),
-A63,list / multiset / set collection,CRDB,CockroachDb,A,list / multiset / set collection,"workbook supported, live refused all candidates",
+A63,list / multiset / set collection,CRDB,CockroachDb,A,SQL array,"workbook supported, live refused all candidates",
 A63,list / multiset / set collection,MDB,MariaDb,?,list / multiset / set collection,unverified (workbook),
 A63,list / multiset / set collection,MYSQL,MySql,?,list / multiset / set collection,unverified (workbook),
 A74,opaque / special database type,PG,PostgreSql,?,opaque / special database type,unverified (workbook),
@@ -793,15 +793,15 @@ A54,IP network / CIDR,YB,YugabyteDb,?,IP network / CIDR,unverified (workbook),CI
 A54,IP network / CIDR,TIDB,TiDb,?,IP network / CIDR,unverified (workbook),
 A54,IP network / CIDR,FLAT,FlatFile,?,IP network / CIDR,unverified (workbook),
 A56,point geometry,DUCK,DuckDB,E,point geometry,"workbook supported, live refused all candidates",
-A56,point geometry,YB,YugabyteDb,?,point geometry,unverified (workbook),POINT
+A56,point geometry,YB,YugabyteDb,?,native point,unverified (workbook),POINT
 A56,point geometry,TIDB,TiDb,X,point geometry,agree: unsupported,
 A56,point geometry,FLAT,FlatFile,?,point geometry,unverified (workbook),
 A57,line / linestring geometry,DUCK,DuckDB,E,line / linestring geometry,"workbook supported, live refused all candidates",
-A57,line / linestring geometry,YB,YugabyteDb,?,line / linestring geometry,unverified (workbook),
+A57,line / linestring geometry,YB,YugabyteDb,?,native line,unverified (workbook),
 A57,line / linestring geometry,TIDB,TiDb,X,line / linestring geometry,agree: unsupported,
 A57,line / linestring geometry,FLAT,FlatFile,?,line / linestring geometry,unverified (workbook),
 A58,polygon geometry,DUCK,DuckDB,E,polygon geometry,"workbook supported, live refused all candidates",
-A58,polygon geometry,YB,YugabyteDb,?,polygon geometry,unverified (workbook),POLYGON
+A58,polygon geometry,YB,YugabyteDb,?,native polygon,unverified (workbook),POLYGON
 A58,polygon geometry,TIDB,TiDb,X,polygon geometry,agree: unsupported,
 A58,polygon geometry,FLAT,FlatFile,?,polygon geometry,unverified (workbook),
 A62,fixed-length array,DUCK,DuckDB,N,fixed-length array,agree: supported,INTEGER ARRAY[10]; INTEGER[10]
@@ -809,7 +809,7 @@ A62,fixed-length array,YB,YugabyteDb,A,fixed-length array,agree: supported,INTEG
 A62,fixed-length array,TIDB,TiDb,?,fixed-length array,unverified (workbook),
 A62,fixed-length array,FLAT,FlatFile,?,fixed-length array,unverified (workbook),
 A63,list / multiset / set collection,DUCK,DuckDB,N,list / multiset / set collection,"workbook supported, live refused all candidates",
-A63,list / multiset / set collection,YB,YugabyteDb,A,list / multiset / set collection,"workbook supported, live refused all candidates",
+A63,list / multiset / set collection,YB,YugabyteDb,A,SQL array,"workbook supported, live refused all candidates",
 A63,list / multiset / set collection,TIDB,TiDb,?,list / multiset / set collection,unverified (workbook),
 A63,list / multiset / set collection,FLAT,FlatFile,?,list / multiset / set collection,unverified (workbook),
 A74,opaque / special database type,DUCK,DuckDB,?,opaque / special database type,unverified (workbook),
@@ -1039,7 +1039,7 @@ A62,fixed-length array,ASE,SybaseASE,?,fixed-length array,unverified (workbook),
 A62,fixed-length array,SPAN,Spanner,X,fixed-length array,"workbook unsupported, live accepted",INTEGER ARRAY[10]; INTEGER[10]
 A63,list / multiset / set collection,SS,SingleStore,?,list / multiset / set collection,unverified (workbook),
 A63,list / multiset / set collection,ASE,SybaseASE,?,list / multiset / set collection,unverified (workbook),
-A63,list / multiset / set collection,SPAN,Spanner,A,list / multiset / set collection,"workbook supported, live refused all candidates",
+A63,list / multiset / set collection,SPAN,Spanner,A,SQL array,"workbook supported, live refused all candidates",
 A74,opaque / special database type,SS,SingleStore,?,opaque / special database type,unverified (workbook),
 A74,opaque / special database type,ASE,SybaseASE,N,opaque / special database type,"workbook supported, live refused all candidates",
 A74,opaque / special database type,SPAN,Spanner,?,opaque / special database type,unverified (workbook),

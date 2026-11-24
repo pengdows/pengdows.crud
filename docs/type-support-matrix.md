@@ -66,6 +66,7 @@ its trailing zeros, is the data (every dialect sends it without them).
 | `Cidr` | `DbType.Object` | every database |  |
 | `IPAddress` | `DbType.Object` | every database |  |
 | `PostgreSqlPoint` | `DbType.Object` | every database |  |
+| `PostgreSqlLine` | `DbType.Object` | every database |  |
 | `PostgreSqlPolygon` | `DbType.Object` | every database |  |
 | `List<int>` | `DbType.Object` | every database |  |
 | `Dictionary<string,object>` | `DbType.Object` | every database |  |

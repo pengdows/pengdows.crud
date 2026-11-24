@@ -1205,6 +1205,23 @@ public sealed class Cell_NativePolygon : IFidelityRow<Cell_NativePolygon>
 }
 
 [Table("type_fidelity")]
+public sealed class Cell_NativeLine : IFidelityRow<Cell_NativeLine>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("native_line", DbType.Object)]
+    public PostgreSqlLine Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("native_line", "Value", "native line") };
+
+    public static Cell_NativeLine Expected() => new() { Id = 1, Value = PostgreSqlLine.Parse("{1,-2,3}") };
+    public static IReadOnlyList<Cell_NativeLine> Edges() => Array.Empty<Cell_NativeLine>();
+}
+
+[Table("type_fidelity")]
 public sealed class Cell_Xid32 : IFidelityRow<Cell_Xid32>
 {
     [Id(true)]
@@ -1440,6 +1457,40 @@ public sealed class Cell_IntArray_Oracle : IFidelityRow<Cell_IntArray_Oracle>
 
     public static Cell_IntArray_Oracle Expected() => new() { Id = 1, Value = new[] { 1, 2, 3 } };
     public static IReadOnlyList<Cell_IntArray_Oracle> Edges() => new Cell_IntArray_Oracle[] { new() { Id = 2, Value = new int[0] } };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_FixedArray_Oracle : IFidelityRow<Cell_FixedArray_Oracle>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("fixed_array", DbType.Object, NativeType = "probe_varray")]
+    public int[] Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("fixed_array", "Value", "fixed-length array") };
+
+    public static Cell_FixedArray_Oracle Expected() => new() { Id = 1, Value = new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 } };
+    public static IReadOnlyList<Cell_FixedArray_Oracle> Edges() => Array.Empty<Cell_FixedArray_Oracle>();
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_ListCollection_Oracle : IFidelityRow<Cell_ListCollection_Oracle>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("list_collection", DbType.Object, NativeType = "probe_nested")]
+    public int[] Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("list_collection", "Value", "list / multiset / set collection") };
+
+    public static Cell_ListCollection_Oracle Expected() => new() { Id = 1, Value = new int[] { 1, 2, 3 } };
+    public static IReadOnlyList<Cell_ListCollection_Oracle> Edges() => Array.Empty<Cell_ListCollection_Oracle>();
 }
 
 [Table("type_fidelity")]
@@ -1868,6 +1919,40 @@ public sealed class Cell_NativePoint_YugabyteDb : IFidelityRow<Cell_NativePoint_
 }
 
 [Table("type_fidelity")]
+public sealed class Cell_NativeLine_PostgreSql : IFidelityRow<Cell_NativeLine_PostgreSql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("native_line", DbType.Object, NativeType = "line")]
+    public PostgreSqlLine Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("native_line", "Value", "native line") };
+
+    public static Cell_NativeLine_PostgreSql Expected() => new() { Id = 1, Value = PostgreSqlLine.Parse("{1,-2,3}") };
+    public static IReadOnlyList<Cell_NativeLine_PostgreSql> Edges() => Array.Empty<Cell_NativeLine_PostgreSql>();
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_NativeLine_YugabyteDb : IFidelityRow<Cell_NativeLine_YugabyteDb>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("native_line", DbType.Object, NativeType = "line")]
+    public PostgreSqlLine Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("native_line", "Value", "native line") };
+
+    public static Cell_NativeLine_YugabyteDb Expected() => new() { Id = 1, Value = PostgreSqlLine.Parse("{1,-2,3}") };
+    public static IReadOnlyList<Cell_NativeLine_YugabyteDb> Edges() => Array.Empty<Cell_NativeLine_YugabyteDb>();
+}
+
+[Table("type_fidelity")]
 public sealed class Cell_NativePolygon_PostgreSql : IFidelityRow<Cell_NativePolygon_PostgreSql>
 {
     [Id(true)]
@@ -1899,6 +1984,74 @@ public sealed class Cell_NativePolygon_YugabyteDb : IFidelityRow<Cell_NativePoly
 
     public static Cell_NativePolygon_YugabyteDb Expected() => new() { Id = 1, Value = PostgreSqlPolygon.Parse("((0,0),(1,0),(1,1),(0,0))") };
     public static IReadOnlyList<Cell_NativePolygon_YugabyteDb> Edges() => Array.Empty<Cell_NativePolygon_YugabyteDb>();
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Point_DuckDB : IFidelityRow<Cell_Point_DuckDB>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("point", DbType.Object, NativeType = "GEOMETRY")]
+    public Geometry Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("point", "Value", "point geometry") };
+
+    public static Cell_Point_DuckDB Expected() => new() { Id = 1, Value = Geometry.FromWellKnownText("POINT (1 2)", 0) };
+    public static IReadOnlyList<Cell_Point_DuckDB> Edges() => Array.Empty<Cell_Point_DuckDB>();
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Linestring_DuckDB : IFidelityRow<Cell_Linestring_DuckDB>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("linestring", DbType.Object, NativeType = "GEOMETRY")]
+    public Geometry Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("linestring", "Value", "line / linestring geometry") };
+
+    public static Cell_Linestring_DuckDB Expected() => new() { Id = 1, Value = Geometry.FromWellKnownText("LINESTRING (0 0, 1 1)", 0) };
+    public static IReadOnlyList<Cell_Linestring_DuckDB> Edges() => Array.Empty<Cell_Linestring_DuckDB>();
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Polygon_DuckDB : IFidelityRow<Cell_Polygon_DuckDB>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("polygon", DbType.Object, NativeType = "GEOMETRY")]
+    public Geometry Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("polygon", "Value", "polygon geometry") };
+
+    public static Cell_Polygon_DuckDB Expected() => new() { Id = 1, Value = Geometry.FromWellKnownText("POLYGON ((0 0, 1 0, 1 1, 0 0))", 0) };
+    public static IReadOnlyList<Cell_Polygon_DuckDB> Edges() => Array.Empty<Cell_Polygon_DuckDB>();
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Geometry_DuckDB : IFidelityRow<Cell_Geometry_DuckDB>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("geometry", DbType.Object, NativeType = "GEOMETRY")]
+    public Geometry Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("geometry", "Value", "general geometry") };
+
+    public static Cell_Geometry_DuckDB Expected() => new() { Id = 1, Value = Geometry.FromWellKnownText("POINT (1 2)", 0) };
+    public static IReadOnlyList<Cell_Geometry_DuckDB> Edges() => Array.Empty<Cell_Geometry_DuckDB>();
 }
 
 [Table("type_fidelity")]
@@ -2072,6 +2225,23 @@ public sealed class Cell_NativePoint_AuroraPostgreSql : IFidelityRow<Cell_Native
 }
 
 [Table("type_fidelity")]
+public sealed class Cell_NativeLine_AuroraPostgreSql : IFidelityRow<Cell_NativeLine_AuroraPostgreSql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("native_line", DbType.Object, NativeType = "line")]
+    public PostgreSqlLine Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("native_line", "Value", "native line") };
+
+    public static Cell_NativeLine_AuroraPostgreSql Expected() => new() { Id = 1, Value = PostgreSqlLine.Parse("{1,-2,3}") };
+    public static IReadOnlyList<Cell_NativeLine_AuroraPostgreSql> Edges() => Array.Empty<Cell_NativeLine_AuroraPostgreSql>();
+}
+
+[Table("type_fidelity")]
 public sealed class Cell_NativePolygon_AuroraPostgreSql : IFidelityRow<Cell_NativePolygon_AuroraPostgreSql>
 {
     [Id(true)]
@@ -2163,6 +2333,7 @@ internal static class TypeFidelityCells
         ("full-text search vector / query", "full_text", typeof(Cell_FullText)),
         ("native point", "native_point", typeof(Cell_NativePoint)),
         ("native polygon", "native_polygon", typeof(Cell_NativePolygon)),
+        ("native line", "native_line", typeof(Cell_NativeLine)),
         ("32-bit transaction ID", "xid32", typeof(Cell_Xid32)),
         ("vector embedding", "vector", typeof(Cell_Vector)),
         ("hierarchical path", "hierarchy", typeof(Cell_Hierarchy)),
@@ -2182,6 +2353,8 @@ internal static class TypeFidelityCells
         (SupportedDatabase.Snowflake, "external-file reference") => typeof(Cell_FileReference_Snowflake),
         (SupportedDatabase.Snowflake, "variant / dynamic value") => typeof(Cell_Variant_Snowflake),
         (SupportedDatabase.Oracle, "SQL array") => typeof(Cell_IntArray_Oracle),
+        (SupportedDatabase.Oracle, "fixed-length array") => typeof(Cell_FixedArray_Oracle),
+        (SupportedDatabase.Oracle, "list / multiset / set collection") => typeof(Cell_ListCollection_Oracle),
         (SupportedDatabase.DuckDB, "IP address") => typeof(Cell_IpAddress_DuckDB),
         (SupportedDatabase.DuckDB, "IP network / CIDR") => typeof(Cell_Cidr_DuckDB),
         (SupportedDatabase.Firebird, "decimal floating point") => typeof(Cell_DecimalFloat_Firebird),
@@ -2207,8 +2380,14 @@ internal static class TypeFidelityCells
         (SupportedDatabase.YugabyteDb, "32-bit transaction ID") => typeof(Cell_Xid32_YugabyteDb),
         (SupportedDatabase.PostgreSql, "native point") => typeof(Cell_NativePoint_PostgreSql),
         (SupportedDatabase.YugabyteDb, "native point") => typeof(Cell_NativePoint_YugabyteDb),
+        (SupportedDatabase.PostgreSql, "native line") => typeof(Cell_NativeLine_PostgreSql),
+        (SupportedDatabase.YugabyteDb, "native line") => typeof(Cell_NativeLine_YugabyteDb),
         (SupportedDatabase.PostgreSql, "native polygon") => typeof(Cell_NativePolygon_PostgreSql),
         (SupportedDatabase.YugabyteDb, "native polygon") => typeof(Cell_NativePolygon_YugabyteDb),
+        (SupportedDatabase.DuckDB, "point geometry") => typeof(Cell_Point_DuckDB),
+        (SupportedDatabase.DuckDB, "line / linestring geometry") => typeof(Cell_Linestring_DuckDB),
+        (SupportedDatabase.DuckDB, "polygon geometry") => typeof(Cell_Polygon_DuckDB),
+        (SupportedDatabase.DuckDB, "general geometry") => typeof(Cell_Geometry_DuckDB),
         (SupportedDatabase.AuroraMySql, "vector embedding") => typeof(Cell_Vector_AuroraMySql),
         (SupportedDatabase.AuroraMySql, "bit / bitstring") => typeof(Cell_BitString_AuroraMySql),
         (SupportedDatabase.AuroraPostgreSql, "map / dictionary") => typeof(Cell_Map_AuroraPostgreSql),
@@ -2219,6 +2398,7 @@ internal static class TypeFidelityCells
         (SupportedDatabase.AuroraPostgreSql, "transaction ID") => typeof(Cell_TransactionId_AuroraPostgreSql),
         (SupportedDatabase.AuroraPostgreSql, "32-bit transaction ID") => typeof(Cell_Xid32_AuroraPostgreSql),
         (SupportedDatabase.AuroraPostgreSql, "native point") => typeof(Cell_NativePoint_AuroraPostgreSql),
+        (SupportedDatabase.AuroraPostgreSql, "native line") => typeof(Cell_NativeLine_AuroraPostgreSql),
         (SupportedDatabase.AuroraPostgreSql, "native polygon") => typeof(Cell_NativePolygon_AuroraPostgreSql),
         _ => null,
     };
