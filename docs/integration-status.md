@@ -31,7 +31,7 @@ that was run for the release is green. Access runs only on Windows.
 | Spanner | 157 pass, 0 fail, 0 skip · 2026-11-23 18:10Z · fc4a1a01+ | 156 pass, 1 fail, 0 skip · 2026-11-23 17:19Z · fc4a1a01+ |
 | SingleStore | 169 pass, 0 fail, 0 skip · 2026-11-23 16:45Z · fc4a1a01+ | 169 pass, 0 fail, 0 skip · 2026-11-23 17:08Z · fc4a1a01+ |
 | Snowflake | 119 pass, 1 fail, 0 skip · 2026-11-23 14:12Z · fc4a1a01+ | 1 pass, 1 fail, 0 skip · 2026-11-22 21:57Z · fc4a1a01+ |
-| SapHana | 156 pass, 0 fail, 0 skip · 2026-11-21 02:02Z · 9e81cc53+ | 156 pass, 0 fail, 0 skip · 2026-11-21 02:24Z · 9e81cc53+ |
+| SapHana | 157 pass, 0 fail, 0 skip · 2026-11-24 10:58Z · fb05263e+ | 157 pass, 0 fail, 0 skip · 2026-11-24 11:01Z · fb05263e+ |
 | InterBase | 157 pass, 0 fail, 0 skip · 2026-11-23 16:52Z · fc4a1a01+ | 157 pass, 0 fail, 0 skip · 2026-11-23 17:15Z · fc4a1a01+ |
 | Access | 156 pass, 0 fail, 0 skip · 2026-11-21 21:21Z · 83c33667+ | 156 pass, 0 fail, 0 skip · 2026-11-21 21:23Z · 83c33667+ |
 | AuroraPostgreSql | 174 pass, 0 fail, 0 skip · 2026-11-13 16:22Z · e11ef215 | 174 pass, 0 fail, 0 skip · 2026-11-13 16:47Z · e11ef215 |
