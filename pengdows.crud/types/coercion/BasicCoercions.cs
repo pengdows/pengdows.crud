@@ -249,8 +249,9 @@ internal class IntArrayCoercion : DbCoercion<int[]>
                         .ToArray();
                     return true;
                 }
-                catch
+                catch (Exception ex) when (ex is FormatException or OverflowException)
                 {
+                    // A non-integer or out-of-range element: the value doesn't convert.
                     value = null;
                     return false;
                 }
@@ -305,8 +306,9 @@ internal class HStoreCoercion : DbCoercion<HStore>
                 value = HStore.Parse(str);
                 return true;
             }
-            catch
+            catch (FormatException)
             {
+                // Text that isn't key=>value pairs doesn't convert.
                 value = default;
                 return false;
             }
@@ -474,6 +476,12 @@ internal class DecimalCoercion : DbCoercion<decimal>
             case string text when decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed):
                 value = parsed;
                 return true;
+            // A double keeps the digits it carries (DecimalFromDouble); Convert.ToDecimal(double) keeps only 15.
+            case double dbl:
+                return DecimalFromDouble(dbl, out value);
+            // A float keeps the digits it carries (DecimalFromFloat); Convert.ToDecimal(float) keeps only 7.
+            case float flt:
+                return DecimalFromFloat(flt, out value);
             // BigInteger/Int128/UInt128 aren't IConvertible, so Convert would throw on every value;
             // decline and let the general path convert them (TypeCoercionHelper.TryCoerceWideInteger).
             case not IConvertible:
@@ -485,12 +493,76 @@ internal class DecimalCoercion : DbCoercion<decimal>
                     value = Convert.ToDecimal(src.RawValue, CultureInfo.InvariantCulture);
                     return true;
                 }
-                catch
+                catch (Exception ex) when (ex is InvalidCastException or FormatException or OverflowException)
                 {
+                    // Text or a value Convert can't read as a decimal: it doesn't convert.
                     value = 0m;
                     return false;
                 }
         }
+    }
+
+    /// <summary>
+    /// The decimal a finite double denotes at its shortest round-trip text, which is the digits the double carries (up to 17).
+    /// <c>Convert.ToDecimal(double)</c> keeps only 15 significant digits, so 1.2345678901234567 came back as
+    /// 1.23456789012346. NaN and the infinities have no decimal value and are refused.
+    /// </summary>
+    internal static decimal DecimalFromDoubleOrThrow(double value) =>
+        DecimalFromDouble(value, out var result)
+            ? result
+            : throw new OverflowException($"{value.ToString("R", CultureInfo.InvariantCulture)} has no decimal value.");
+
+    /// <summary>The Convert-style failure for a float: NaN and the infinities have no decimal value, and neither does one too large.</summary>
+    internal static decimal DecimalFromFloatOrThrow(float value) =>
+        DecimalFromFloat(value, out var result)
+            ? result
+            : throw new OverflowException($"{value.ToString("R", CultureInfo.InvariantCulture)} has no decimal value.");
+
+    // Formats into a stack buffer: this runs once per value on the read path, and a string here was an allocation per row.
+    internal static bool DecimalFromDouble(double value, out decimal result)
+    {
+        if (!double.IsFinite(value))
+        {
+            result = 0m;
+            return false;
+        }
+
+        return TryDecimalFromShortestText(value, out result);
+    }
+
+    /// <summary>The decimal a finite float denotes at its shortest round-trip text: the digits the float carries (up to 9).</summary>
+    internal static bool DecimalFromFloat(float value, out decimal result)
+    {
+        if (!float.IsFinite(value))
+        {
+            result = 0m;
+            return false;
+        }
+
+        return TryDecimalFromShortestText(value, out result);
+    }
+
+    private static bool TryDecimalFromShortestText<T>(T value, out decimal result)
+        where T : ISpanFormattable
+    {
+        Span<char> text = stackalloc char[32];
+        if (!value.TryFormat(text, out var written, "R", CultureInfo.InvariantCulture))
+        {
+            result = 0m;
+            return false;
+        }
+
+        return decimal.TryParse(text[..written], NumberStyles.Float, CultureInfo.InvariantCulture, out result);
+    }
+
+    /// <summary>True when the decimal reads back unchanged through a float's shortest round-trip text.</summary>
+    internal static bool SurvivesAsFloat(decimal source)
+    {
+        var single = (float)source;
+        Span<char> text = stackalloc char[32];
+        return single.TryFormat(text, out var written, "R", CultureInfo.InvariantCulture)
+               && decimal.TryParse(text[..written], NumberStyles.Float, CultureInfo.InvariantCulture, out var back)
+               && back == source;
     }
 }
 
@@ -550,16 +622,9 @@ internal class ByteArrayCoercion : DbCoercion<byte[]>
                 value = segment.ToArray();
                 return true;
             case Stream stream:
-                try
-                {
-                    value = LargeObjectParameter.ReadAll(stream);
-                    return true;
-                }
-                catch
-                {
-                    value = null;
-                    return false;
-                }
+                // A read failure is the driver's I/O error, not a conversion failure: it propagates as the IOException it is.
+                value = LargeObjectParameter.ReadAll(stream);
+                return true;
             default:
                 value = null;
                 return false;

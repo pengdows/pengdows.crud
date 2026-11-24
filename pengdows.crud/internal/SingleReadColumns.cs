@@ -13,6 +13,8 @@
 // =============================================================================
 
 using System.Reflection;
+using System.Text.Json;
+using pengdows.crud.types.coercion;
 using pengdows.crud.types.converters;
 
 namespace pengdows.crud.@internal;
@@ -64,7 +66,9 @@ internal static class SingleReadColumns
     public static string? JsonTextFromValue(object value, TypeCoercionOptions? options) =>
         value is byte[] bytes && options is { BinaryJsonIsBson: true } && BsonJson.IsDocument(bytes)
             ? BsonJson.ToJson(bytes)
-            : StringFromValue(value, options);
+            // The one JSON text extraction: UTF-8 bytes, streams, JSON document/element/node and text alike. (Generic
+            // coercion from bytes to string is not a decoder, and it failed for every byte-valued JSON column.)
+            : JsonCoercion.ExtractJsonString(value, JsonSerializerOptions.Default);
 
     public static byte[] BytesFromValue(object value, TypeCoercionOptions? options) =>
         value as byte[] ?? (byte[])TypeCoercionHelper.Coerce(value, value.GetType(), typeof(byte[]), options)!;

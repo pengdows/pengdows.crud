@@ -63,8 +63,9 @@ internal static class EnumCoercion
 
             return HandleEnumFailure(value, enumType, parseMode, isNullable);
         }
-        catch
+        catch (Exception ex) when (ex is InvalidCastException or ArgumentException or FormatException or OverflowException)
         {
+            // A fraction (WholeNumber), a value Enum.ToObject rejects, or one that won't convert: not a member.
             return HandleEnumFailure(value, enumType, parseMode, isNullable);
         }
     }

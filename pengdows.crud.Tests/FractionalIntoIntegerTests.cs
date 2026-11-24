@@ -101,7 +101,7 @@ public class FractionalIntoIntegerTests
     }
 
     // DataReaderMapper treats it as any unconvertible value (an overflow, say): Strict fails naming the
-    // column, the lenient default logs and leaves the property at its default, never 2 or 3.
+    // column. Lenient mode fails the same way (DataReaderMapper_Lenient_FractionalValue_Fails): neither mode leaves 2 or 3.
     [Theory]
     [MemberData(nameof(Fractional))]
     public async Task DataReaderMapper_Strict_FractionalValue_Fails(object value)
@@ -118,9 +118,11 @@ public class FractionalIntoIntegerTests
         Assert.Contains("'n'", error.Message);
     }
 
+    // Review policy Ring 1 P0: a lenient default that leaves a value the database did not store is a silent wrong result.
+    // Lenient mode now fails the same way strict mode does, naming the column.
     [Theory]
     [MemberData(nameof(Fractional))]
-    public async Task DataReaderMapper_Lenient_FractionalValue_LeavesTheDefault(object value)
+    public async Task DataReaderMapper_Lenient_FractionalValue_Fails(object value)
     {
         var (factory, context) = Create();
         await using var _ = context;
@@ -128,10 +130,10 @@ public class FractionalIntoIntegerTests
         await using var sc = context.CreateSqlContainer("SELECT id, n, big FROM t");
         await using var reader = await sc.ExecuteReaderAsync();
 
-        var rows = await DataReaderMapper.LoadAsync<Plain>(reader, MapperOptions.Default);
+        var error = await Assert.ThrowsAsync<DataMappingException>(
+            () => DataReaderMapper.LoadAsync<Plain>(reader, MapperOptions.Default).AsTask());
 
-        Assert.Equal(0, rows[0].N);
-        Assert.Null(rows[0].Big);
+        Assert.Contains("'n'", error.Message);
     }
 
     [Theory]

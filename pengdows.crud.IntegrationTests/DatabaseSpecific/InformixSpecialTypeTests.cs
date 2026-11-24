@@ -66,7 +66,7 @@ public sealed class InformixSpecialTypeTests : DatabaseTestBase
         await RunTestAgainstProviderAsync(SupportedDatabase.Informix, async context =>
         {
             await TryExec(context, "DROP TABLE ifx_distinct_doc");
-            await TryExec(context, "DROP DISTINCT TYPE ifx_money_t RESTRICT");
+            await TryExec(context, "DROP TYPE ifx_money_t RESTRICT");
             await Exec(context, "CREATE DISTINCT TYPE ifx_money_t AS DECIMAL(9,2)");
             await Exec(context, "CREATE TABLE ifx_distinct_doc (id INTEGER NOT NULL PRIMARY KEY, m ifx_money_t)");
             await Exec(context, "INSERT INTO ifx_distinct_doc VALUES (1, 12.50::DECIMAL(9,2)::ifx_money_t)");
@@ -74,7 +74,7 @@ public sealed class InformixSpecialTypeTests : DatabaseTestBase
             Assert.Equal(12.50m, await Scalar<decimal>(context, "SELECT m::DECIMAL(9,2) FROM ifx_distinct_doc WHERE id = 1"));
             await Assert.ThrowsAnyAsync<Exception>(() => Exec(context, "INSERT INTO ifx_distinct_doc VALUES (2, 7.25)")); // no implicit cast from the base type
             await Exec(context, "DROP TABLE ifx_distinct_doc");
-            await Exec(context, "DROP DISTINCT TYPE ifx_money_t RESTRICT");
+            await Exec(context, "DROP TYPE ifx_money_t RESTRICT");
         });
     }
 

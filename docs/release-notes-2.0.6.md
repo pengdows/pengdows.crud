@@ -122,6 +122,14 @@ the integration run (`INCLUDE_AURORA=true`). Per-database requirements and versi
 
 ## Reads that now fail instead of returning a wrong value
 
+- **Behaviour change: `DataReaderMapper` no longer maps a failed column to the property's default in
+  lenient mode.** 2.0.5 and early 2.0.6 logged a failed column (a fraction read into an integer, an
+  overflow, text that isn't a number) and left the property at `default`, a value the database never
+  stored. Every column that fails now throws `DataMappingException` naming the column, the same as strict
+  mode did, and the gateway already behaved this way. The NULL-into-non-nullable rule was unchanged.
+  Intent stated for review (REVIEW_POLICY Ring 1 P0). `MapperOptions.Strict` no longer changes column
+  failures; whether to remove the property is an open decision, so it stays declared for now.
+
 - A `[Json]` column holding text that isn't valid JSON for the property type fails the read with
   `DataMappingException` naming the column. 2.0.5 returned `null`/default silently (DEC-008).
   Blank text reads as the JSON literal `null` on every path (gateway, `DataReaderMapper`,
@@ -571,6 +579,7 @@ passed on 2.0.5 and fails now was relying on behavior no real provider has.
 | `fakeDbFactory.CreateDataSource` | .NET's default data source | .NET's default data source; `SupportsNativeDataSource = true` returns a `FakeDbDataSource` | providers without their own data source return .NET's default |
 | A column holding a `fakeDbInterval` (new) | — | reports `TimeSpan` and data type `Interval`; `GetValue` converts as DuckDB.NET 1.5.6 does (throws for negatives and months ≥ 1, drops negative months); `GetProviderSpecificValue` returns the stored parts | DuckDB.NET 1.5.6 on `INTERVAL` |
 | `OffsetDroppedByGetValueColumns` (new) | — | the column reports `DateTime` and data type `TimeStampTZ`; `GetValue` returns the wall time with no offset, `GetDateTimeOffset` the value | ODP.NET 3.21 on `TIMESTAMP WITH TIME ZONE` |
+| `FloatingTextColumns` (new, opt-in) | — | a column holding the text of a non-finite number (`"inf"`, `"-inf"`, `"NaN"`) reports `double`; `GetDouble`, `GetFloat` and `GetValue` throw `FormatException`; `GetString` returns the text. Recorded reason (REVIEW_POLICY §4D): a fakeDb consumer cannot emulate Snowflake's FLOAT without it, and the library's infinity read depends on this behavior. The reasons live here because `PublicAPI.Unshipped.txt` rejects comment lines. | Snowflake.Data as referenced by the integration run, on `FLOAT` (probe 2026-11-22, version not recorded: `GetDouble`, `GetValue` throw on `inf`; `GetString` returns it) |
 | `GetProviderSpecificValue` / `GetProviderSpecificFieldType` | .NET's default (`GetValue`) | the stored value for a provider-specific type (`fakeDbInterval`), otherwise unchanged | each provider's own value type |
 | A new parameter's `Direction` and `Value` | `0` (no defined direction) and `DBNull.Value` | `Input` and `null` | the documented `DbParameter` defaults |
 | A new command's `CommandType` | `0` | `Text` | the documented `DbCommand` default |

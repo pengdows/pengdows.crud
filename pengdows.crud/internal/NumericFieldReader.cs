@@ -24,11 +24,12 @@ internal static class NumericFieldReader
     {
         try
         {
-            return (double)record.GetDecimal(ordinal);
+            // The same decimal-to-double rule as every other numeric read, including its precision warning.
+            return NumericExpressions.DoubleFromDecimal(record.GetDecimal(ordinal));
         }
         catch (Exception ex) when (ex is InvalidCastException or OverflowException)
         {
-            return record.GetDouble(ordinal);
+            return FloatingPointReads.ReadDouble(record, ordinal);
         }
     }
 

@@ -85,55 +85,40 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
 
             if (column.IsJsonType)
             {
-                var getString = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetString))!;
-                // Blank text is the JSON literal null (COR-007).
-                var jsonStr = Expression.Call(
+                // Every JSON target, value type (JsonElement, JsonValue) or reference type (JsonDocument, a [Json] POCO),
+                // takes this one path: the raw value is read once and its DBNull is the null check, and its JSON text comes
+                // from JsonCoercion, the same extraction every other read uses. GetString was wrong for bytes (UTF-8 JSON
+                // and binary JSON alike), and a second text extraction here disagreed with JsonCoercion's.
+                var jsonStored = Expression.Variable(typeof(object), "value");
+                var jsonText = Expression.Call(
                     typeof(pengdows.crud.types.coercion.JsonCoercion).GetMethod(nameof(pengdows.crud.types.coercion.JsonCoercion.JsonTextOrNullLiteral),
                         BindingFlags.NonPublic | BindingFlags.Static)!,
-                    Expression.Call(readerParam, getString, ordinalExpr));
-
-                var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
-                if (underlying == typeof(types.valueobjects.JsonValue))
-                {
-                    // A JsonValue holds the JSON text itself. Deserializing into the struct (it has no
-                    // settable properties) returned an empty default (TYPE-019).
-                    var ctor = typeof(types.valueobjects.JsonValue).GetConstructor(new[] { typeof(string) })!;
-                    valueReadExpr = Expression.Convert(Expression.New(ctor, jsonStr), targetType);
-                }
-                else
-                {
-                    // Use JsonSerializer.Deserialize<T>(string, JsonSerializerOptions)
-                    var deserializeMethod = ResolveJsonDeserializeMethod(targetType);
-                    valueReadExpr = Expression.Call(deserializeMethod, jsonStr, Expression.Constant(column.JsonSerializerOptions));
-                }
-
+                    Expression.Call(SingleReadColumns.JsonTextFromValueMethod, jsonStored,
+                        Expression.Constant(coercionOptions, typeof(TypeCoercionOptions))));
                 // Invalid JSON is not swallowed (DEC-008): the JsonException reaches the gateway,
                 // which reports a DataMappingException naming the column (TYPE-008).
-
-                if (!targetType.IsValueType)
-                {
-                    // A reference-type target (JsonDocument, a [Json] POCO) keeps its null guard: read the text once, its
-                    // DBNull is the null check, and the text is the one GetValue result (a string or anything convertible).
-                    var jsonStored = Expression.Variable(typeof(object), "value");
-                    var jsonText = Expression.Call(
-                        typeof(pengdows.crud.types.coercion.JsonCoercion).GetMethod(nameof(pengdows.crud.types.coercion.JsonCoercion.JsonTextOrNullLiteral),
-                            BindingFlags.NonPublic | BindingFlags.Static)!,
-                        Expression.Call(SingleReadColumns.JsonTextFromValueMethod, jsonStored,
-                            Expression.Constant(coercionOptions, typeof(TypeCoercionOptions))));
-                    var jsonValue = (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(types.valueobjects.JsonValue)
-                        ? (Expression)Expression.Convert(Expression.New(
-                            typeof(types.valueobjects.JsonValue).GetConstructor(new[] { typeof(string) })!, jsonText), targetType)
-                        : Expression.Call(ResolveJsonDeserializeMethod(targetType), jsonText,
-                            Expression.Constant(column.JsonSerializerOptions));
-                    expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
-                    expressions.Add(Expression.Block(
-                        new[] { jsonStored },
-                        Expression.Assign(jsonStored, Expression.Call(readerParam, GetValueMethod, ordinalExpr)),
-                        Expression.IfThen(
-                            Expression.Not(Expression.TypeIs(jsonStored, typeof(DBNull))),
-                            Expression.Assign(Expression.Property(entityVar, property), jsonValue))));
-                    continue;
-                }
+                // A JsonValue holds the JSON text itself; deserializing into the struct returned an empty default (TYPE-019).
+                var jsonValue = (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(types.valueobjects.JsonValue)
+                    ? (Expression)Expression.Convert(Expression.New(
+                        typeof(types.valueobjects.JsonValue).GetConstructor(new[] { typeof(string) })!, jsonText), targetType)
+                    : Expression.Call(ResolveJsonDeserializeMethod(targetType), jsonText,
+                        Expression.Constant(column.JsonSerializerOptions));
+                // A non-nullable value type (JsonElement, JsonValue) has no null: a NULL fails loudly, as every other
+                // non-nullable value type does (ColumnConversion), rather than leaving the property at its default.
+                var nonNullableValueType = targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null;
+                var nullStored = nonNullableValueType
+                    ? (Expression)Expression.Throw(Expression.New(typeof(InvalidCastException).GetConstructor(new[] { typeof(string) })!,
+                        Expression.Constant($"NULL cannot be read into the non-nullable type {targetType.Name}.")))
+                    : Expression.Empty();
+                expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
+                expressions.Add(Expression.Block(
+                    new[] { jsonStored },
+                    Expression.Assign(jsonStored, Expression.Call(readerParam, GetValueMethod, ordinalExpr)),
+                    Expression.IfThenElse(
+                        Expression.Not(Expression.TypeIs(jsonStored, typeof(DBNull))),
+                        Expression.Assign(Expression.Property(entityVar, property), jsonValue),
+                        nullStored)));
+                continue;
             }
             else if (ColumnReadRules.TryBuild(readerParam, i, fieldType, targetType, coercionOptions,
                          ColumnQuirkReads.NpgsqlTypedFor(reader, i, targetType), column.NativeType,
@@ -344,12 +329,25 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
 
     // The column read as its own type: a typed getter, GetFieldValue<T> for the value types IDataRecord has
     // no getter for (TypedFieldReader, COR-008), otherwise GetValue.
-    private static Expression ReadColumn(Expression readerParam, Type fieldType, Expression ordinalExpr) =>
-        TypedFieldReader.Handles(fieldType)
+    private static Expression ReadColumn(Expression readerParam, Type fieldType, Expression ordinalExpr)
+    {
+        // A double or float column reads through FloatingPointReads: a driver that rejects a non-finite number's text in its
+        // typed getter (Snowflake's "inf") still yields the infinity.
+        if (fieldType == typeof(double) || fieldType == typeof(float))
+        {
+            return Expression.Call(
+                typeof(FloatingPointReads).GetMethod(fieldType == typeof(double)
+                    ? nameof(FloatingPointReads.ReadDouble)
+                    : nameof(FloatingPointReads.ReadSingle))!,
+                Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
+        }
+
+        return TypedFieldReader.Handles(fieldType)
             ? Expression.Call(
                 typeof(TypedFieldReader).GetMethod(nameof(TypedFieldReader.Read))!.MakeGenericMethod(fieldType),
                 Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr)
             : Expression.Call(readerParam, GetReaderMethod(fieldType), ordinalExpr);
+    }
 
     private static MethodInfo GetReaderMethod(Type fieldType) =>
         ReaderGetters.TypedGetter(typeof(IDataRecord), fieldType) ?? ReaderGetters.GetValue;

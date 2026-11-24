@@ -36,7 +36,23 @@ internal static class NumericExpressions
         // decimal column (Oracle NUMBER) into an enum failed to compile (COR-013).
         var numericTarget = underlyingTarget.IsEnum ? Enum.GetUnderlyingType(underlyingTarget) : underlyingTarget;
         Expression converted = typed;
-        if (sourceType != numericTarget)
+        if (sourceType == typeof(double) && numericTarget == typeof(decimal))
+        {
+            // The double's own digits (DecimalCoercion.DecimalFromDoubleOrThrow), not the explicit conversion's 15.
+            converted = Expression.Call(typeof(NumericExpressions).GetMethod(nameof(DecimalFromDouble))!, typed);
+        }
+        else if (sourceType == typeof(float) && numericTarget == typeof(decimal))
+        {
+            // The float's own digits (DecimalCoercion.DecimalFromFloatOrThrow), not ConvertChecked's 7.
+            converted = Expression.Call(typeof(NumericExpressions).GetMethod(nameof(DecimalFromFloat))!, typed);
+        }
+        else if (sourceType == typeof(decimal) && (numericTarget == typeof(double) || numericTarget == typeof(float)))
+        {
+            // Reported when the decimal's digits don't survive (TypeCoercionHelper.WarnIfDecimalLosesDigits), never silent.
+            converted = Expression.Call(typeof(NumericExpressions).GetMethod(
+                numericTarget == typeof(double) ? nameof(DoubleFromDecimal) : nameof(FloatFromDecimal))!, typed);
+        }
+        else if (sourceType != numericTarget)
         {
             if (WholeNumber.RequireFor(sourceType, numericTarget) is { } requireWhole)
             {
@@ -47,5 +63,21 @@ internal static class NumericExpressions
         }
 
         return numericTarget != underlyingTarget ? Expression.Convert(converted, underlyingTarget) : converted;
+    }
+
+    public static decimal DecimalFromDouble(double value) => types.coercion.DecimalCoercion.DecimalFromDoubleOrThrow(value);
+
+    public static decimal DecimalFromFloat(float value) => types.coercion.DecimalCoercion.DecimalFromFloatOrThrow(value);
+
+    public static double DoubleFromDecimal(decimal value)
+    {
+        TypeCoercionHelper.WarnIfDecimalLosesDigits(value, typeof(double));
+        return (double)value;
+    }
+
+    public static float FloatFromDecimal(decimal value)
+    {
+        TypeCoercionHelper.WarnIfDecimalLosesDigits(value, typeof(float));
+        return (float)value;
     }
 }

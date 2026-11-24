@@ -14,6 +14,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Linq.Expressions;
+using System.Reflection;
 using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.@internal;
@@ -65,8 +66,12 @@ internal static class ConverterResolution
         }
         catch (Exception ex)
         {
+            // The value is named when it can be formatted, so an overflow says which value didn't fit.
+            var shown = value is IFormattable formattable
+                ? formattable.ToString(null, CultureInfo.InvariantCulture)
+                : sourceType.Name;
             throw new InvalidCastException(
-                $"Cannot convert value from {sourceType.Name} to {actualTarget.Name}.",
+                $"Cannot convert value {shown} from {sourceType.Name} to {actualTarget.Name}.",
                 ex);
         }
     }
@@ -109,6 +114,28 @@ internal static class ConverterResolution
             var property = typeof(DateTimeOffset).GetProperty(nameof(DateTimeOffset.DateTime))!;
             conversion = Expression.Property(typedInput, property);
         }
+        else if (sourceType == typeof(string) && (targetType == typeof(double) || targetType == typeof(float)))
+        {
+            // The spellings a provider returns for the infinities and NaN (FloatingPointText).
+            var parse = typeof(FloatingPointText).GetMethod(
+                targetType == typeof(double) ? nameof(FloatingPointText.ParseDoubleOrThrow) : nameof(FloatingPointText.ParseSingleOrThrow),
+                BindingFlags.NonPublic | BindingFlags.Static)!;
+            conversion = Expression.Call(parse, typedInput);
+        }
+        else if (sourceType == typeof(float) && targetType == typeof(decimal))
+        {
+            // The float's own digits (DecimalCoercion.DecimalFromFloatOrThrow), not Convert.ChangeType's 7.
+            var fromFloat = typeof(DecimalCoercion).GetMethod(nameof(DecimalCoercion.DecimalFromFloatOrThrow),
+                BindingFlags.NonPublic | BindingFlags.Static)!;
+            conversion = Expression.Call(fromFloat, typedInput);
+        }
+        else if (sourceType == typeof(double) && targetType == typeof(decimal))
+        {
+            // The double's own digits, not Convert.ChangeType's 15 (see DecimalCoercion.DecimalFromDoubleOrThrow).
+            var method = typeof(DecimalCoercion).GetMethod(nameof(DecimalCoercion.DecimalFromDoubleOrThrow),
+                BindingFlags.NonPublic | BindingFlags.Static)!;
+            conversion = Expression.Call(method, typedInput);
+        }
         else
         {
             // Use ChangeType method with InvariantCulture for standard conversions
@@ -116,9 +143,12 @@ internal static class ConverterResolution
                 nameof(Convert.ChangeType),
                 new[] { typeof(object), typeof(Type), typeof(IFormatProvider) })!;
 
+            // A fractional number into an integer is refused here as on every other route (COR-009); ChangeType would round it.
+            var wholeCheck = pengdows.crud.@internal.WholeNumber.RequireFor(sourceType, targetType);
+            Expression checkedInput = wholeCheck is null ? typedInput : Expression.Call(wholeCheck, typedInput);
             conversion = Expression.Call(
                 changeTypeMethod,
-                Expression.Convert(typedInput, typeof(object)),
+                Expression.Convert(checkedInput, typeof(object)),
                 Expression.Constant(targetType),
                 Expression.Constant(CultureInfo.InvariantCulture)
             );

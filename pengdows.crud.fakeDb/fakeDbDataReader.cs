@@ -264,6 +264,11 @@ public class fakeDbDataReader : DbDataReader
     public override object GetValue(int i)
     {
         CheckSequentialAccess(i);
+        if (IsFloatingTextColumn(i))
+        {
+            throw FloatingTextRead(i);
+        }
+
         try
         {
             return GetValueCore(i);
@@ -381,6 +386,19 @@ public class fakeDbDataReader : DbDataReader
     public ISet<string>? DecimalTextColumns { get; set; }
 
     private bool IsDecimalTextColumn(int i) => DecimalTextColumns != null && DecimalTextColumns.Contains(GetName(i));
+
+    /// <summary>
+    /// Columns that emulate Snowflake's FLOAT (confirmed by the live probe, 2026-11-22): the stored value is the text of a
+    /// non-finite number ("inf", "-inf", "NaN"). <see cref="GetFieldType"/> reports <see cref="double"/>; <see cref="GetDouble"/>,
+    /// <see cref="GetFloat"/> and <see cref="GetValue"/> throw <see cref="FormatException"/> ("The input string 'inf' was not
+    /// in a correct format."); <see cref="GetString"/> returns the text, which is how a caller reads the infinity.
+    /// </summary>
+    public ISet<string>? FloatingTextColumns { get; set; }
+
+    private bool IsFloatingTextColumn(int i) => FloatingTextColumns != null && FloatingTextColumns.Contains(GetName(i));
+
+    private FormatException FloatingTextRead(int i) =>
+        new($"The input string '{RawValue(i) as string}' was not in a correct format.");
 
     private static OverflowException Int64TextOverflow(string text) =>
         new($"Error converting '{text} to Int64'. Use GetString() to handle very large values");
@@ -656,7 +674,7 @@ public class fakeDbDataReader : DbDataReader
             throw new OverflowException("Value was either too large or too small for a Decimal.");
         }
 
-        var value = IsUnloadableUdt(i) || IsInt64TextColumn(i) || IsDecimalTextColumn(i) || IsHandlerlessColumn(i) ||
+        var value = IsUnloadableUdt(i) || IsInt64TextColumn(i) || IsDecimalTextColumn(i) || IsFloatingTextColumn(i) || IsHandlerlessColumn(i) ||
                     IsDoubleBeyondDecimal(i) || IsUnknownTypeColumn(i) || IsNullableElementArray(i) || RawValue(i) is fakeDbInterval
             ? RawValue(i)
             : GetValue(i);
@@ -836,6 +854,11 @@ public class fakeDbDataReader : DbDataReader
     public override double GetDouble(int i)
     {
         CheckSequentialAccess(i);
+        if (IsFloatingTextColumn(i))
+        {
+            throw FloatingTextRead(i);
+        }
+
         if (IsDoubleBeyondDecimal(i) && RawValue(i) is double value)
         {
             return value;
@@ -854,7 +877,7 @@ public class fakeDbDataReader : DbDataReader
         ColumnReadExceptions != null || OutOfRangeReturnsNullColumns != null || Int64TextColumns != null ||
         HandlerlessColumns != null || DoubleBeyondDecimalColumns != null || UnknownTypeColumns != null ||
         NullableElementArrayColumns != null || UnloadableUdtColumns != null || OffsetDroppedByGetValueColumns != null ||
-        ProviderDecimalColumns != null || DecimalTextColumns != null;
+        ProviderDecimalColumns != null || DecimalTextColumns != null || FloatingTextColumns != null;
 
     private object? RawValue(int i)
     {
@@ -868,6 +891,11 @@ public class fakeDbDataReader : DbDataReader
         if (Columns != null)
         {
             return Columns[ordinal].FieldType;
+        }
+
+        if (IsFloatingTextColumn(ordinal))
+        {
+            return typeof(double);
         }
 
         if (IsHandlerlessColumn(ordinal))
@@ -947,6 +975,11 @@ public class fakeDbDataReader : DbDataReader
     public override float GetFloat(int i)
     {
         CheckSequentialAccess(i);
+        if (IsFloatingTextColumn(i))
+        {
+            throw FloatingTextRead(i);
+        }
+
         return (float)GetValue(i);
     }
 
@@ -990,7 +1023,7 @@ public class fakeDbDataReader : DbDataReader
     public override string GetString(int i)
     {
         CheckSequentialAccess(i);
-        if ((IsInt64TextColumn(i) || IsDecimalTextColumn(i)) && RawValue(i) is string text)
+        if ((IsInt64TextColumn(i) || IsDecimalTextColumn(i) || IsFloatingTextColumn(i)) && RawValue(i) is string text)
         {
             return text;
         }

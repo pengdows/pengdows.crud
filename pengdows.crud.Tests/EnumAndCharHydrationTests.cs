@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -46,6 +47,11 @@ public class EnumAndCharHydrationTests
     }
 
     // What the full conversion gives for the same stored value, or the property's default when it cannot convert.
+    // Review policy Ring 1 P0: a value the full conversion refuses must fail the mapping, not map to default. This maps
+    // without asserting one row, so the failure can be asserted.
+    private static Task<List<T>> MapList<T>(Type column, object value) where T : class, new() =>
+        DataReaderMapper.LoadAsync<T>(Reader(column, value), MapperOptions.Default).AsTask();
+
     private static object? Reference(Type column, object value, Type target)
     {
         try
@@ -66,10 +72,15 @@ public class EnumAndCharHydrationTests
     [InlineData(-3)]   // undefined, negative
     public async Task IntColumnIntoEnum_MatchesTheFullConversion(int stored)
     {
-        var row = await Map<MoodRow>(typeof(int), stored);
-
         var expected = Reference(typeof(int), stored, typeof(Mood));
-        Assert.Equal(expected is Mood m ? m : default, row.V);
+        if (expected is Mood m)
+        {
+            Assert.Equal(m, (await Map<MoodRow>(typeof(int), stored)).V);
+        }
+        else
+        {
+            await Assert.ThrowsAsync<DataMappingException>(() => MapList<MoodRow>(typeof(int), stored));
+        }
     }
 
     [Theory]
@@ -80,10 +91,15 @@ public class EnumAndCharHydrationTests
     [InlineData(8)]    // undefined
     public async Task IntColumnIntoFlagsEnum_MatchesTheFullConversion(int stored)
     {
-        var row = await Map<PermsRow>(typeof(int), stored);
-
         var expected = Reference(typeof(int), stored, typeof(Perms));
-        Assert.Equal(expected is Perms p ? p : default, row.V);
+        if (expected is Perms p)
+        {
+            Assert.Equal(p, (await Map<PermsRow>(typeof(int), stored)).V);
+        }
+        else
+        {
+            await Assert.ThrowsAsync<DataMappingException>(() => MapList<PermsRow>(typeof(int), stored));
+        }
     }
 
     [Theory]
@@ -94,10 +110,15 @@ public class EnumAndCharHydrationTests
     [InlineData("nope")]
     public async Task TextColumnIntoEnum_MatchesTheFullConversion(string stored)
     {
-        var row = await Map<MoodRow>(typeof(string), stored);
-
         var expected = Reference(typeof(string), stored, typeof(Mood));
-        Assert.Equal(expected is Mood m ? m : default, row.V);
+        if (expected is Mood m)
+        {
+            Assert.Equal(m, (await Map<MoodRow>(typeof(string), stored)).V);
+        }
+        else
+        {
+            await Assert.ThrowsAsync<DataMappingException>(() => MapList<MoodRow>(typeof(string), stored));
+        }
     }
 
     [Fact]
@@ -113,10 +134,15 @@ public class EnumAndCharHydrationTests
     [InlineData("ab")] // not one character: the full conversion decides
     public async Task TextColumnIntoChar_MatchesTheFullConversion(string stored)
     {
-        var row = await Map<CharRow>(typeof(string), stored);
-
         var expected = Reference(typeof(string), stored, typeof(char));
-        Assert.Equal(expected is char c ? c : default, row.V);
+        if (expected is char c)
+        {
+            Assert.Equal(c, (await Map<CharRow>(typeof(string), stored)).V);
+        }
+        else
+        {
+            await Assert.ThrowsAsync<DataMappingException>(() => MapList<CharRow>(typeof(string), stored));
+        }
     }
 
     // Allocated bytes per mapped row, after the mapping is resolved and warm.

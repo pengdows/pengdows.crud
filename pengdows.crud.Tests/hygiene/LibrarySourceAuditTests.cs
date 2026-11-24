@@ -21,6 +21,16 @@ public class LibrarySourceAuditTests
                         !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"));
     }
 
+    /// <summary>The type conversion code: the coercion folder, the coercion helper, the mapper and the numeric reads.</summary>
+    private static bool IsConversionCode(string file)
+    {
+        var sep = Path.DirectorySeparatorChar;
+        return file.Contains($"{sep}types{sep}", StringComparison.Ordinal) ||
+               file.EndsWith($"{sep}TypeCoercionHelper.cs", StringComparison.Ordinal) ||
+               file.EndsWith($"{sep}DataReaderMapper.cs", StringComparison.Ordinal) ||
+               file.Contains($"{sep}internal{sep}Numeric", StringComparison.Ordinal);
+    }
+
     // G-03: no finalizer or GC backstop anywhere in the library, so an undisposed connection, reader or transaction keeps
     // its governor permit. If a backstop is added, TrackedConnectionSlotLifetimeTests.AbandonedConnection_* must change on
     // purpose too, and docs/core-invariants.md must say so.
@@ -121,6 +131,68 @@ public class LibrarySourceAuditTests
         }
 
         Assert.True(offenders.Count == 0, "Unbraced control flow: " + string.Join(", ", offenders));
+    }
+
+    // Review policy CATCH-001: a catch block with no code must say which exception it expects. "A reason" of five words is not
+    // enough: the comment has to name the exception type, so a reader can see what is being swallowed. Scoped to the type
+    // conversion code (types/, TypeCoercionHelper.cs, DataReaderMapper.cs, internal/Numeric*); the rest of the library is
+    // tracked as separate debt, since it was never part of this review.
+    [Fact]
+    public void Catch001_CommentOnlyCatchNamesTheExpectedException()
+    {
+        var catchOpen = new Regex(@"^\s*catch\b[^{]*$");
+        var namesException = new Regex(@"\b\w+Exception\b");
+        var offenders = new List<string>();
+        foreach (var file in LibrarySources().Where(IsConversionCode))
+        {
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i + 2 < lines.Length; i++)
+            {
+                if (!catchOpen.IsMatch(lines[i]) || lines[i + 1].Trim() != "{")
+                {
+                    continue;
+                }
+
+                var body = new List<string>();
+                var j = i + 2;
+                while (j < lines.Length && lines[j].Trim() != "}")
+                {
+                    body.Add(lines[j].Trim());
+                    j++;
+                }
+
+                var code = body.Where(l => l.Length > 0 && !l.StartsWith("//", StringComparison.Ordinal) && !l.StartsWith("/*", StringComparison.Ordinal)).ToList();
+                if (code.Count == 0 && !namesException.IsMatch(string.Join(" ", body)))
+                {
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1}");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0, "Comment-only catch blocks that do not name the expected exception: " + string.Join(", ", offenders));
+    }
+
+    // Review policy 4F: one statement per line. A switch case that carries a second statement on its line (`case X x: a = 1; break;`)
+    // hides the break from a diff. Only case labels are scanned: the general form also matches property declarations.
+    [Fact]
+    public void Policy4F_OneStatementPerLine_SwitchCases()
+    {
+        var caseWithTwoStatements = new Regex(@"^\s*(?:case\b[^:]*:|default:)\s*[^\s/][^;]*;\s*\S");
+        var breakAfterStatement = new Regex(@"^\s*[^\s/].*;\s*break;\s*(?://.*)?$");
+        var offenders = new List<string>();
+        foreach (var file in LibrarySources())
+        {
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (caseWithTwoStatements.IsMatch(lines[i]) || breakAfterStatement.IsMatch(lines[i]))
+                {
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1}");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0, "Switch cases with more than one statement on a line: " + string.Join(", ", offenders));
     }
 
     // Review policy 4F, enforced by the compiler as well as by the scan above: the analyzer reports a missing brace in the build

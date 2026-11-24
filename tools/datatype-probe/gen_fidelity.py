@@ -103,6 +103,47 @@ SPEC = [
     ("security_label", "specialized security label", "string", "String", "\"label\"", "eq"),
 ]
 
+# Edge values per column: the limits and awkward members of each type, written and read back as well as the sample
+# (IFidelityRow.Edges). Each is a C# expression of the column's CLR type. A value a database can't hold fails the cell:
+# that is a finding to record (a declared bound) or fix, never a value to drop from this list.
+EDGES = {
+    "signed_8_bit": ["sbyte.MinValue", "sbyte.MaxValue", "(sbyte)0"],
+    "signed_16_bit": ["short.MinValue", "short.MaxValue", "(short)0"],
+    "signed_32_bit": ["int.MinValue", "int.MaxValue", "0"],
+    "signed_64_bit": ["long.MaxValue", "0L"],
+    "signed_128_bit": ["Int128.MinValue", "Int128.MaxValue", "(Int128)0"],
+    "unsigned_8_bit": ["byte.MinValue", "byte.MaxValue"],
+    "unsigned_16_bit": ["ushort.MaxValue", "(ushort)0"],
+    "unsigned_32_bit": ["uint.MaxValue", "0u"],
+    "unsigned_64_bit": ["0ul", "1ul"],
+    "unsigned_128_bit": ["UInt128.MinValue", "UInt128.MaxValue - 1"],
+    "arbitrary_integer": ["-BigInteger.Parse(\"123456789012345678901234567890\")", "BigInteger.Zero"],
+    "binary_float32": ["float.MaxValue", "float.Epsilon", "float.NaN", "float.PositiveInfinity",
+                       "float.NegativeInfinity", "-0.0f"],
+    "binary_float64": ["double.MaxValue", "double.Epsilon", "double.NaN", "double.PositiveInfinity",
+                       "double.NegativeInfinity", "-0.0", "0.30000000000000004"],
+    "fixed_decimal": ["0.0000000000000000000000000001m", "-123.4500m", "0m", "79228162514264337593543950335m",
+                      "-79228162514264337593543950335m"],
+    "boolean": ["false"],
+    "bit_string": ["new BitArray(0)"],
+    "varying_character": ["\"\"", "\"  padded  \"", "\"\U0001F600 non-BMP\"", "\"line\\nbreak\""],
+    "unbounded_text": ["\"\"", r'"quote \"double\" text"', "\"tab\\tand\\\\backslash\""],
+    "fixed_character": ["\"ab\""],
+    "uuid": ["Guid.Empty"],
+    "calendar_date": ["DateOnly.MinValue", "DateOnly.MaxValue"],
+    "time_of_day": ["TimeOnly.MinValue", "TimeOnly.MaxValue"],
+    "time_span": ["TimeSpan.Zero", "new TimeSpan(23, 59, 59)"],
+    "timestamp": ["new DateTime(2026, 10, 5, 13, 45, 30, DateTimeKind.Utc).AddTicks(1234560)",
+                  "new DateTime(1601, 1, 1, 0, 0, 0, DateTimeKind.Utc)",
+                  "new DateTime(9999, 12, 31, 23, 59, 59, DateTimeKind.Utc)"],
+    "timestamp_with_zone": ["new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.FromHours(-5))",
+                            "DateTimeOffset.MinValue"],
+    "binary": ["new byte[0]", "new byte[] { 0, 255, 0 }"],
+    "json": ["JsonDocument.Parse(\"[]\")", "JsonDocument.Parse(\"null\")", "JsonDocument.Parse(\"\\\"text\\\"\")"],
+    "ip_address": ["IPAddress.IPv6Loopback", "IPAddress.Any"],
+    "int_array": ["new int[0]"],
+}
+
 # Where the database has no unsigned type, the column is the next signed type up: the type the library binds the
 # value as on that database (BoundDbTypes.txt). Used only when the probe accepted no native declaration.
 WIDENED = {
@@ -536,6 +577,222 @@ def refused_reason(refused, db, sem):
     return " ".join(text.replace("Unknown failed on " + db + ": ", "").split())[:200]
 
 
+# Declared limits: (database, semantic type, edge number from 1, as in EDGES) -> the server's (or driver's) observed refusal.
+# A listed edge that fails is reported as LIMIT, not FAIL, with its reason; an edge that is not listed and fails is a FAIL.
+# Each entry was observed in the 2026-11-22 run (tools/datatype-probe results, TypeFidelityIntegrationTests output).
+# Entries are removed when the server or the library changes; a listed edge that now passes is reported as PASS.
+EDGE_LIMITS = {
+    ("SqlServer", "signed 128-bit", 1): "server: NUMERIC(38,0) can't hold -2^127: Arithmetic overflow converting nvarchar to numeric",
+    ("PostgreSql", "signed 128-bit", 1): "server: NUMERIC(38,0) can't hold -2^127: 22003 numeric field overflow",
+    ("YugabyteDb", "signed 128-bit", 1): "server: NUMERIC(38,0) can't hold -2^127: 22003 numeric field overflow",
+    ("CockroachDb", "signed 128-bit", 1): "server: DECIMAL(38) can't hold -2^127: 22003 precision 38 must round",
+    ("MySql", "signed 128-bit", 1): "server: DECIMAL(38,0) can't hold -2^127: Out of range value for column",
+    ("MariaDb", "signed 128-bit", 1): "server: DECIMAL(38,0) can't hold -2^127: Out of range value for column",
+    ("Oracle", "signed 128-bit", 1): "server: NUMBER(38) can't hold -2^127: ORA-01438 greater than specified precision (38, 0)",
+    # NaN: a SQL float has no NaN value.
+    ("MySql", "binary float32", 3): "server: FLOAT has no NaN: Out of range value for column",
+    ("MariaDb", "binary float32", 3): "server: FLOAT has no NaN: Out of range value for column",
+    ("TiDb", "binary float32", 3): "server: FLOAT has no NaN: Out of range value for column",
+    ("SingleStore", "binary float32", 3): "server: FLOAT has no NaN: the NaN text is read as a column name",
+    ("SqlServer", "binary float32", 3): "server: REAL has no NaN: the TDS parameter is not a valid float",
+    ("Oracle", "binary float32", 3): "server: the declared NUMBER has no NaN: ORA-03087 NaN can't convert to NUMBER",
+    ("SybaseASE", "binary float32", 3): "server: FLOAT has no NaN: Domain error occurred",
+    ("Sqlite", "binary float32", 3): "driver: Microsoft.Data.Sqlite refuses to store NaN: Cannot store 'NaN' values",
+    ("MySql", "binary float64", 3): "server: DOUBLE has no NaN: Out of range value for column",
+    ("MariaDb", "binary float64", 3): "server: DOUBLE has no NaN: Out of range value for column",
+    ("TiDb", "binary float64", 3): "server: DOUBLE has no NaN: Out of range value for column",
+    ("SingleStore", "binary float64", 3): "server: DOUBLE has no NaN: the NaN text is read as a column name",
+    ("SqlServer", "binary float64", 3): "server: FLOAT has no NaN: the TDS parameter is not a valid float",
+    ("SybaseASE", "binary float64", 3): "server: FLOAT has no NaN: Domain error occurred",
+    ("Sqlite", "binary float64", 3): "driver: Microsoft.Data.Sqlite refuses to store NaN: Cannot store 'NaN' values",
+    # The double maximum: the declared NUMBER overflows (Oracle); Snowflake returns Infinity for it.
+    ("Oracle", "binary float64", 1): "declared NUMBER: ORA-01426 numeric overflow for Double.MaxValue",
+    ("Snowflake", "binary float64", 1): "server: FLOAT returns Infinity for Double.MaxValue (observed)",
+    # 1e-28 into a decimal of declared scale below 28 is stored as 0 (silently, by the server).
+    ("PostgreSql", "fixed decimal", 1): "declared scale is too small: 1E-28 is stored as 0",
+    ("MySql", "fixed decimal", 1): "declared scale is too small: 1E-28 is stored as 0",
+    ("MariaDb", "fixed decimal", 1): "declared scale is too small: 1E-28 is stored as 0",
+    ("SqlServer", "fixed decimal", 1): "declared scale is too small: 1E-28 is stored as 0",
+    ("Oracle", "fixed decimal", 1): "declared scale is too small: 1E-28 is stored as 0",
+    ("CockroachDb", "fixed decimal", 1): "declared scale is too small: 1E-28 is stored as 0",
+    ("YugabyteDb", "fixed decimal", 1): "declared scale is too small: 1E-28 is stored as 0",
+    ("TiDb", "fixed decimal", 1): "declared scale is too small: 1E-28 is stored as 0",
+    ("DuckDB", "fixed decimal", 1): "declared scale is too small: 1E-28 is stored as 0",
+    ("Firebird", "fixed decimal", 1): "declared scale is too small: 1E-28 is stored as 0",
+    ("FlatFile", "fixed decimal", 1): "declared scale is too small: 1E-28 is stored as 0",
+    ("Snowflake", "fixed decimal", 1): "declared scale is too small: 1E-28 is stored as 0",
+    # SQLite's NUMERIC affinity stores a 29-digit value as a double, which is past decimal's range.
+    ("Sqlite", "fixed decimal", 4): "driver/affinity: a 29-digit value is stored as a double past decimal's range",
+    # Zero-length bit strings: BIT(n) refuses or pads them.
+    ("MySql", "bit / bitstring", 1): "server: a zero-length BIT is refused: Column cannot be null",
+    ("MariaDb", "bit / bitstring", 1): "server: a zero-length BIT is refused: Column cannot be null",
+    ("SingleStore", "bit / bitstring", 1): "server: a zero-length BIT is refused: Column cannot be null",
+    ("TiDb", "bit / bitstring", 1): "server: BIT(n) pads a zero-length value to n zeros",
+    ("DuckDB", "bit / bitstring", 1): "server: BIT pads a zero-length value to a zero",
+    # Unicode and empty text: a non-Unicode VARCHAR, and Oracle stores '' as NULL.
+    ("SqlServer", "varying character", 3): "declared VARCHAR is not Unicode: the non-BMP character is stored as ??",
+    ("Oracle", "varying character", 1): "server: Oracle stores '' as NULL: ORA-01400 cannot insert NULL",
+    ("Oracle", "unbounded text", 1): "server: Oracle stores '' as NULL: ORA-01400 cannot insert NULL",
+    ("Oracle", "binary LOB", 1): "server: Oracle stores empty bytes as NULL: ORA-01400 cannot insert NULL",
+    ("SybaseASE", "binary LOB", 1): "server: empty bytes are read back as one zero byte",
+    # Date ranges the declared types don't cover.
+    ("SingleStore", "calendar date", 1): "server: the DATE range starts after 0001-01-01: Invalid DATE/TIME",
+    ("Spanner", "calendar date", 1): "server: the DATE range starts after 0001-01-01: Invalid year",
+    ("MySql", "timestamp without zone", 2): "declared TIMESTAMP(6) covers 1970 to 2038 only: Incorrect datetime value",
+    ("MariaDb", "timestamp without zone", 2): "declared TIMESTAMP(6) covers 1970 to 2038 only: Incorrect datetime value",
+    ("Firebird", "timestamp without zone", 1): "server: TIMESTAMP keeps 0.1 ms: .1234560 is read back as .1234000",
+    # The server's JSON type refuses a bare scalar null.
+    ("SqlServer", "JSON text / JSON value", 2): "server: the json type refuses the bare JSON null: Unexpected character 'n'",
+    ("SqlServer", "JSON text / JSON value", 3): "server: the json type refuses a bare JSON string: Unexpected character '\"'",
+    # 128-bit signed: both ends have 39 digits (2^127 and 2^127-1), so a 38-digit declared precision holds neither.
+    ("PostgreSql", "signed 128-bit", 2): "server: NUMERIC(38,0) can't hold 2^127-1: 22003 numeric field overflow",
+    ("YugabyteDb", "signed 128-bit", 2): "server: NUMERIC(38,0) can't hold 2^127-1: 22003 numeric field overflow",
+    ("CockroachDb", "signed 128-bit", 2): "server: DECIMAL(38) can't hold 2^127-1: 22003 precision 38 must round",
+    ("MySql", "signed 128-bit", 2): "server: DECIMAL(38,0) can't hold 2^127-1: Out of range value for column",
+    ("MariaDb", "signed 128-bit", 2): "server: DECIMAL(38,0) can't hold 2^127-1: Out of range value for column",
+    ("SqlServer", "signed 128-bit", 2): "server: NUMERIC(38,0) can't hold 2^127-1: Arithmetic overflow converting nvarchar to numeric",
+    ("Oracle", "signed 128-bit", 2): "server: NUMBER(38) can't hold 2^127-1: ORA-01438 greater than specified precision (38, 0)",
+    ("FlatFile", "signed 128-bit", 1): "server: NUMERIC(38,0) can't hold -2^127: the value exceeds the declared precision",
+    ("SingleStore", "signed 128-bit", 1): "server: DECIMAL(38,0) can't hold -2^127: Out of range value for column",
+    ("Snowflake", "signed 128-bit", 1): "server: NUMBER(38,0) can't hold -2^127: DML failed, number out of range",
+    ("SybaseASE", "signed 128-bit", 1): "server: NUMERIC can't hold -2^127: arithmetic overflow converting the text",
+    ("TiDb", "signed 128-bit", 1): "server: DECIMAL(38,0) can't hold -2^127: Out of range value for column",
+    # Decimal maximum and minimum: the declared precision of the fidelity column (18,4 on several databases) can't hold them.
+    ("PostgreSql", "fixed decimal", 4): "declared NUMERIC can't hold the decimal maximum: 22003 numeric field overflow",
+    ("YugabyteDb", "fixed decimal", 4): "declared NUMERIC can't hold the decimal maximum: 22003 numeric field overflow",
+    ("CockroachDb", "fixed decimal", 4): "declared DECIMAL(18,4) can't hold the decimal maximum: 22003 precision 18",
+    ("MySql", "fixed decimal", 4): "declared DECIMAL can't hold the decimal maximum: Out of range value for column",
+    ("MariaDb", "fixed decimal", 4): "declared DECIMAL can't hold the decimal maximum: Out of range value for column",
+    ("TiDb", "fixed decimal", 4): "declared DECIMAL can't hold the decimal maximum: Out of range value for column",
+    ("SqlServer", "fixed decimal", 4): "declared NUMERIC can't hold the decimal maximum: Arithmetic overflow converting numeric",
+    ("Oracle", "fixed decimal", 4): "declared NUMBER(18,4) can't hold the decimal maximum: ORA-01438 greater than precision (18, 4)",
+    ("DuckDB", "fixed decimal", 4): "declared DECIMAL(18,4) can't hold the decimal maximum: Conversion Error",
+    ("FlatFile", "fixed decimal", 4): "declared DECIMAL(18,4) can't hold the decimal maximum: the value exceeds the declared precision",
+    ("Snowflake", "fixed decimal", 4): "declared NUMBER can't hold the decimal maximum: DML failed, number out of range",
+    ("Firebird", "fixed decimal", 4): "driver: the declared column reads back past decimal's range: OverflowException",
+    ("Sqlite", "fixed decimal", 5): "driver/affinity: a 29-digit negative value is stored as a double past decimal's range",
+    ("SybaseASE", "fixed decimal", 1): "declared scale is too small: 1E-28 is stored as 0 and the insert reports no row written",
+    # Non-finite floats: the server has no infinity (or no value for it).
+    ("MySql", "binary float32", 4): "server: FLOAT has no infinity: Out of range value for column",
+    ("MariaDb", "binary float32", 4): "server: FLOAT has no infinity: Out of range value for column",
+    ("TiDb", "binary float32", 4): "server: FLOAT has no infinity: Out of range value for column",
+    ("SingleStore", "binary float32", 4): "server: FLOAT has no infinity: the text is read as a column name",
+    ("SqlServer", "binary float32", 4): "server: REAL has no infinity: the TDS parameter is not a valid float",
+    ("Oracle", "binary float32", 4): "declared NUMBER: ORA-01426 numeric overflow for infinity",
+    ("SybaseASE", "binary float32", 4): "server: FLOAT has no infinity: Domain error occurred",
+    ("MySql", "binary float64", 4): "server: DOUBLE has no infinity: Out of range value for column",
+    ("MariaDb", "binary float64", 4): "server: DOUBLE has no infinity: Out of range value for column",
+    ("TiDb", "binary float64", 4): "server: DOUBLE has no infinity: Out of range value for column",
+    ("SingleStore", "binary float64", 4): "server: DOUBLE has no infinity: the text is read as a column name",
+    ("SqlServer", "binary float64", 4): "server: FLOAT has no infinity: the TDS parameter is not a valid float",
+    ("SybaseASE", "binary float64", 4): "server: FLOAT has no infinity: Domain error occurred",
+    ("Informix", "binary float32", 2): "server: SMALLFLOAT can't hold the denormal 1E-45: Value will not fit in a SMALLFLOAT",
+    ("Informix", "binary float64", 3): "server: FLOAT has no NaN: Value will not fit in a FLOAT",
+    # Timestamp ranges the declared types don't cover.
+    ("MySql", "timestamp without zone", 3): "declared TIMESTAMP(6) ends in 2038: Incorrect datetime value",
+    ("MariaDb", "timestamp without zone", 3): "declared TIMESTAMP(6) ends in 2038: Incorrect datetime value",
+    ("TiDb", "timestamp without zone", 2): "declared TIMESTAMP covers 1970 to 2038 only: Incorrect timestamp value",
+    ("SingleStore", "timestamp without zone", 2): "declared TIMESTAMP covers 1970 to 2038 only: the stored value can't be read",
+    ("Spanner", "timestamp with zone", 2): "server: the timestamp range starts after 0001-01-01: 22008 timestamp out of range",
+    # Informix's NULL sentinels: the smallest SMALLINT and INTEGER are reserved for NULL.
+    ("Informix", "signed 16-bit", 1): "server: SMALLINT's minimum is its NULL sentinel: Value exceeds limit of SMALLINT precision",
+    ("Informix", "signed 32-bit", 1): "server: INTEGER's minimum is its NULL sentinel: Value exceeds limit of INTEGER precision",
+    # The most negative decimal (edge 5) needs the same digits as the positive maximum (edge 4), so the declared precision
+    # refuses it on every database that refused edge 4.
+    ("PostgreSql", "fixed decimal", 5): "declared NUMERIC can't hold the negative decimal maximum: 22003 numeric field overflow",
+    ("YugabyteDb", "fixed decimal", 5): "declared NUMERIC can't hold the negative decimal maximum: 22003 numeric field overflow",
+    ("CockroachDb", "fixed decimal", 5): "declared DECIMAL(18,4) can't hold the negative decimal maximum: 22003 must round to less than 10^14",
+    ("MySql", "fixed decimal", 5): "declared DECIMAL can't hold the negative decimal maximum: Out of range value for column",
+    ("MariaDb", "fixed decimal", 5): "declared DECIMAL can't hold the negative decimal maximum: Out of range value for column",
+    ("SqlServer", "fixed decimal", 5): "declared NUMERIC can't hold the negative decimal maximum: Arithmetic overflow converting numeric",
+    ("Oracle", "fixed decimal", 5): "declared NUMBER(18,4) can't hold the negative decimal maximum: ORA-01438 greater than precision (18, 4)",
+    ("DuckDB", "fixed decimal", 5): "declared DECIMAL(18,4) can't hold the negative decimal maximum: Conversion Error, value is out of range",
+    ("Firebird", "fixed decimal", 5): "driver: the declared column reads back past decimal's range: OverflowException",
+    # The largest 128-bit value (edge 2) has 39 digits, so the 38-digit declared precision refuses it.
+    ("TiDb", "signed 128-bit", 2): "server: DECIMAL(38,0) can't hold 2^127-1: Out of range value for column",
+    ("SingleStore", "signed 128-bit", 2): "server: DECIMAL(38,0) can't hold 2^127-1: Leaf Error, out of range value for column",
+    ("FlatFile", "signed 128-bit", 2): "server: NUMERIC(38,0) can't hold 2^127-1: the value exceeds the declared precision",
+    ("SybaseASE", "signed 128-bit", 2): "server: NUMERIC can't hold 2^127-1: arithmetic overflow converting the text",
+    ("Snowflake", "signed 128-bit", 2): "server: NUMBER(38,0) can't hold 2^127-1: Numeric value is out of range (SqlState 22003)",
+}
+
+
+def _declare(databases, semantic, edges, reason):
+    """Adds one reason for each (database, edge) pair. Every reason is an observed server or driver error from the run."""
+    for db in databases:
+        for edge in edges:
+            EDGE_LIMITS[(db, semantic, edge)] = reason
+
+
+# Non-finite floats: the server has no -Infinity for the type (edge 5), and no value that keeps the sign of zero (edge 6).
+_declare(["MySql", "MariaDb", "TiDb", "SingleStore", "SqlServer", "Oracle", "SybaseASE"], "binary float32", [5],
+         "server: no -Infinity in this FLOAT type (observed: Out of range / Domain error / ORA-01426)")
+_declare(["MySql", "MariaDb", "TiDb", "SingleStore", "SqlServer", "Oracle", "SybaseASE"], "binary float64", [5],
+         "server: no -Infinity in this DOUBLE type (observed: Out of range / Domain error / TDS parameter invalid)")
+_declare(["Informix"], "binary float32", [3, 4, 5],
+         "server: Informix FLOAT/SMALLFLOAT has no NaN or infinity (observed: Value will not fit in a SMALLFLOAT)")
+_declare(["Informix"], "binary float64", [4, 5],
+         "server: Informix FLOAT has no infinity (observed: Value will not fit in a FLOAT)")
+_declare(["MariaDb", "TiDb", "SingleStore", "Oracle", "SybaseASE"], "binary float32", [6],
+         "server: the database does not keep the sign of zero: -0 is stored as 0")
+_declare(["MariaDb", "TiDb", "SingleStore", "Oracle", "SybaseASE"], "binary float64", [6],
+         "server: the database does not keep the sign of zero: -0 is stored as 0")
+# Db2: the server refuses a denormal, NaN and the infinities (SQL0302N), and its decimal has a 1E-28 scale and a 38-digit
+# maximum that the declared column (18,4) can't hold (CLI0111E, observed in the 2026-11-22 run).
+_declare(["Db2"], "binary float32", [2, 3, 4, 5, 6],
+         "server: DB2 refuses this FLOAT value (SQL0302N, host variable out of range)")
+_declare(["Db2"], "binary float64", [2, 3, 4, 5, 6],
+         "server: DB2 refuses this DOUBLE value (SQL0302N, host variable out of range)")
+_declare(["Db2"], "fixed decimal", [1],
+         "declared scale is too small: 1E-28 is stored as 0")
+_declare(["Db2"], "fixed decimal", [4, 5],
+         "declared precision can't hold the decimal maximum (CLI0111E numeric value out of range)")
+# Informix JSON is an object type: json_in accepts {} and {"a":1} and refuses arrays, null and scalars (probe 2026-11-22).
+_declare(["Informix"], "JSON text / JSON value", [1, 2, 3],
+         "server: the Informix JSON column holds objects only; json_in refuses arrays, null and scalars (observed)")
+_declare(["Snowflake"], "binary float64", [7],
+         "server: Snowflake FLOAT keeps 15 significant digits: 0.30000000000000004 reads back as 0.3")
+_declare(["Sqlite"], "binary float32", [6],
+         "driver: Microsoft.Data.Sqlite does not keep the sign of zero: -0 is read as 0")
+_declare(["Sqlite"], "binary float64", [6],
+         "driver: Microsoft.Data.Sqlite does not keep the sign of zero: -0 is read as 0")
+# Oracle BINARY_DOUBLE: the denormal and the non-finite values it refuses.
+_declare(["Oracle"], "binary float64", [2], "server: BINARY_DOUBLE reads the denormal 5E-324 back as 0")
+_declare(["Oracle"], "binary float64", [3, 4, 5], "server: BINARY_DOUBLE has no NaN or infinity for this column type")
+
+# The most negative decimal (edge 5) and the 1E-28 and maximum decimal edges (1 and 4) on the remaining databases.
+_declare(["TiDb", "FlatFile", "Snowflake", "Sqlite", "SybaseASE", "Informix", "InterBase", "SingleStore"],
+         "fixed decimal", [5], "declared precision can't hold the negative decimal maximum (observed in the run)")
+_declare(["Informix", "InterBase", "SingleStore"], "fixed decimal", [1],
+         "declared scale is too small: 1E-28 is stored as 0")
+_declare(["Informix", "InterBase", "SingleStore", "SybaseASE"], "fixed decimal", [4],
+         "declared precision can't hold the decimal maximum (observed in the run)")
+
+# Timestamps: the date range and the precision of the declared types.
+_declare(["Informix", "InterBase", "SybaseASE"], "timestamp without zone", [1],
+         "server: the declared timestamp keeps milliseconds only; 100-ns ticks are truncated")
+_declare(["SybaseASE"], "timestamp without zone", [2],
+         "server: DATETIME starts at 1753, so 1601-01-01 overflows (Arithmetic overflow converting UNIVARCHAR)")
+_declare(["SingleStore", "TiDb"], "timestamp without zone", [3],
+         "driver or server: 9999-12-31 23:59:59 can't be read back by the declared type (observed: MySQL zero-date / Incorrect value)")
+
+# Text: empty text and padding on Sybase and Informix, and characters outside the declared character set.
+_declare(["SybaseASE"], "varying character", [1], "server: an empty string is stored as a single space")
+_declare(["SybaseASE"], "unbounded text", [1], "server: an empty string is stored as a single space")
+_declare(["SybaseASE", "Informix"], "varying character", [2], "server: trailing spaces are trimmed on read")
+_declare(["SybaseASE", "Informix"], "varying character", [3],
+         "server: characters outside the declared character set are refused (observed: could not be converted / illegal character)")
+
+
+def edges_lines(name, col, usable):
+    """The Edges() member of a cell class. Empty when the column has no edge values, or the native CLR type differs from
+    the one the edge values were written for (so they wouldn't compile against it)."""
+    if not usable or col not in EDGES:
+        return [f"    public static IReadOnlyList<{name}> Edges() => Array.Empty<{name}>();"]
+    items = ", ".join(f"new() {{ Id = {i + 2}, Value = {value} }}" for i, value in enumerate(EDGES[col]))
+    return [f"    public static IReadOnlyList<{name}> Edges() => new {name}[] {{ {items} }};"]
+
+
 def main():
     accepted, refused = probe_results()
     resolved = {db: {sem: resolve(accepted, db, sem) for _, sem, *_ in SPEC} for db in DB_ENUM}
@@ -615,6 +872,18 @@ def main():
           "        {"]
     for db in sorted(templates):
         d.append(f"            [SupportedDatabase.{db}] = {cs_string(templates[db])},")
+    # Declared limits, each checked against the edge list it names (a typo fails the generator, not the test).
+    column_of = {sem: col for col, sem, *_ in SPEC}
+    for (db, sem, edge), reason in EDGE_LIMITS.items():
+        assert sem in column_of, f"EDGE_LIMITS: unknown semantic type {sem!r}"
+        assert 1 <= edge <= len(EDGES.get(column_of[sem], [])), f"EDGE_LIMITS: {db} {sem!r} has no edge {edge}"
+    d += ["        };", ""]
+    d += ["    // (database, semantic type, edge number from 1) -> a declared limit: a listed edge that fails is reported as LIMIT.",
+          "    public static readonly IReadOnlyDictionary<(SupportedDatabase Database, string Semantic, int Edge), string> EdgeLimits =",
+          "        new Dictionary<(SupportedDatabase Database, string Semantic, int Edge), string>",
+          "        {"]
+    for (db, sem, edge), reason in sorted(EDGE_LIMITS.items()):
+        d.append(f"            [(SupportedDatabase.{db}, {cs_string(sem)}, {edge})] = {cs_string(reason)},")
     d += ["        };", "}", ""]
     with open(os.path.join(OUT, "TypeFidelityDeclarations.cs"), "w", encoding="utf-8") as f:
         f.write("\n".join(d))
@@ -625,6 +894,7 @@ def main():
         "// <auto-generated>",
         "// Generated by tools/datatype-probe/gen_fidelity.py. Do not edit by hand.",
         "// </auto-generated>",
+        "using System;",
         "using System.Collections;",
         "using System.Collections.Generic;",
         "using System.Data;",
@@ -655,6 +925,7 @@ def main():
             f"        new[] {{ ({cs_string(col)}, \"Value\", {cs_string(sem)}) }};",
             "",
             f"    public static {name} Expected() => new() {{ Id = 1, Value = {val} }};",
+            *edges_lines(name, col, usable=True),
             "}",
             "",
         ]
@@ -665,6 +936,7 @@ def main():
         if sem not in spec_by_sem:
             continue
         col, clr, dbt, val = spec_by_sem[sem]
+        same_clr = native_clr(db, sem, clr, val)[0] == clr
         clr, val = native_clr(db, sem, clr, val)
         name = f"Cell_{pascal(col)}_{db}"
         native_rows.append((db, sem, name))
@@ -683,6 +955,7 @@ def main():
             f"        new[] {{ ({cs_string(col)}, \"Value\", {cs_string(sem)}) }};",
             "",
             f"    public static {name} Expected() => new() {{ Id = 1, Value = {val} }};",
+            *edges_lines(name, col, usable=same_clr),
             "}",
             "",
         ]

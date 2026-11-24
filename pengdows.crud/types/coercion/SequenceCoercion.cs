@@ -197,5 +197,4 @@ internal static class SequenceCoercion
         [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out object? array) =>
         ProviderVectorValues.TryUnwrap(value, out array);
 
-
 }

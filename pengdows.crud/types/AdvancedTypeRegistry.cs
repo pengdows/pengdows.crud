@@ -303,9 +303,10 @@ internal class AdvancedTypeRegistry
     }
 
     /// <summary>
-    /// The type a value of <paramref name="clrType"/> is mapped as when written: a Stream or TextReader
-    /// subclass (MemoryStream, FileStream, StringReader) as Stream or TextReader, which the mappings
-    /// are registered for; any other type as itself.
+    /// The type a value of <paramref name="clrType"/> is mapped as when written: a Stream, TextReader or IPAddress
+    /// subclass (MemoryStream, StringReader, IPAddress.IPv6Loopback's ReadOnlyIPAddress) as Stream, TextReader or
+    /// IPAddress, which the mappings are registered for; any other type as itself. A subclass that missed its mapping
+    /// was bound raw, and the provider refused it ("Parameter value type ReadOnlyIPAddress is not supported").
     /// </summary>
     internal static Type WriteType(Type clrType) =>
         clrType.IsValueType || clrType == typeof(string)
@@ -314,7 +315,9 @@ internal class AdvancedTypeRegistry
                 ? typeof(Stream)
                 : typeof(TextReader).IsAssignableFrom(clrType)
                     ? typeof(TextReader)
-                    : clrType;
+                    : typeof(System.Net.IPAddress).IsAssignableFrom(clrType)
+                        ? typeof(System.Net.IPAddress)
+                        : clrType;
 
     internal bool IsMappedType(Type clrType)
     {

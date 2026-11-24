@@ -303,6 +303,8 @@ static pengdows.crud.fakeDb.fakeDbDriverQuirks.AseClient() -> pengdows.crud.fake
 static pengdows.crud.fakeDb.fakeDbDriverQuirks.Db2() -> pengdows.crud.fakeDb.fakeDbDriverQuirks!
 pengdows.crud.fakeDb.fakeDbDataReader.DecimalTextColumns.get -> System.Collections.Generic.ISet<string!>?
 pengdows.crud.fakeDb.fakeDbDataReader.DecimalTextColumns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.FloatingTextColumns.get -> System.Collections.Generic.ISet<string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.FloatingTextColumns.set -> void
 pengdows.crud.fakeDb.fakeDbBFile
 pengdows.crud.fakeDb.fakeDbBFile.fakeDbBFile(string! directoryName, string! fileName, byte[]! content) -> void
 pengdows.crud.fakeDb.fakeDbBFile.DirectoryName.get -> string!

@@ -30,21 +30,20 @@ public class DataReaderMapperRowBodyTests
         }
     });
 
+    // Review policy Ring 1 P0: lenient mode no longer keeps going past a failed column with a default. The failure throws,
+    // naming the column, as strict mode does.
     [Fact]
-    public async Task LenientMode_AFailingColumnDoesNotStopTheColumnsAfterIt()
+    public async Task LenientMode_AFailingColumn_ThrowsNamingIt()
     {
         var original = TypeCoercionHelper.Logger;
         try
         {
             TypeCoercionHelper.Logger = NullLogger.Instance;
 
-            var rows = await DataReaderMapper.LoadAsync<Row>(Reader("NaN"), MapperOptions.Default);
+            var error = await Assert.ThrowsAsync<DataMappingException>(
+                () => DataReaderMapper.LoadAsync<Row>(Reader("NaN"), MapperOptions.Default).AsTask());
 
-            var row = Assert.Single(rows);
-            Assert.Equal("Alice", row.Name);
-            Assert.Equal(0, row.Age);
-            Assert.True(row.IsActive);
-            Assert.Equal("end", row.Tail);
+            Assert.Contains("'age'", error.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -53,21 +52,18 @@ public class DataReaderMapperRowBodyTests
     }
 
     [Fact]
-    public async Task StrictAndLenientCallers_ShareOnePlan_AndEachKeepsItsOwnBehavior()
+    public async Task StrictAndLenientCallers_ShareOnePlan_AndBothFailTheSameWay()
     {
         var original = TypeCoercionHelper.Logger;
         try
         {
             TypeCoercionHelper.Logger = NullLogger.Instance;
 
-            await DataReaderMapper.LoadAsync<Row>(Reader("NaN"), MapperOptions.Default);
+            await Assert.ThrowsAsync<DataMappingException>(async () =>
+                await DataReaderMapper.LoadAsync<Row>(Reader("NaN"), MapperOptions.Default));
 
             await Assert.ThrowsAsync<DataMappingException>(async () =>
                 await DataReaderMapper.LoadAsync<Row>(Reader("NaN"), new MapperOptions { Strict = true }));
-
-            // ...and the lenient caller still gets its default after the strict one has run.
-            var rows = await DataReaderMapper.LoadAsync<Row>(Reader("NaN"), MapperOptions.Default);
-            Assert.Equal(0, Assert.Single(rows).Age);
         }
         finally
         {

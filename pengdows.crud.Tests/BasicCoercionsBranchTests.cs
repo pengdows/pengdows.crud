@@ -147,8 +147,9 @@ public class BasicCoercionsBranchTests
         Assert.True(coercion.TryRead(new DbValue(stream), out var bytes));
         Assert.Equal(new byte[] { 5, 6, 7, 8 }, bytes);
 
+        // A read failure is the driver's I/O error, not a conversion failure: it propagates (review finding, Ring 2).
         var throwing = new ThrowingReadStream();
-        Assert.False(coercion.TryRead(new DbValue(throwing), out _));
+        Assert.Throws<IOException>(() => coercion.TryRead(new DbValue(throwing), out _));
     }
 
     private sealed class ThrowingReadStream : Stream

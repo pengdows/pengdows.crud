@@ -155,7 +155,8 @@ internal sealed class CidrConverter : AdvancedTypeConverter<Cidr>
             }
             catch (Exception ex) when (ex is InvalidCastException or System.Reflection.TargetInvocationException)
             {
-                // The provider type's Address/Prefix is not the shape this converter reads: not convertible, so fall through to false.
+                // InvalidCastException, or TargetInvocationException from a reflected accessor: the provider type's Address/Prefix is
+                // not the shape this converter reads, so it is not convertible and falls through to false.
             }
         }
 

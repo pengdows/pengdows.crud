@@ -74,9 +74,6 @@ namespace pengdows.crud;
 internal static class TypeCoercionHelper
 {
 
-
-
-
     private static ILogger _logger = NullLogger.Instance;
 
     public static ILogger Logger
@@ -98,8 +95,6 @@ internal static class TypeCoercionHelper
     {
         System.Threading.Interlocked.CompareExchange(ref field, logger, NullLogger.Instance);
     }
-
-
 
     public static object? Coerce(
         object? value,
@@ -155,6 +150,13 @@ internal static class TypeCoercionHelper
             if (JsonCoercion.IsJsonValueType(underlyingTarget))
             {
                 return JsonCoercion.CoerceJsonValue(s, targetType, options);
+            }
+
+            // The library writes an empty collection or bit string as "" (SQLite's comma-joined int[], a zero-length
+            // BitArray): that text is the empty value of the type, not a missing number.
+            if (EmptyTextForm(underlyingTarget) is { } empty)
+            {
+                return empty;
             }
 
             throw BlankText(underlyingTarget);
@@ -244,7 +246,6 @@ internal static class TypeCoercionHelper
         WholeNumber.Check(value, underlyingTarget);
         NumericTruth.Check(value, underlyingTarget);
 
-
         // Npgsql's own value types for a native PostgreSQL column (a point, a tsquery, a log sequence number) are not
         // IConvertible: their text is the column's value.
         if (underlyingTarget == typeof(string) && ProviderNativeText.TryText(value, out var nativeText))
@@ -252,10 +253,21 @@ internal static class TypeCoercionHelper
             return nativeText;
         }
 
+        // A decimal read into a binary floating type keeps only the digits the float holds: that is reported, not hidden.
+        if (value is decimal decimalSource && (underlyingTarget == typeof(double) || underlyingTarget == typeof(float)))
+        {
+            WarnIfDecimalLosesDigits(decimalSource, underlyingTarget);
+        }
+
         // Final fallback: Use cached compiled converter for better performance
         try
         {
             return pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(value, underlyingTarget);
+        }
+        catch (InvalidCastException)
+        {
+            // Already names the value and both types (ConverterResolution); wrapping it would drop the value.
+            throw;
         }
         catch (Exception ex)
         {
@@ -263,23 +275,71 @@ internal static class TypeCoercionHelper
         }
     }
 
+    /// <summary>
+    /// Warns when <paramref name="source"/> does not survive a round trip through <paramref name="target"/>
+    /// (a double or float). The conversion still happens: a warning, not a failure, is what a lost fraction
+    /// of digits deserves.
+    /// </summary>
+    internal static void WarnIfDecimalLosesDigits(decimal source, Type target)
+    {
+        // A decimal with no more significant digits than the target keeps all of them (a double keeps 15, a float 6), so
+        // the check below only runs for a value that could lose some. This is the per-row path: the check stays
+        // allocation-free for ordinary values.
+        var digitsKept = target == typeof(float) ? 6 : 15;
+        if (DecimalHelpers.Infer(source).Precision <= digitsKept)
+        {
+            return;
+        }
+
+        var survives = target == typeof(float)
+            ? pengdows.crud.types.coercion.DecimalCoercion.SurvivesAsFloat(source)
+            : pengdows.crud.types.coercion.DecimalCoercion.DecimalFromDouble((double)source, out var back) && back == source;
+
+        if (!survives)
+        {
+            TryLogWarning(
+                "Reading decimal {Value} as {TargetType} loses precision: the binary floating type keeps about 15 significant digits.",
+                source, target.Name);
+        }
+    }
+
     internal static FormatException BlankText(Type target) => new($"Blank text can't be read as {target.Name}.");
 
+    /// <summary>
+    /// The empty value of a type whose text form is written empty: an array (not a byte array, whose blank text is its own
+    /// binary case), a List&lt;T&gt;, or a BitArray. Null for every other type, which keeps refusing blank text.
+    /// </summary>
+    private static object? EmptyTextForm(Type target)
+    {
+        if (target == typeof(System.Collections.BitArray))
+        {
+            return new System.Collections.BitArray(0);
+        }
 
+        if (target.IsArray && target.GetElementType() is { } element && element != typeof(byte))
+        {
+            return Array.CreateInstance(element, 0);
+        }
 
+        if (target.IsGenericType && target.GetGenericTypeDefinition() == typeof(List<>))
+        {
+            return Activator.CreateInstance(target);
+        }
 
+        return null;
+    }
 
-
-
+    // A broken logging sink must not fail the read it was logging, so any exception it throws is caught here. The failure
+    // itself goes to Trace, so it is never silent.
     internal static void TryLogWarning(string message, params object?[] args)
     {
         try
         {
             Logger.LogWarning(message, args);
         }
-        catch
+        catch (Exception ex)
         {
-            // Swallow logging failures to avoid breaking enum parse fallbacks.
+            System.Diagnostics.Trace.TraceWarning($"pengdows.crud could not write a warning to its logger: {ex}");
         }
     }
 
@@ -289,9 +349,9 @@ internal static class TypeCoercionHelper
         {
             Logger.LogDebug(message, args);
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore logging failures in debug-only fallbacks.
+            System.Diagnostics.Trace.TraceWarning($"pengdows.crud could not write a debug entry to its logger: {ex}");
         }
     }
 
@@ -310,12 +370,6 @@ internal static class TypeCoercionHelper
         };
         return text != null;
     }
-
-
-
-
-
-
 
 }
 

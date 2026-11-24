@@ -2754,12 +2754,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         if (!valueIsNull)
         {
-            // Every string value is sized to fit, whatever its DbType: a pooled parameter is reset to
-            // an explicit Size of 0, and Microsoft.Data.Sqlite truncates text to an explicit size (a
-            // string bound as DbType.Object was stored as "", confirmed live, TYPE-002).
-            if (value is string s && parameter.Value is string)
+            // Every value the parameter carries as text is sized to fit, whatever its DbType and whatever it was before
+            // conversion: a pooled parameter keeps the Size of its last use, and Microsoft.Data.Sqlite truncates text to that
+            // size (a string bound as DbType.Object was stored as "", confirmed live, TYPE-002). A value that becomes text
+            // through its converter (an IPAddress) is sized by the text it is sent as, not the object it was.
+            if (parameter.Value is string sent)
             {
-                parameter.Size = Math.Max(s.Length, 1);
+                parameter.Size = Math.Max(sent.Length, 1);
             }
         }
 

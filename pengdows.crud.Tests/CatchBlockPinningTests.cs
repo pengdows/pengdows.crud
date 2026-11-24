@@ -1,6 +1,8 @@
 using System;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using System.Threading.Tasks;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -58,6 +60,39 @@ public sealed class CatchBlockPinningTests
             pengdows.crud.types.coercion.EnumCoercion.LogEnumFailure(typeof(Color));
             return 0;
         });
+    }
+
+    private sealed class CapturingTraceListener : TraceListener
+    {
+        public StringBuilder Text { get; } = new();
+
+        public override void Write(string? message) => Text.Append(message);
+
+        public override void WriteLine(string? message) => Text.AppendLine(message);
+
+        public override void TraceEvent(TraceEventCache? eventCache, string source, TraceEventType eventType, int id,
+            string? message) => Text.AppendLine(message);
+    }
+
+    [Fact]
+    public void BrokenLoggingSink_FailureIsTraced_NotSwallowedSilently()
+    {
+        var listener = new CapturingTraceListener();
+        Trace.Listeners.Add(listener);
+        try
+        {
+            WithThrowingLogger(() =>
+            {
+                pengdows.crud.types.coercion.EnumCoercion.LogEnumFailure(typeof(Color));
+                return 0;
+            });
+        }
+        finally
+        {
+            Trace.Listeners.Remove(listener);
+        }
+
+        Assert.Contains("the logging sink is broken", listener.Text.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

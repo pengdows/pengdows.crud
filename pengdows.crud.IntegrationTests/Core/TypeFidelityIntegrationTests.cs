@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Data;
 using System.Globalization;
 using System.Net;
 using System.Reflection;
@@ -123,11 +124,15 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
                         : semantic == "geography / geodetic" && provider == SupportedDatabase.SingleStore ? SixPlaceCoordinates
                         : provider == SupportedDatabase.Snowflake && SnowflakeSpatialSemantics.Contains(semantic) ? WithoutSpaces
                         : provider == SupportedDatabase.Snowflake && semantic == "external-file reference" ? SnowflakeStagePath
+                        // A CHAR(n) value is padded to n by the standard, so "ab" reads back as "ab" and spaces: the value
+                        // is compared without its trailing padding.
+                        : semantic == "fixed character" ? TrimmedText
                         : null;
-                    // A server-generated cell takes three arguments; only the round-trip cell takes the comparison.
+                    // A server-generated cell takes three arguments; only the round-trip cell takes the comparison and the
+                    // declared limits of its database and type.
                     var arguments = cell == nameof(GeneratedCellAsync)
                         ? new object?[] { context, declared.Declaration, column }
-                        : new object?[] { context, declared.Declaration, column, canonical };
+                        : new object?[] { context, declared.Declaration, column, canonical, provider, semantic };
                     status = await (Task<string>)method.Invoke(null, arguments)!;
                 }
                 else if (unsupported.TryGetValue(semantic, out var reason))
@@ -200,7 +205,7 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
             // The cause is the inner exception for a wrapper (TemplateInitializationException, DataMappingException): name it too.
             var cause = ex.InnerException is { } inner ? " <- " + inner.GetType().Name + ": " + inner.Message : string.Empty;
             var message = (ex.Message + cause).ReplaceLineEndings(" ");
-            return "FAIL " + ex.GetType().Name + ": " + (message.Length > 360 ? message[..360] : message);
+            return "FAIL " + ex.GetType().Name + ": " + (message.Length > 1200 ? message[..1200] : message);
         }
     }
 
@@ -223,6 +228,8 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
     {
         await TryExecuteAsync(context, "GRANT SECADM ON DATABASE TO USER LBACADM");
 
+        // The database is explicitly activated by the container at start-up (Db2TestContainer), so it stays up after its
+        // last connection closes and the security administrator's connection is not refused.
         await using var admin = new DatabaseContext(
             rawConnectionString.Replace("UID=db2inst1", "UID=lbacadm", StringComparison.Ordinal), IBM.Data.Db2.DB2Factory.Instance);
         await TryExecuteAsync(admin, "CREATE SECURITY LABEL COMPONENT LVL ARRAY ['LOW','HIGH']");
@@ -247,7 +254,7 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
 
     // One cell: create the table with the declaration, write one row, read it back, compare the value.
     private static async Task<string> RoundTripCellAsync<TRow>(IDatabaseContext context, string declaration, string column,
-        Func<object?, string>? canonical = null)
+        Func<object?, string>? canonical, SupportedDatabase provider, string semantic)
         where TRow : class, IFidelityRow<TRow>, new()
     {
         try
@@ -263,32 +270,95 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
             }
 
             var gateway = new TableGateway<TRow, int>(context);
-            var expected = TRow.Expected();
-            if (!await gateway.CreateAsync(expected, context))
-            {
-                return "FAIL insert reported no row written";
-            }
-
-            var actual = await gateway.RetrieveOneAsync(expected.Id, context);
-            if (actual == null)
-            {
-                return "FAIL row not found after insert";
-            }
-
             var compare = canonical ?? Canonical;
-            var wrote = compare(typeof(TRow).GetProperty("Value")!.GetValue(expected));
-            var read = compare(typeof(TRow).GetProperty("Value")!.GetValue(actual));
-            var readValue = typeof(TRow).GetProperty("Value")!.GetValue(actual);
-            return wrote == read
-                ? "PASS"
-                : $"FAIL wrote {wrote}, read {read} (read as {readValue?.GetType().Name ?? "null"})";
+            var property = typeof(TRow).GetProperty("Value")!;
+
+            // The sample, then every edge value (the limits and awkward members of the type): each row is written and read
+            // back by its own id, and must come back the same. The sample failing fails the cell at once. An edge that fails
+            // fails the cell unless its database and type declare it a limit (TypeFidelityDeclarations.EdgeLimits): a declared
+            // limit is reported as LIMIT with the server's reason, and the other edges still run.
+            var rows = new List<TRow> { TRow.Expected() };
+            rows.AddRange(TRow.Edges());
+            var failures = new List<string>();
+            var limits = new List<string>();
+            foreach (var row in rows)
+            {
+                var label = row.Id == 1 ? "sample" : $"edge {row.Id - 1}";
+                var wroteValue = property.GetValue(row);
+                var wrote = compare(wroteValue);
+                string? failure = null;
+                try
+                {
+                    if (!await gateway.CreateAsync(row, context))
+                    {
+                        failure = $"{label} ({wrote}): insert reported no row written";
+                    }
+                    else
+                    {
+                        var actual = await gateway.RetrieveOneAsync(row.Id, context);
+                        if (actual == null)
+                        {
+                            failure = $"{label} ({wrote}): row not found after insert";
+                        }
+                        else
+                        {
+                            var readValue = property.GetValue(actual);
+                            var read = compare(readValue);
+                            if (wrote != read)
+                            {
+                                failure = $"{label}: wrote {wrote}, read {read} (read as {readValue?.GetType().Name ?? "null"})";
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex) when (row.Id != 1)
+                {
+                    // An edge value the database refuses names the value, not the table or the sample.
+                    var message = ex.Message.ReplaceLineEndings(" ");
+                    failure = $"{label} ({wrote}): {ex.GetType().Name}: {(message.Length > 1200 ? message[..1200] : message)}";
+                }
+
+                if (failure == null)
+                {
+                    continue;
+                }
+
+                if (row.Id == 1)
+                {
+                    return "FAIL " + failure;
+                }
+
+                if (TypeFidelityDeclarations.EdgeLimits.TryGetValue((provider, semantic, row.Id - 1), out var reason))
+                {
+                    limits.Add($"{failure} => {reason}");
+                }
+                else
+                {
+                    failures.Add(failure);
+                }
+            }
+
+            if (failures.Count > 0)
+            {
+                // Every undeclared failing edge is listed by number, so a status is the complete record for its cell.
+                // A failure message starts "edge N".
+                var numbers = string.Join(",", failures.Select(f => f.Split(' ', 3)[1]));
+                return $"FAIL edges {numbers}: " + string.Join("; ", failures);
+            }
+
+            if (limits.Count > 0)
+            {
+                return $"LIMIT {limits.Count} edge(s): " + string.Join("; ", limits);
+            }
+
+            return rows.Count == 1 ? "PASS" : $"PASS {rows.Count} values";
         }
         catch (Exception ex)
         {
             // The cause is the inner exception for a wrapper (TemplateInitializationException, DataMappingException): name it too.
             var cause = ex.InnerException is { } inner ? " <- " + inner.GetType().Name + ": " + inner.Message : string.Empty;
             var message = (ex.Message + cause).ReplaceLineEndings(" ");
-            return "FAIL " + ex.GetType().Name + ": " + (message.Length > 360 ? message[..360] : message);
+            return "FAIL " + ex.GetType().Name + ": " + (message.Length > 1200 ? message[..1200] : message);
         }
     }
 
@@ -336,6 +406,10 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
         Regex.Replace(wkt, @"[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?", match =>
             double.Parse(match.Value, NumberStyles.Float, CultureInfo.InvariantCulture)
                 .ToString("R", CultureInfo.InvariantCulture));
+
+    // A fixed-width text value compared without its trailing padding (CHAR(n) pads with spaces, and no other text does).
+    private static string TrimmedText(object? value) =>
+        value is string text ? "text:" + text.TrimEnd(' ') : Canonical(value);
 
     private static string Canonical(object? value) => value switch
     {

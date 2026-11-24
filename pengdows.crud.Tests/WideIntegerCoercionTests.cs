@@ -46,10 +46,12 @@ namespace pengdows.crud.Tests
             Assert.Equal(BigInteger.Parse(Int128.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture)), result);
         }
 
+        // Text that isn't a whole number declines (the documented contract, review finding); the general conversion then refuses it.
         [Fact]
-        public void ANonIntegerTextThrows()
+        public void ANonIntegerTextDeclines()
         {
-            Assert.Throws<FormatException>(() => WideIntegerCoercion.TryCoerceWideInteger("not-a-number", typeof(BigInteger), out _));
+            Assert.False(WideIntegerCoercion.TryCoerceWideInteger("not-a-number", typeof(BigInteger), out var result));
+            Assert.Null(result);
         }
 
         [Fact]

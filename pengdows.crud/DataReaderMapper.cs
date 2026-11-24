@@ -403,14 +403,14 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return plan.RowMapper(rdr, options.Strict);
     }
 
-    // A column that fails to read or convert: Strict raises a DataMappingException naming the column and property
-    // (the cause kept); otherwise the failure is logged and the property keeps its default (the row's other columns
-    // are still mapped). Called from the catch around each column in the compiled row body.
+    // A column that fails to read or convert throws a DataMappingException naming the column and property, with the cause
+    // kept, in either mode. The lenient default used to log the failure and leave the property at its default: a value the
+    // database did not store, which is a silent wrong result (review policy Ring 1 P0). Called from the catch around each
+    // column in the compiled row body.
     private static void HandleColumnFailure(Exception ex, bool strict, DbDataReader rdr, int ordinal,
         PropertyInfo property)
     {
-        // A NULL into a non-nullable value type is never a default, in either mode: the property would hold a value the
-        // database did not store (0, false, the empty Guid). It fails with the column named, as strict mode always did.
+        // A NULL into a non-nullable value type fails the same way.
         if (IsNullIntoNonNullableValue(rdr, ordinal, property))
         {
             throw new DataMappingException(
@@ -419,19 +419,10 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 ex);
         }
 
-        if (strict)
-        {
-            throw new DataMappingException(
-                $"Failed to map column '{rdr.GetName(ordinal)}' to property '{property.Name}'.",
-                SupportedDatabase.Unknown,
-                ex);
-        }
-
-        TypeCoercionHelper.Logger.LogWarning(
-            ex,
-            "Failed to map column '{Column}' to property '{Property}'.",
-            rdr.GetName(ordinal),
-            property.Name);
+        throw new DataMappingException(
+            $"Failed to map column '{rdr.GetName(ordinal)}' to property '{property.Name}'.",
+            SupportedDatabase.Unknown,
+            ex);
     }
 
     private static bool IsNullIntoNonNullableValue(DbDataReader rdr, int ordinal, PropertyInfo property) =>
@@ -669,6 +660,16 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 var getDecimalMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetDecimal))!;
                 rawValue = Expression.Call(readerParam, getDecimalMethod, Expression.Constant(key.Ordinal));
             }
+            else if (key.FieldType == typeof(double) || key.FieldType == typeof(float))
+            {
+                // A driver that rejects a non-finite number's text in its typed getter (Snowflake's "inf") still yields the
+                // infinity: the same read the compiled mapper makes (FloatingPointReads).
+                rawValue = Expression.Call(
+                    typeof(pengdows.crud.@internal.FloatingPointReads).GetMethod(key.FieldType == typeof(double)
+                        ? nameof(pengdows.crud.@internal.FloatingPointReads.ReadDouble)
+                        : nameof(pengdows.crud.@internal.FloatingPointReads.ReadSingle))!,
+                    Expression.Convert(readerParam, typeof(IDataRecord)), Expression.Constant(key.Ordinal));
+            }
             else if (TypedGetter(key.FieldType) is { } typedGetter)
             {
                 // The provider's own getter for the column's type, as the gateway reads it: several
@@ -891,7 +892,6 @@ public sealed class DataReaderMapper : IDataReaderMapper
             Expression.Constant(key.Ordinal), Expression.Constant(key.Property.Name), Expression.Constant(targetType)));
     }
 
-
     private static readonly MethodInfo _nullIntoNonNullableMethod = typeof(NullabilityRules).GetMethod(
         nameof(NullabilityRules.NullIntoNonNullableException), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!;
 
@@ -910,6 +910,23 @@ public sealed class DataReaderMapper : IDataReaderMapper
             // with no dialect uses .NET's mixed-endian order. Exactly 16 bytes (COR-003/COR-014).
             converted = Expression.Call(_readGuidFromBytesMethod, Expression.Convert(readerParam, typeof(IDataRecord)),
                 ordinalConst, Expression.Constant(key.Coercion?.GuidBytesBigEndian ?? false));
+        }
+        else if (key.FieldType == typeof(double) && underlyingTarget == typeof(float))
+        {
+            // Read through FloatingPointReads (a driver's typed getter can reject a non-finite number's text), then narrowed.
+            converted = Expression.Convert(
+                Expression.Call(typeof(pengdows.crud.@internal.FloatingPointReads).GetMethod(
+                    nameof(pengdows.crud.@internal.FloatingPointReads.ReadDouble))!,
+                    Expression.Convert(readerParam, typeof(IDataRecord)), ordinalConst),
+                typeof(float));
+        }
+        else if (key.FieldType == typeof(float) && underlyingTarget == typeof(double))
+        {
+            converted = Expression.Convert(
+                Expression.Call(typeof(pengdows.crud.@internal.FloatingPointReads).GetMethod(
+                    nameof(pengdows.crud.@internal.FloatingPointReads.ReadSingle))!,
+                    Expression.Convert(readerParam, typeof(IDataRecord)), ordinalConst),
+                typeof(double));
         }
         else if (TypedCoercions.Find(key.FieldType, underlyingTarget) is { } typedCoercion)
         {

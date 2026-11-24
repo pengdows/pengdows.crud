@@ -39,6 +39,23 @@ through `GetBytes` and splits off the SRID. `WellKnownBinary` is always plain WK
 `Srid` (2.0.5 kept the EWKB SRID flag in `WellKnownBinary`). Verified live on PostGIS 3.5
 (`PostGisRoundTripTests`) and CockroachDB 25.1 (TYPE-002).
 
+### Numeric reads: what fits, what is refused, what is reported
+
+Every numeric read (the gateway, DataReaderMapper, the converter cache and the coercion helper) follows
+the same three rules:
+
+* **A value that fits converts exactly.** `400` (a `double`, `long` or `decimal`) reads into a `short`
+  as `400`. An integer target also refuses a fractional value (`6.47` into an `int`), and a value the
+  target can't hold (`70000` into a `short`) throws a `DataMappingException` from the gateway. The
+  message names the value and the target type. `DataReaderMapper` throws the same way in every mode
+  (see the 2.0.6 release notes): a value is never left at the property's default.
+* **A `double` keeps the digits it carries.** It becomes a `decimal` through its shortest round-trip
+  text (`1.2345678901234567` reads back as that value, not as `1.23456789012346`). `NaN` and the
+  infinities have no `decimal` value and are refused.
+* **A `decimal` that loses digits on the way to a `double` or `float` is reported, not silent.** The
+  conversion still happens and logs a `Warning` through the `TypeCoercionHelper` logger. A decimal with
+  at most 15 significant digits (6 for a `float`) never triggers it.
+
 ## Usage pattern
 
 No special attribute is needed to use these types. Declare the property with the value-object

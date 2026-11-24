@@ -61,16 +61,23 @@ public abstract partial class BaseTableGateway<TEntity>
         TypeCoercionOptions options, int? failedOrdinal = null)
     {
         IColumnInfo? failing = null;
+        Exception? detail = null;
+
+        // A sequential-access reader can't go back to earlier columns (DEC-013): re-reading would
+        // throw and blame the wrong column, so report without naming one.
+        var canReread = reader is not wrappers.TrackedReader { IsSequentialAccess: true };
+
         // The mapper knows which column it was reading; metadata (GetName) is readable under
         // SequentialAccess, values aren't (DEC-013).
         if (failedOrdinal is { } ordinal && _columnsByNameCI.TryGetValue(reader.GetName(ordinal), out var known))
         {
             failing = known;
+            if (canReread)
+            {
+                detail = CoercionFailure(reader, ordinal, known, options);
+            }
         }
 
-        // A sequential-access reader can't go back to earlier columns (DEC-013): re-reading would
-        // throw and blame the wrong column, so report without naming one.
-        var canReread = reader is not wrappers.TrackedReader { IsSequentialAccess: true };
         for (var i = 0; canReread && i < reader.FieldCount && failing == null; i++)
         {
             if (!_columnsByNameCI.TryGetValue(reader.GetName(i), out var column))
@@ -78,19 +85,11 @@ public abstract partial class BaseTableGateway<TEntity>
                 continue;
             }
 
-            try
-            {
-                var value = reader.GetValue(i);
-                if (value is not null && value is not DBNull)
-                {
-                    // The plan's options: dialect-specific reads (e.g. Informix LIST literals) would
-                    // otherwise "fail" here too and be blamed instead of the real column (REV-037).
-                    TypeCoercionHelper.Coerce(value, value.GetType(), column.PropertyInfo.PropertyType, options);
-                }
-            }
-            catch (Exception)
+            var coercionFailure = CoercionFailure(reader, i, column, options);
+            if (coercionFailure != null)
             {
                 failing = column;
+                detail = coercionFailure;
             }
         }
 
@@ -98,8 +97,33 @@ public abstract partial class BaseTableGateway<TEntity>
             ? $"a column into {typeof(TEntity).Name}"
             : $"column '{failing.Name}' into {typeof(TEntity).Name}.{failing.PropertyInfo.Name} " +
               $"({failing.PropertyInfo.PropertyType.Name})";
-        return new DataMappingException($"Could not read {target}: {failure.Message}",
+        // A numeric column's overflow arrives as the runtime's "Arithmetic operation resulted in an overflow", which names
+        // neither the value nor the type. The coercion that found the column names both, so its message is the reason.
+        var reason = failure is OverflowException && detail is not null ? detail.Message : failure.Message;
+        return new DataMappingException($"Could not read {target}: {reason}",
             enums.SupportedDatabase.Unknown, failure);
+    }
+
+    /// <summary>The failure reading one column into its property, or null when it reads.</summary>
+    private static Exception? CoercionFailure(ITrackedReader reader, int ordinal, IColumnInfo column,
+        TypeCoercionOptions options)
+    {
+        try
+        {
+            var value = reader.GetValue(ordinal);
+            if (value is not null && value is not DBNull)
+            {
+                // The plan's options: dialect-specific reads (e.g. Informix LIST literals) would
+                // otherwise "fail" here too and be blamed instead of the real column (REV-037).
+                TypeCoercionHelper.Coerce(value, value.GetType(), column.PropertyInfo.PropertyType, options);
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return ex;
+        }
     }
 
     private HybridRecordsetPlan GetOrBuildRecordsetPlan(ITrackedReader reader)

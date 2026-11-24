@@ -347,8 +347,8 @@ UInt64:9 -> RowVersion: RowVersion:0000000000000009
 "10110" -> BitArray: BitArray:10110
 0x05 -> BitArray: throws InvalidCastException
 "/1/2/" -> HierarchyId: HierarchyId:/1/2/
-"/1/2/" -> Int128: throws FormatException
-"/1/2/" -> BigInteger: throws FormatException
+"/1/2/" -> Int128: throws InvalidCastException
+"/1/2/" -> BigInteger: throws InvalidCastException
 "170141183460469231731687303715884105727" -> HierarchyId: throws InvalidCastException
 "170141183460469231731687303715884105727" -> Int128: Int128:170141183460469231731687303715884105727
 "170141183460469231731687303715884105727" -> BigInteger: BigInteger:170141183460469231731687303715884105727

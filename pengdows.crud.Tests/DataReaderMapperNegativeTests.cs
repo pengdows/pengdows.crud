@@ -15,7 +15,9 @@ namespace pengdows.crud.Tests;
 public class DataReaderMapperNegativeTests
 {
     [Fact]
-    public async Task LoadObjectsFromDataReaderAsync_InvalidFieldConversion_Ignored()
+    // Review policy Ring 1 P0: a failed conversion is not ignored into the property's default; it fails the mapping, naming
+    // the column.
+    public async Task LoadObjectsFromDataReaderAsync_InvalidFieldConversion_Throws()
     {
         var rows = new[]
         {
@@ -33,11 +35,10 @@ public class DataReaderMapperNegativeTests
         {
             TypeCoercionHelper.Logger = NullLogger.Instance;
 
-            var result = await DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader);
+            var error = await Assert.ThrowsAsync<DataMappingException>(
+                () => DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader).AsTask());
 
-            Assert.Single(result);
-            Assert.Equal("Alice", result[0].Name);
-            Assert.Equal(0, result[0].Age); // default due to failed conversion
+            Assert.Contains("'Age'", error.Message);
         }
         finally
         {
@@ -46,7 +47,9 @@ public class DataReaderMapperNegativeTests
     }
 
     [Fact]
-    public async Task LoadAsync_NonStrict_LogsMappingWarning()
+    // Review policy Ring 1 P0: the lenient default no longer logs a failure and maps on. The failure throws, and the log
+    // entry is never the only record of it.
+    public async Task LoadAsync_NonStrict_FailedColumn_ThrowsAndDoesNotOnlyLog()
     {
         var rows = new[]
         {
@@ -68,15 +71,13 @@ public class DataReaderMapperNegativeTests
             TypeCoercionHelper.Logger = logger;
             var reader = new fakeDbDataReader(rows);
 
-            await DataReaderMapper.LoadAsync<SampleEntity>(reader, MapperOptions.Default);
+            await Assert.ThrowsAsync<DataMappingException>(
+                () => DataReaderMapper.LoadAsync<SampleEntity>(reader, MapperOptions.Default).AsTask());
         }
         finally
         {
             TypeCoercionHelper.Logger = originalLogger;
         }
-
-        Assert.Contains(loggerProvider.Entries,
-            entry => entry.Level == LogLevel.Warning && entry.Message.Contains("Failed to map column"));
     }
 
     [Fact]

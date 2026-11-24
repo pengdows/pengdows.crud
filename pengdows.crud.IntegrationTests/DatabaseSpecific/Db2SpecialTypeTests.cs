@@ -69,8 +69,10 @@ public sealed class Db2SpecialTypeTests : DatabaseTestBase
         });
     }
 
+    // Verified live (2026-11-23): Db2 assigns a plain DECIMAL literal to a distinct-type column and stores it as the base
+    // value, so the base type is accepted without an explicit cast. (Informix refuses it; see InformixSpecialTypeTests.)
     [SkippableFact]
-    public async Task DistinctType_HasItsBaseStorage_ButDoesNotMixWithIt()
+    public async Task DistinctType_HasItsBaseStorage_AssignsFromTheBaseType()
     {
         await RunTestAgainstProviderAsync(SupportedDatabase.Db2, async context =>
         {
@@ -81,7 +83,8 @@ public sealed class Db2SpecialTypeTests : DatabaseTestBase
             await Exec(context, "INSERT INTO db2_distinct_doc VALUES (1, db2_money_t(12.50))");
 
             Assert.Equal(12.50m, await Scalar<decimal>(context, "SELECT DECIMAL(m) FROM db2_distinct_doc WHERE id = 1"));
-            await Assert.ThrowsAnyAsync<Exception>(() => Exec(context, "INSERT INTO db2_distinct_doc VALUES (2, 7.25)")); // no implicit cast from the base type
+            await Exec(context, "INSERT INTO db2_distinct_doc VALUES (2, 7.25)");
+            Assert.Equal(7.25m, await Scalar<decimal>(context, "SELECT DECIMAL(m) FROM db2_distinct_doc WHERE id = 2"));
             await Exec(context, "DROP TABLE db2_distinct_doc");
             await Exec(context, "DROP DISTINCT TYPE db2_money_t");
         });

@@ -108,8 +108,9 @@ internal sealed class RowVersionConverter : AdvancedTypeConverter<RowVersion>
                     result = RowVersion.FromBytes(bytes);
                     return true;
                 }
-                catch
+                catch (ArgumentException)
                 {
+                    // Not the row version's length: RowVersion's constructor refuses it.
                     result = default!;
                     return false;
                 }
@@ -119,8 +120,9 @@ internal sealed class RowVersionConverter : AdvancedTypeConverter<RowVersion>
                     result = RowVersion.FromBytes(memory.ToArray());
                     return true;
                 }
-                catch
+                catch (ArgumentException)
                 {
+                    // Not the row version's length: RowVersion's constructor refuses it.
                     result = default!;
                     return false;
                 }
@@ -130,8 +132,9 @@ internal sealed class RowVersionConverter : AdvancedTypeConverter<RowVersion>
                     result = RowVersion.FromBytes(segment.ToArray());
                     return true;
                 }
-                catch
+                catch (ArgumentException)
                 {
+                    // Not the row version's length: RowVersion's constructor refuses it.
                     result = default!;
                     return false;
                 }

@@ -54,7 +54,81 @@ public class Db2TestContainer : TestContainer
 
         _connectionString = $"Server=localhost:{hostPort};Database={_database};UID={_username};PWD={_password};";
 
-        await WaitForDbToStart(DB2Factory.Instance, _connectionString, _container, 300);
+        // The readiness check runs without pooling, so its physical connection really closes: a pooled one can outlive Close()
+        // and keep the database in use while the activation below runs.
+        await WaitForDbToStart(DB2Factory.Instance, _connectionString + "Pooling=false;", _container, 300);
+
+        // Explicit activation, from the instance owner's command line: an activated database stays up after its last
+        // connection closes, so no test connection finds it deactivated. The readiness probe above closes its connection
+        // just before this runs, and Db2 can still be deactivating then: the activation is refused (SQL1035N) until the
+        // deactivation finishes (observed 2026-11-22). Retry only that refusal, for a bounded time.
+        const int activationAttempts = 15;
+        for (var attempt = 1; ; attempt++)
+        {
+            var activation = await _container.ExecAsync(new[]
+            {
+                "/bin/sh", "-c", "su - db2inst1 -c '/opt/ibm/db2/V11.5/bin/db2 activate database testdb'"
+            });
+            // SQL1490W: the database was already active, so the activation is in place; the CLP reports that as exit code 2.
+            if (activation.ExitCode == 0 || (activation.Stdout + activation.Stderr).Contains("SQL1490W", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var refused = (activation.Stdout + activation.Stderr).Contains("SQL1035N", StringComparison.Ordinal);
+            if (!refused || attempt == activationAttempts)
+            {
+                var state = await CaptureActivationStateAsync();
+                throw new InvalidOperationException(
+                    $"Activating {_database} failed on attempt {attempt} ({activation.ExitCode}): {activation.Stderr}{activation.Stdout}" +
+                    $"\nServer state at refusal:\n{state}");
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1));
+        }
+    }
+
+    /// <summary>
+    /// The server's view of the database at the moment activation is refused: its active state, the applications connected
+    /// to it, and the end of the diagnostic log. Run inside the container as the instance owner.
+    /// </summary>
+    private async Task<string> CaptureActivationStateAsync()
+    {
+        var report = new System.Text.StringBuilder();
+        foreach (var (title, command) in new[]
+                 {
+                     ("list active databases", new[] { "su", "-", "db2inst1", "-c", "/opt/ibm/db2/V11.5/bin/db2 list active databases" }),
+                     ("list applications", new[] { "su", "-", "db2inst1", "-c", "/opt/ibm/db2/V11.5/bin/db2 list applications for database testdb show detail" }),
+                     ("db2diag tail", new[] { "/bin/sh", "-c", "tail -n 200 /database/config/db2inst1/sqllib/db2dump/DIAG0000/db2diag.log" }),
+                 })
+        {
+            var result = await _container.ExecAsync(command);
+            report.AppendLine($"--- {title} (exit {result.ExitCode})").Append(result.Stdout).Append(result.Stderr);
+        }
+
+        report.AppendLine("--- container log (tail)").Append(await ContainerLogTailAsync());
+        return report.ToString();
+    }
+
+    /// <summary>The last lines of the container's own log (its start-up and setup progress), read with the Docker CLI.</summary>
+    private async Task<string> ContainerLogTailAsync()
+    {
+        var startInfo = new System.Diagnostics.ProcessStartInfo("docker", new[] { "logs", "--tail", "300", _container.Id })
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        using var process = System.Diagnostics.Process.Start(startInfo);
+        if (process is null)
+        {
+            return "(docker CLI not available)";
+        }
+
+        var stdout = await process.StandardOutput.ReadToEndAsync();
+        var stderr = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        return stdout + stderr;
     }
 
     /// <summary>

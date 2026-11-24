@@ -30,14 +30,26 @@ internal static class WideIntegerCoercion
         BigInteger source;
         switch (value)
         {
-            case BigInteger big: source = big; break;
-            case Int128 i128: source = i128; break;
-            case UInt128 u128: source = u128; break;
+            case BigInteger big:
+                source = big;
+                break;
+            case Int128 i128:
+                source = i128;
+                break;
+            case UInt128 u128:
+                source = u128;
+                break;
             case sbyte or byte or short or ushort or int or uint or long or ulong:
-                source = new BigInteger(Convert.ToDecimal(value, CultureInfo.InvariantCulture)); break;
-            case decimal d when decimal.Truncate(d) == d: source = new BigInteger(d); break;
-            case string text: source = BigInteger.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture); break;
-            default: return false;
+                source = new BigInteger(Convert.ToDecimal(value, CultureInfo.InvariantCulture));
+                break;
+            case decimal d when decimal.Truncate(d) == d:
+                source = new BigInteger(d);
+                break;
+            // Text that isn't a whole number declines, as the summary above says; the general conversion takes it.
+            case string text when BigInteger.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out source):
+                break;
+            default:
+                return false;
         }
 
         result = Type.GetTypeCode(target) switch

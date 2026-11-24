@@ -122,8 +122,9 @@ internal sealed class InetConverter : AdvancedTypeConverter<Inet>
                 result = Inet.Parse(text);
                 return true;
             }
-            catch
+            catch (Exception ex) when (ex is FormatException or ArgumentException or OverflowException)
             {
+                // Bad address text, or a prefix outside 0-32/0-128 (ArgumentOutOfRangeException): not an inet value.
                 result = default!;
                 return false;
             }
