@@ -63,6 +63,23 @@ internal class DuckDbDialect : SqlDialect
     // DuckDB.NET names a UNION column's type ("Union") and a spatial GEOMETRY column's ("Geometry") and then throws a raw
     // ArgumentException ("Unrecognised type Union (28) for column v") from GetFieldType and GetValue (live, DuckDB.NET 2.0.1). A result
     // set holding one is refused when its reader opens, by name, with what to select instead (UnreadableColumnTypes).
+    // A GEOMETRY column (a geometry value object, SpatialValue) is written as WKT through a cast to GEOMETRY and read as its
+    // WKT through ST_AsText: DuckDB.NET cannot read the type itself (see UnreadableColumnTypes), and the text round-trips.
+    private static bool IsSpatial(IColumnInfo column)
+    {
+        var type = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType;
+        return typeof(pengdows.crud.types.valueobjects.SpatialValue).IsAssignableFrom(type);
+    }
+
+    public override bool RendersColumnArgument(IColumnInfo column) =>
+        IsSpatial(column) || base.RendersColumnArgument(column);
+
+    public override string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
+        IsSpatial(column) ? $"CAST({parameterMarker} AS GEOMETRY)" : base.RenderColumnArgument(parameterMarker, column);
+
+    internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
+        IsSpatial(column) ? $"ST_AsText({columnReference}) AS {wrappedName}" : base.RenderColumnSelect(columnReference, wrappedName, column);
+
     internal override IReadOnlyDictionary<string, string>? UnreadableColumnTypes { get; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -689,6 +706,8 @@ internal class DuckDbDialect : SqlDialect
         {
             // DuckDB's INTERVAL takes the day-time value as a TimeSpan, days kept (it refuses ISO text).
             IntervalFormat = IntervalWireFormat.DayTimeSpan,
+            // The spatial extension's GEOMETRY has no SRID: the value travels as plain WKT (ST_GeomFromText writes it).
+            SpatialFormat = SpatialWireFormat.WellKnownTextWithoutSrid,
             // A map is stored as its JSON text (DuckDB.NET does not map a dictionary to its MAP type).
             RegisterTypeMappings = registry => TextCollections.RegisterMappings(registry, SupportedDatabase.DuckDB),
             RegisterCoercions = registry => TextCollections.RegisterCoercions(registry, SupportedDatabase.DuckDB)

@@ -1,6 +1,6 @@
 // =============================================================================
 // FILE: PostgreSqlGeometricConverters.cs
-// PURPOSE: Converters for PostgreSqlPoint and PostgreSqlPolygon, the native PostgreSQL geometric types.
+// PURPOSE: Converters for PostgreSqlPoint, PostgreSqlLine and PostgreSqlPolygon, the native PostgreSQL geometric types.
 //
 // AI SUMMARY:
 // - ConvertToProvider(): the PostgreSQL text ("(x,y)", "((x,y),...)"). The column's native type is applied by the
@@ -32,6 +32,32 @@ internal sealed class PostgreSqlPointConverter : AdvancedTypeConverter<PostgreSq
                 return true;
             case not string when value.GetType().FullName?.StartsWith("NpgsqlTypes.", System.StringComparison.Ordinal) == true
                                  && PostgreSqlPoint.TryParse(value.ToString(), out var native):
+                result = native;
+                return true;
+            default:
+                result = default;
+                return false;
+        }
+    }
+}
+
+/// <summary>Converts <see cref="PostgreSqlLine"/> to and from PostgreSQL's line text.</summary>
+internal sealed class PostgreSqlLineConverter : AdvancedTypeConverter<PostgreSqlLine>
+{
+    protected override object? ConvertToProvider(PostgreSqlLine value, SupportedDatabase provider) => value.ToString();
+
+    public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out PostgreSqlLine result)
+    {
+        switch (value)
+        {
+            case PostgreSqlLine line:
+                result = line;
+                return true;
+            case string text when PostgreSqlLine.TryParse(text, out var parsed):
+                result = parsed;
+                return true;
+            case not string when value.GetType().FullName?.StartsWith("NpgsqlTypes.", System.StringComparison.Ordinal) == true
+                                 && PostgreSqlLine.TryParse(value.ToString(), out var native):
                 result = native;
                 return true;
             default:

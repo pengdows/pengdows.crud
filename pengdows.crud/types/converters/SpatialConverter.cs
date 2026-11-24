@@ -71,6 +71,12 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             return SqlServerSpatialFormat.ToConstructorArgument(value);
         }
 
+        if (format == SpatialWireFormat.WellKnownTextWithoutSrid && value.Srid != 0)
+        {
+            throw new NotSupportedException(
+                $"{provider} stores geometry without an SRID, so a value with SRID {value.Srid} would lose it. Write SRID 0.");
+        }
+
         if (value.ProviderValue != null)
         {
             return value.ProviderValue;
@@ -84,6 +90,7 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             SpatialWireFormat.LittleEndianSridPrefixedWkb => CreateMySqlSpatial(value),
             // Plain WKT, a value built from WKB decoded to it.
             SpatialWireFormat.WellKnownText => ExtendedWellKnownText.WellKnownTextOf(value),
+            SpatialWireFormat.WellKnownTextWithoutSrid => ExtendedWellKnownText.WellKnownTextOf(value),
             SpatialWireFormat.ExtendedTextOrHex => CreateSnowflakeSpatial(value),
             SpatialWireFormat.SridFlaggedExtendedWkb => CreateSridFlaggedWkb(value, "SAP HANA"),
             // EWKT text, always with its SRID: OracleDialect builds SDO_GEOMETRY from it (TYPE-021).

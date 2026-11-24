@@ -31,6 +31,9 @@ internal enum SpatialWireFormat
     /// <summary>The value's provider object if any, else its WKB, WKT or GeoJSON as carried.</summary>
     Unspecified = 0,
 
+    /// <summary>Plain WKT for a database whose geometry has no SRID (DuckDB's GEOMETRY): a value with a non-zero SRID is refused.</summary>
+    WellKnownTextWithoutSrid,
+
     /// <summary>Big-endian SRID + WKB that the gateway SQL turns into the instance (STGeomFromWKB).</summary>
     SridPrefixedWkbForConstructor,
 

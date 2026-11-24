@@ -95,6 +95,7 @@ public class TypeCompletenessTests
         yield return S("Cidr", DbType.Object, () => Cidr.Parse("10.0.0.0/8"));
         yield return S("IPAddress", DbType.Object, () => System.Net.IPAddress.Parse("192.168.1.10"));
         yield return S("PostgreSqlPoint", DbType.Object, () => new pengdows.crud.types.valueobjects.PostgreSqlPoint(1, 2));
+        yield return S("PostgreSqlLine", DbType.Object, () => pengdows.crud.types.valueobjects.PostgreSqlLine.Parse("{1,-2,3}"));
         yield return S("PostgreSqlPolygon", DbType.Object, () => pengdows.crud.types.valueobjects.PostgreSqlPolygon.Parse("((0,0),(1,0),(1,1),(0,0))"));
         yield return S("List<int>", DbType.Object, () => new System.Collections.Generic.List<int> { 1, 2, 3 });
         yield return S("Dictionary<string,object>", DbType.Object, () => new System.Collections.Generic.Dictionary<string, object> { ["a"] = "1" });

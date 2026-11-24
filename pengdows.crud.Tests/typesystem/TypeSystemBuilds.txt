@@ -242,7 +242,7 @@
     i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
     i5 = Time TimeOnly:01:02:03.0000000
     i6 = Time TimeOnly:01:02:03.0000000
-  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES ($i0, $i1, $i2, $i3, $i4, $i5, $i6)
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES ($i0, $i1, $i2, $i3, CAST($i4 AS GEOMETRY), $i5, $i6)
     i0 = Int32 Int32:0
     i1 = String "["a"]"
     i2 = Object Int32[]{Int32:1,Int32:2}

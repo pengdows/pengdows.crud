@@ -115,6 +115,7 @@ public class PublicTypeAuditRegisterTests
         ["pengdows.crud.types.valueobjects.IntervalYearMonth"] = Decision.Keep,
         ["pengdows.crud.types.valueobjects.PostgreSqlInterval"] = Decision.Keep,
         ["pengdows.crud.types.valueobjects.PostgreSqlPoint"] = Decision.Keep,
+        ["pengdows.crud.types.valueobjects.PostgreSqlLine"] = Decision.Keep,
         ["pengdows.crud.types.valueobjects.PostgreSqlPolygon"] = Decision.Keep,
         ["pengdows.crud.types.coercion.DbValue"] = Decision.Keep,
 

@@ -345,6 +345,7 @@ internal class AdvancedTypeRegistry
         // Network address converters
         RegisterConverter(new IPAddressConverter());
         RegisterConverter(new PostgreSqlPointConverter());
+        RegisterConverter(new PostgreSqlLineConverter());
         RegisterConverter(new PostgreSqlPolygonConverter());
 
         // Spatial converters
