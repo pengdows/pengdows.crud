@@ -62,6 +62,49 @@ public sealed class SpannerTypeFixesTests
         Assert.Equal(Sample.ToString("D"), parameter.Value);
     }
 
+    // Live (Spanner Omni + PGAdapter, Npgsql 9): a NaN or infinite double/float parameter reaches the server typed as text
+    // ("column is of type double precision but expression is of type text"). Sent as PostgreSQL's text spelling and untyped,
+    // the server takes the column's type, as it does for a Guid. A finite value keeps its Npgsql type.
+    [Theory]
+    [InlineData(DbType.Double, "NaN")]
+    [InlineData(DbType.Double, "Infinity")]
+    [InlineData(DbType.Double, "-Infinity")]
+    [InlineData(DbType.Single, "NaN")]
+    [InlineData(DbType.Single, "Infinity")]
+    public void CreateDbParameter_NonFiniteFloatingPoint_IsSentUntypedAsItsText(DbType type, string spelling)
+    {
+        var (context, _) = Context(npgsqlMetadata: true);
+        using var __ = context;
+
+        var parameter = Assert.IsType<fakeDbNpgsqlParameter>(context.CreateDbParameter<object>("p", type, NonFinite(type, spelling)));
+
+        Assert.Equal(fakeNpgsqlDbType.Unknown, parameter.NpgsqlDbType);
+        Assert.Equal(spelling, parameter.Value);
+    }
+
+    [Theory]
+    [InlineData(DbType.Double)]
+    [InlineData(DbType.Single)]
+    public void CreateDbParameter_FiniteFloatingPoint_KeepsItsType(DbType type)
+    {
+        var (context, _) = Context(npgsqlMetadata: true);
+        using var __ = context;
+
+        var parameter = Assert.IsType<fakeDbNpgsqlParameter>(context.CreateDbParameter<object>("p", type, type == DbType.Double ? 1.5 : 1.5f));
+
+        Assert.NotEqual(fakeNpgsqlDbType.Unknown, parameter.NpgsqlDbType);
+    }
+
+    private static object NonFinite(DbType type, string spelling) => (type, spelling) switch
+    {
+        (DbType.Double, "NaN") => double.NaN,
+        (DbType.Double, "Infinity") => double.PositiveInfinity,
+        (DbType.Double, "-Infinity") => double.NegativeInfinity,
+        (DbType.Single, "NaN") => float.NaN,
+        (DbType.Single, "Infinity") => float.PositiveInfinity,
+        _ => throw new ArgumentOutOfRangeException(nameof(spelling))
+    };
+
     [Fact]
     public async Task RetrieveOneAsync_UuidAndArray_AreRead()
     {

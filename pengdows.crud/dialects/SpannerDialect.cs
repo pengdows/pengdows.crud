@@ -150,6 +150,16 @@ internal sealed class SpannerDialect : PostgreSqlDialect
     // takes it for a uuid column and a varchar(36) column alike.
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
+        // Live (Spanner Omni + PGAdapter, Npgsql 9): a NaN or infinite double/float parameter reaches the server typed as
+        // text ("column is of type double precision but expression is of type text"). Sent as PostgreSQL's text spelling
+        // and untyped, the server takes the column's type, as it does for a Guid (Npgsql refuses a double value untyped).
+        if (NonFiniteFloatingPointText(value) is { } text)
+        {
+            var nonFinite = base.CreateDbParameter<string>(name, DbType.String, text);
+            SetNpgsqlDbTypeOnly(nonFinite, "Unknown");
+            return nonFinite;
+        }
+
         var parameter = base.CreateDbParameter(name, type, value);
         if (type == DbType.Guid && value is Guid)
         {
@@ -158,6 +168,17 @@ internal sealed class SpannerDialect : PostgreSqlDialect
 
         return parameter;
     }
+
+    // PostgreSQL's spelling of a non-finite float (NaN, Infinity, -Infinity); null for a finite value or a non-float.
+    private static string? NonFiniteFloatingPointText<T>(T value) => value switch
+    {
+        double d when !double.IsFinite(d) => PostgreSqlFloatText(d),
+        float f when !float.IsFinite(f) => PostgreSqlFloatText(f),
+        _ => null
+    };
+
+    private static string PostgreSqlFloatText(double d) =>
+        double.IsNaN(d) ? "NaN" : d > 0 ? "Infinity" : "-Infinity";
 
     // Spanner returns SqlState "P0001" (a generic raise-exception code) for EVERY constraint
     // violation, not the ANSI class-23 codes real PostgreSQL uses — verified live against a real
