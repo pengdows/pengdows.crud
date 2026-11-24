@@ -183,6 +183,14 @@ internal sealed class HanaDialect : SqlDialect
             return base.CreateDbParameter<object?>(name, DbType.String, pengdows.crud.types.coercion.JsonCoercion.GetJsonText(array));
         }
 
+        // Live (HANA Express, Sap.Data.Hana.Net 2.29.27): a zero-length byte[] bound as a binary parameter makes the driver's
+        // next binary bind on the same connection crash the process (a native write through a null pointer). An empty
+        // binary goes as an empty text parameter instead; the column's CAST(? AS BLOB) still stores an empty BLOB.
+        if (type == DbType.Binary && value is byte[] { Length: 0 })
+        {
+            return base.CreateDbParameter<object?>(name, DbType.String, string.Empty);
+        }
+
         if (type is DbType.DateTime or DbType.DateTime2)
         {
             var text = TimestampText(value, "yyyy-MM-dd HH:mm:ss.fffffff");

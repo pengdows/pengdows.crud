@@ -201,4 +201,44 @@ public sealed class HanaTypeFixesTests
         Assert.Equal(Int128.Parse("1234567890123456789012"), rows[0].Big);
         Assert.Equal(BigInteger.Parse("1234567890123456789012"), rows[0].Huge);
     }
+
+    // Live (HANA Express, Sap.Data.Hana.Net 2.29.27): a zero-length byte[] bound as a binary parameter makes the driver's
+    // next binary bind on the same connection crash the process (a native write through a null pointer, "Test host
+    // process crashed"). An empty binary goes as an empty text parameter; CAST(? AS BLOB) still stores an empty BLOB.
+    [Fact]
+    public void CreateDbParameter_EmptyBinary_IsSentAsEmptyText()
+    {
+        var (context, _) = HanaContext();
+        using var __ = context;
+
+        var parameter = context.CreateDbParameter<byte[]>("p", DbType.Binary, Array.Empty<byte>());
+
+        Assert.Equal(DbType.String, parameter.DbType);
+        Assert.Equal(string.Empty, parameter.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_NonEmptyBinary_StaysBinary()
+    {
+        var (context, _) = HanaContext();
+        using var __ = context;
+
+        var parameter = context.CreateDbParameter<byte[]>("p", DbType.Binary, new byte[] { 0, 255, 0 });
+
+        Assert.Equal(DbType.Binary, parameter.DbType);
+        Assert.Equal(new byte[] { 0, 255, 0 }, (byte[])parameter.Value!);
+    }
+
+    private static (DatabaseContext Context, fakeDbConnection Exec) HanaContext()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SapHana);
+        factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.SapHana });
+        var exec = new fakeDbConnection { EmulatedProduct = SupportedDatabase.SapHana };
+        factory.Connections.Add(exec);
+        return (new DatabaseContext(new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=x;EmulatedProduct=SapHana",
+            DbMode = DbMode.Standard
+        }, factory), exec);
+    }
 }
