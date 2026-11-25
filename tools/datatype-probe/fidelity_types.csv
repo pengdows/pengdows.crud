@@ -310,7 +310,7 @@ boolean,boolean,bool,Boolean,DuckDB,declared,BOOLEAN,Boolean,
 boolean,boolean,bool,Boolean,YugabyteDb,declared,BOOLEAN,boolean,
 boolean,boolean,bool,Boolean,TiDb,declared,BOOLEAN,BOOL,
 boolean,boolean,bool,Boolean,SingleStore,declared,BOOLEAN,TINYINT,
-boolean,boolean,bool,Boolean,SybaseASE,unsupported,,,Can't find type 'BOOLEAN'.
+boolean,boolean,bool,Boolean,SybaseASE,declared,BIT,bit,
 boolean,boolean,bool,Boolean,Spanner,declared,BOOLEAN,boolean,
 boolean,boolean,bool,Boolean,FlatFile,declared,BOOLEAN,BOOLEAN,
 boolean,boolean,bool,Boolean,Access,declared,BIT,DBTYPE_BOOL,
