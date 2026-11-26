@@ -758,6 +758,11 @@ EDGE_LIMITS = {
     ("SapHana", 'fixed decimal', 5): "declared DECIMAL(19,4) can't hold the negative decimal maximum: Numeric overflow, precision 19 scale 4 (observed)",
     ("SapHana", 'signed 128-bit', 1): "server: HANA FIXED16 can't hold -2^127: Numeric overflow for FIXED16 (observed)",
     ("SapHana", 'signed 128-bit', 2): "server: HANA FIXED16 can't hold 2^127-1: Numeric overflow for FIXED16 (observed)",
+    ("Access", "fixed decimal", 1): "declared DECIMAL(18,4) scale is too small: 1E-28 is stored as 0 (observed)",
+    ("Access", "fixed decimal", 4): "declared DECIMAL(18,4) can't hold the decimal maximum: the decimal field's precision is too small (observed)",
+    ("Access", "fixed decimal", 5): "declared DECIMAL(18,4) can't hold the negative decimal maximum: the decimal field's precision is too small (observed)",
+    ("Access", "calendar date", 1): "Access DATETIME cannot hold a date before 0100-01-01: the gateway refuses DateOnly.MinValue with ArgumentOutOfRangeException (observed)",
+    ("Access", "timestamp without zone", 1): "Access DATETIME is a double: sub-millisecond ticks are lost, 0.1234560 s reads back as 0.1230000 s (observed)",
 }
 
 

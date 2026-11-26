@@ -1980,6 +1980,11 @@ internal static class TypeFidelityDeclarations
     public static readonly IReadOnlyDictionary<(SupportedDatabase Database, string Semantic, int Edge), string> EdgeLimits =
         new Dictionary<(SupportedDatabase Database, string Semantic, int Edge), string>
         {
+            [(SupportedDatabase.Access, "calendar date", 1)] = "Access DATETIME cannot hold a date before 0100-01-01: the gateway refuses DateOnly.MinValue with ArgumentOutOfRangeException (observed)",
+            [(SupportedDatabase.Access, "fixed decimal", 1)] = "declared DECIMAL(18,4) scale is too small: 1E-28 is stored as 0 (observed)",
+            [(SupportedDatabase.Access, "fixed decimal", 4)] = "declared DECIMAL(18,4) can't hold the decimal maximum: the decimal field's precision is too small (observed)",
+            [(SupportedDatabase.Access, "fixed decimal", 5)] = "declared DECIMAL(18,4) can't hold the negative decimal maximum: the decimal field's precision is too small (observed)",
+            [(SupportedDatabase.Access, "timestamp without zone", 1)] = "Access DATETIME is a double: sub-millisecond ticks are lost, 0.1234560 s reads back as 0.1230000 s (observed)",
             [(SupportedDatabase.AuroraMySql, "binary float32", 3)] = "server: FLOAT has no NaN: Out of range value for column",
             [(SupportedDatabase.AuroraMySql, "binary float32", 4)] = "server: FLOAT has no infinity: Out of range value for column",
             [(SupportedDatabase.AuroraMySql, "binary float32", 5)] = "server: no -Infinity in this FLOAT type (observed: Out of range / Domain error / ORA-01426)",
