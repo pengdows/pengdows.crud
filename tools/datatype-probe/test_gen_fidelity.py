@@ -476,3 +476,13 @@ class SybaseAseBitBooleanTests(unittest.TestCase):
     def test_sybase_ase_declares_bit_as_boolean(self):
         self.assertEqual("BIT", g.DB_PREFER[("SybaseASE", "boolean")][0])
 
+
+class AuroraEdgeLimitTests(unittest.TestCase):
+    # Aurora MySQL and Aurora PostgreSQL run the MySQL and PostgreSQL engines, so every edge limit recorded for an engine
+    # applies to its Aurora variant too (the cells already take the engine's declarations).
+    def test_every_engine_edge_limit_applies_to_its_aurora_variant(self):
+        for (db, sem, edge), reason in list(g.EDGE_LIMITS.items()):
+            aurora = {"MySql": "AuroraMySql", "PostgreSql": "AuroraPostgreSql"}.get(db)
+            if aurora is not None:
+                self.assertIn((aurora, sem, edge), g.EDGE_LIMITS, (aurora, sem, edge))
+

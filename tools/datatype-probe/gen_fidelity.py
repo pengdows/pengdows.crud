@@ -837,6 +837,13 @@ def edges_lines(name, col, usable):
     return [f"    public static IReadOnlyList<{name}> Edges() => new {name}[] {{ {items} }};"]
 
 
+# An Aurora variant runs its engine, so the engine's recorded edge limits apply to it as well (after every _declare above).
+for _alias, _engine in ENGINE.items():
+    for (_d, _sem, _edge), _reason in list(EDGE_LIMITS.items()):
+        if _d == _engine:
+            EDGE_LIMITS.setdefault((_alias, _sem, _edge), _reason)
+
+
 def main():
     accepted, refused = probe_results()
     resolved = {db: {sem: resolve(accepted, db, sem) for _, sem, *_ in SPEC} for db in DB_ENUM}
