@@ -1,5 +1,7 @@
 # Connection governance investigation — October 2026
 
+> **Correction (2026-11-26):** the `ConnectionPoolProtectionBenchmarks` results in this document are invalid and that benchmark has been removed. Its read rows ran two connection leases per operation for Pengdows against one for Dapper, and its busy-timeout pragma never reached Pengdows's statements, because the library resets session settings on every lease by design. The ~1.7–2.1× ratios here measure that mismatch, not a cost of the governor. The PostgreSQL equal-footing run (one read per operation on both sides) shows parity, and the write-contention evidence is `SQLiteWriteContentionBenchmarks`.
+
 A record of one long working session (2026-10-08, branch `2.0.6`) that started with "did my benchmark run
 complete?" and turned into an investigation of what `PoolGovernor` and `StormGate` actually buy you over a
 correctly sized provider pool. Written so that it can be picked up cold.
@@ -126,9 +128,10 @@ Findings:
 - **pengdows is not protected by default.** The governor sizes from the connection string/config (dialect
   default 100), not from the server, so at defaults it fails like the others.
 - **A pool equal to the server limit still leaves residual failures** (anything else holding a slot).
-- **The ungoverned arms break the host:** ~10,700 sockets in `TIME_WAIT` after one ungoverned Dapper arm
-  (31,701 seen during the pengdows default arm) made Docker unable to bind ports for the next container
-  (`address already in use`). That is a connection storm taking down more than the app.
+- **The ungoverned arms churn the host's ports:** a 1,000-way storm against `max_connections=25` peaked at about
+  1,700–1,900 client-side `TIME_WAIT` sockets in three repetitions, and the governed arm with its pool capped at 20
+  peaked at 41–42 (`benchmarks/PortPressure`). The earlier 10,700 and 31,701 figures and the Docker bind failure were
+  seen once in an unrecorded run and have not been reproduced; do not cite them.
 - **The clamp (opt-in) fixes the default-pool case with no hand sizing:** it read the server limit,
   sized pools to 22 (25 − 3 reserved), 0 failures.
 
@@ -464,7 +467,7 @@ dotnet run -c Release --framework net8.0 -- \
 Gotchas that cost time:
 
 - **Run ungoverned arms last and wait for `TIME_WAIT` to drain between arms** (`ss -s | grep timewait`,
-  < ~500). One ungoverned storm leaves ~10k+ sockets and the next container fails to start; the BDN table shows
+  < ~500). One ungoverned storm leaves about 1,900 sockets (reproduced, `benchmarks/PortPressure`); the BDN table shows
   `NA`, which is a setup failure, not a result. A loop that waits is in the appendix.
 - **BenchmarkDotNet invokes a benchmark method more than once** (jitting + measured). A method that builds
   its own pool must dispose it, or the second call runs against a server still holding the first's connections.

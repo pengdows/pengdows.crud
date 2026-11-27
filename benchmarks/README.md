@@ -15,7 +15,7 @@ Note: the script's `--filter` names `ConnectionPoolStressBenchmarks`, `SqlGenera
 carry these proofs directly:
 
 ```bash
-dotnet run -c Release -f net10.0 --project CrudBenchmarks -- --filter "*ConnectionPoolProtectionBenchmarks*" "*BrokenMappingBenchmarks*" "*EqualFootingCrudBenchmarks*"
+dotnet run -c Release -f net10.0 --project CrudBenchmarks -- --filter "*BrokenMappingBenchmarks*" "*EqualFootingCrudBenchmarks*"
 ```
 
 **What it proves:**
@@ -102,7 +102,6 @@ dotnet run -c Release -- --include-opt-in --filter "*MySqlDefaultConcurrencyBenc
 
 | Benchmark | Proves | Requirements |
 |-----------|--------|--------------|
-| **ConnectionPoolProtectionBenchmarks** | Standard mode handles pressure better than EF/Dapper | None (SQLite) |
 | **BrokenMappingBenchmarks** | Correct SQL generation for edge-case names (spaces, reserved keywords) | None (SQLite) |
 | **EqualFootingCrudBenchmarks** | Performance relative to Dapper and EF Core | None (SQLite) |
 
@@ -158,3 +157,10 @@ BenchmarkDotNet output explained:
 ```csharp
 [SimpleJob(warmupCount: 1, iterationCount: 3)]  // Faster but less accurate
 ```
+
+---
+
+## Contention and port-pressure experiments
+
+- **`CrudBenchmarks/SqliteLockHolderContentionBenchmarks.cs`:** a writer holds the SQLite lock for 2 s while each framework writes against a shared command timeout (0, 1, 5 s). Lost transactions per run: at 1 s, Dapper lost 15–40 of 50 and EF 13–38 across 7 runs, Pengdows 1 every run. At 0 s and 5 s every arm committed everything, and Pengdows finished in about 2.0 s against 3.8–4.5 s for Dapper and EF. Run with `dotnet run -c Release -f net10.0 --project CrudBenchmarks -- --filter "*SqliteLockHolderContentionBenchmarks*"`.
+- **`PortPressure/run-port-pressure.sh`:** a 1,000-way storm against a throwaway PostgreSQL 16 container (`max_connections=25`). Uncontrolled: peak 1,716–1,861 client TIME_WAIT sockets over 3 runs. Governed with the default pool: 349–534 refusals per run. Governed with the pool capped at 20: 0 refusals, peak 41–42. Needs Docker and `ss`; Linux only.

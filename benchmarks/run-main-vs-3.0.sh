@@ -31,7 +31,7 @@ out="$WORK/out/$TIER"
 
 case "$TIER" in
   tier1) filters=('*.HydrationHotPathBenchmarks.*' '*EqualFootingCrudBenchmarks*' '*ApplesToApplesDapperBenchmarks*' '*BenchmarkGuidParameters*' '*BrokenMappingBenchmarks*') ;;
-  tier2) filters=('*SQLiteWriteContentionBenchmarks*' '*SqliteConcurrencyBenchmark*' '*ConnectionPoolProtectionBenchmarks*' '*DuckDbEqualFootingBenchmarks*' '*DuckDbReadBenchmarks*') ;;
+  tier2) filters=('*SQLiteWriteContentionBenchmarks*' '*SqliteConcurrencyBenchmark*' '*DuckDbEqualFootingBenchmarks*' '*DuckDbReadBenchmarks*') ;;
   tier3) filters=('*PostgreSqlEqualFootingBenchmarks*' '*SqlServerEqualFootingBenchmarks*' '*SqlServerHydrationHotPathBenchmarks*') ;;
   *) echo "unknown tier: $TIER" >&2; exit 2 ;;
 esac

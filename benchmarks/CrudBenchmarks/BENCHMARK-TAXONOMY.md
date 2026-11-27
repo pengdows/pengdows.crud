@@ -39,11 +39,11 @@ recover is not a better result.
 | `ApplesToApplesDapperBenchmarks` | `EqualFootingThroughput` | Dapper versus Pengdows with separated connection and mapping paths | Distinguishes DAL lifecycle cost from pure mapping cost |
 | `BrokenMappingBenchmarks` | `FailureContainment`, `ProviderCapability` | Behavior and cost when mappings are incomplete or unusual | Correct failure is more important than a fast invalid result |
 | `SQLiteWriteContentionBenchmarks` | `CorrectnessStress`, `Governance` | 100 concurrent writers under aggressive lock pressure | Count failures and latency; `busy_timeout` sensitivity is itself a result |
+| `SqliteLockHolderContentionBenchmarks` | `CorrectnessStress`, `Governance` | A writer lock held for 2 s against a shared command timeout (0, 1, 5 s), no pragmas | Lost transactions first; wall time only where every arm committed |
 | `SqliteFileWriterStormBenchmarks` | `CorrectnessStress`, `ProductionLifecycle` | Real WAL-file writer/read storms | Compare committed work, p50/p95/p99/max latency, and queue behavior |
 | `SqliteFileWriterBenchmarks` | `ProductionLifecycle`, `EqualFootingThroughput` | Sequential cost of per-operation, pinned, queued, and governed patterns | The small Pengdows overhead is the cost of not pinning a fragile writer |
 | `SqliteFileWriterPoisonBenchmarks` | `FailureContainment` | A writer connection dying mid-run | A pinned writer that cannot recover is a failure mode, not a low-cost recovery strategy |
 | `SqliteConcurrencyBenchmark` | `CorrectnessStress` | SQLite concurrent operation behavior | Report successful work and failures, not just elapsed time |
-| `ConnectionPoolProtectionBenchmarks` | `Governance`, `CorrectnessStress` | Pool exhaustion, write storms, sustained pressure, and hold time | A bounded queue is preferable to unbounded connection pressure |
 | `PeakConnectionsBenchmarks` | `Governance` | Peak connection demand under matched load | Compare resource shape, not only throughput |
 | `PostgreSqlConnectionGovernanceBenchmarks` | `Governance`, `CorrectnessStress` | PostgreSQL connection governance under pressure | Pool behavior and correctness are primary outcomes |
 | `PostgreSqlBackpressureBenchmarks` | `Governance`, `CorrectnessStress` | Backpressure under PostgreSQL load | Queueing is an intentional control, not automatically a regression |
@@ -111,3 +111,5 @@ The benchmarks under `Internal/` are intentionally narrower than the framework c
   isolation guarantee is not an optimization.
 - `CloningPerformanceTest` is `RawHotPath` plus `ProductionLifecycle`: it measures the
   reusable-container strategy.
+
+`benchmarks/PortPressure/run-port-pressure.sh` is not a BenchmarkDotNet class. It runs a 1,000-way storm against PostgreSQL with `max_connections=25` and reports refusals and client-side TIME_WAIT sockets per arm (`Governance`, `FailureContainment`).

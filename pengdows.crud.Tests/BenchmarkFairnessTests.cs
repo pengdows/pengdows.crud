@@ -490,48 +490,6 @@ public class BenchmarkFairnessTests
     }
 
     [Fact]
-    public void ConnectionPoolProtectionBenchmarks_RecordAndWriteCorrectnessFailures()
-    {
-        const string fileName = "ConnectionPoolProtectionBenchmarks.cs";
-        var text = LoadBenchmarkText(fileName);
-
-        AssertAllPresent(fileName, text, new[]
-        {
-            "ConcurrentDictionary<CorrectnessIssueKey, int>",
-            "MarkInvalid(",
-            "if (entity == null)",
-            "if (affected != 1)",
-            "BenchmarkCorrectnessArtifacts.Write(",
-            "nameof(ConnectionPoolProtectionBenchmarks)"
-        });
-    }
-
-    [Fact]
-    public void ConnectionPoolProtectionBenchmarks_DoesNotRethrowWorkloadFailures()
-    {
-        const string fileName = "ConnectionPoolProtectionBenchmarks.cs";
-        var text = LoadBenchmarkText(fileName);
-
-        Assert.Contains("catch (Exception ex)", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("throw;", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ConnectionPoolProtectionBenchmarks_DoNotContainMixedOpsScenario()
-    {
-        const string fileName = "ConnectionPoolProtectionBenchmarks.cs";
-        var text = LoadBenchmarkText(fileName);
-
-        AssertAllAbsent(fileName, text, new[]
-        {
-            "ScenarioMixedOps",
-            "MixedOps_Pengdows",
-            "MixedOps_Dapper",
-            "MixedOps_EntityFramework"
-        });
-    }
-
-    [Fact]
     public void HydrationHotPathBenchmarks_NormalizeConnectionSetupOutsideTheMeasuredPath()
     {
         const string fileName = "HydrationHotPathBenchmarks.cs";

@@ -13,7 +13,6 @@ echo "========================================================================="
 echo ""
 echo "This suite runs:"
 echo ""
-echo "  1. ConnectionPoolProtectionBenchmarks - pool behavior under pressure"
 echo "  2. BrokenMappingBenchmarks - what each library does with a wrong mapping"
 echo "  3. EqualFootingCrudBenchmarks - CRUD time against Dapper and EF Core"
 echo ""
@@ -25,7 +24,7 @@ echo "Running benchmarks... (this will take ~10-15 minutes)"
 echo ""
 
 # Run all thesis-proof benchmarks
-dotnet run -c Release -f "${BENCH_FRAMEWORK:-net10.0}" --project "${root}/CrudBenchmarks" -- --filter "*ConnectionPoolProtectionBenchmarks*" "*BrokenMappingBenchmarks*" "*EqualFootingCrudBenchmarks*"
+dotnet run -c Release -f "${BENCH_FRAMEWORK:-net10.0}" --project "${root}/CrudBenchmarks" -- --filter "*BrokenMappingBenchmarks*" "*EqualFootingCrudBenchmarks*"
 
 echo ""
 echo "========================================================================="
