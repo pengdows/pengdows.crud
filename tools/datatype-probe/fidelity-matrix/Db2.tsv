@@ -1,35 +1,35 @@
-Db2	signed 8-bit	signed_8_bit	PASS
-Db2	signed 16-bit	signed_16_bit	PASS
-Db2	signed 32-bit	signed_32_bit	PASS
-Db2	signed 64-bit	signed_64_bit	PASS
+Db2	signed 8-bit	signed_8_bit	PASS 4 values
+Db2	signed 16-bit	signed_16_bit	PASS 4 values
+Db2	signed 32-bit	signed_32_bit	PASS 4 values
+Db2	signed 64-bit	signed_64_bit	PASS 3 values
 Db2	signed 128-bit	signed_128_bit	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "HUGEINT" is an undefined name.
-Db2	unsigned 8-bit	unsigned_8_bit	PASS
-Db2	unsigned 16-bit	unsigned_16_bit	PASS
-Db2	unsigned 32-bit	unsigned_32_bit	PASS
-Db2	unsigned 64-bit	unsigned_64_bit	PASS
+Db2	unsigned 8-bit	unsigned_8_bit	PASS 3 values
+Db2	unsigned 16-bit	unsigned_16_bit	PASS 3 values
+Db2	unsigned 32-bit	unsigned_32_bit	PASS 3 values
+Db2	unsigned 64-bit	unsigned_64_bit	PASS 3 values
 Db2	arbitrary-size integer	arbitrary_integer	UNSUPPORTED refused: ERROR [42611] [IBM][DB2/LINUXX8664] SQL0604N The length, precision, or scale attribute for column, distinct type, structured type, array type, attribute of structured type, routine, cast target ty
-Db2	binary float32	binary_float32	PASS
-Db2	binary float64	binary_float64	PASS
-Db2	fixed decimal	fixed_decimal	PASS
-Db2	boolean	boolean	PASS
+Db2	binary float32	binary_float32	LIMIT 5 edge(s): edge 2 (float:1E-45): DatabaseOperationException: Insert failed on Db2: ERROR [22003] [IBM][DB2/LINUXX8664] SQL0302N  The value of a host variable in the EXECUTE or OPEN statement is out of range for its corresponding use. => server: DB2 refuses this FLOAT value (SQL0302N, host variable out of range); edge 3 (float:NaN): DatabaseOperationException: Insert failed on Db2: ERROR [22003] [IBM][DB2/LINUXX8664] SQL0302N  The value of a host variable in the EXECUTE or OPEN statement is out of range for its corresponding use. => server: DB2 refuses this FLOAT value (SQL0302N, host variable out of range); edge 4 (float:Infinity): DatabaseOperationException: Insert failed on Db2: ERROR [22003] [IBM][DB2/LINUXX8664] SQL0302N  The value of a host variable in the EXECUTE or OPEN statement is out of range for its corresponding use. => server: DB2 refuses this FLOAT value (SQL0302N, host variable out of range); edge 5 (float:-Infinity): DatabaseOperationException: Insert failed on Db2: ERROR [22003] [IBM][DB2/LINUXX8664] SQL0302N  The value of a host variable in the EXECUTE or OPEN statement is out of range for its corresponding use. => server: DB2 refuses this FLOAT value (SQL0302N, host variable out of range); edge 6: wrote float:-0, read float:0 (read as Single) => server: DB2 refuses this FLOAT value (SQL0302N, host variable out of range)
+Db2	binary float64	binary_float64	LIMIT 5 edge(s): edge 2 (double:5E-324): DatabaseOperationException: Insert failed on Db2: ERROR [22003] [IBM][DB2/LINUXX8664] SQL0302N  The value of a host variable in the EXECUTE or OPEN statement is out of range for its corresponding use. => server: DB2 refuses this DOUBLE value (SQL0302N, host variable out of range); edge 3 (double:NaN): DatabaseOperationException: Insert failed on Db2: ERROR [22003] [IBM][DB2/LINUXX8664] SQL0302N  The value of a host variable in the EXECUTE or OPEN statement is out of range for its corresponding use. => server: DB2 refuses this DOUBLE value (SQL0302N, host variable out of range); edge 4 (double:Infinity): DatabaseOperationException: Insert failed on Db2: ERROR [22003] [IBM][DB2/LINUXX8664] SQL0302N  The value of a host variable in the EXECUTE or OPEN statement is out of range for its corresponding use. => server: DB2 refuses this DOUBLE value (SQL0302N, host variable out of range); edge 5 (double:-Infinity): DatabaseOperationException: Insert failed on Db2: ERROR [22003] [IBM][DB2/LINUXX8664] SQL0302N  The value of a host variable in the EXECUTE or OPEN statement is out of range for its corresponding use. => server: DB2 refuses this DOUBLE value (SQL0302N, host variable out of range); edge 6: wrote double:-0, read double:0 (read as Double) => server: DB2 refuses this DOUBLE value (SQL0302N, host variable out of range)
+Db2	fixed decimal	fixed_decimal	LIMIT 3 edge(s): edge 1: wrote decimal:0.0000000000000000000000000001, read decimal:0 (read as Decimal) => declared scale is too small: 1E-28 is stored as 0; edge 4 (decimal:79228162514264337593543950335): DatabaseOperationException: Insert failed on Db2: ERROR [22003] [IBM] CLI0111E  Numeric value out of range. SQLSTATE=22003 => declared precision can't hold the decimal maximum (CLI0111E numeric value out of range); edge 5 (decimal:-79228162514264337593543950335): DatabaseOperationException: Insert failed on Db2: ERROR [22003] [IBM] CLI0111E  Numeric value out of range. SQLSTATE=22003 => declared precision can't hold the decimal maximum (CLI0111E numeric value out of range)
+Db2	boolean	boolean	PASS 2 values
 Db2	bit / bitstring	bit_string	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "BIT" was found following "NULL PRIMARY KEY, c". Expected tokens may include: "BINARY".
-Db2	varying character	varying_character	PASS
-Db2	unbounded text	unbounded_text	PASS
-Db2	UUID / GUID	uuid	PASS
-Db2	calendar date	calendar_date	PASS
-Db2	time without zone	time_of_day	PASS
-Db2	time without zone	time_span	PASS
+Db2	varying character	varying_character	PASS 5 values
+Db2	unbounded text	unbounded_text	PASS 4 values
+Db2	UUID / GUID	uuid	PASS 2 values
+Db2	calendar date	calendar_date	PASS 3 values
+Db2	time without zone	time_of_day	PASS 3 values
+Db2	time without zone	time_span	PASS 3 values
 Db2	day-time interval	day_time_interval	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "DAY TO SECOND" was found following "MARY KEY, c INTERVAL". Expected tokens may include: "<national_clob_type>".
-Db2	timestamp without zone	timestamp	PASS
+Db2	timestamp without zone	timestamp	PASS 4 values
 Db2	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "TIME" was found following "EY, c TIMESTAMP WITH". Expected tokens may include: "REFERENCES".
-Db2	binary LOB	binary	PASS
+Db2	binary LOB	binary	PASS 3 values
 Db2	JSON text / JSON value	json	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "JSON" is an undefined name.
-Db2	IP address	ip_address	PASS
-Db2	SQL array	int_array	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ")" was found following "KEY, c INTEGER ARRAY". Expected tokens may include: "<references_spec>".
+Db2	IP address	ip_address	PASS 3 values
+Db2	SQL array	int_array	UNSUPPORTED refused: server: Db2 refuses an ARRAY type in a column definition (SQL20441N: a ARRAY data type is not supported in the context where it is being used, confirmed live)
 Db2	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "UHUGEINT" is an undefined name.
 Db2	decimal floating point	decimal_float	PASS
 Db2	money / currency	money	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "MONEY" is an undefined name.
-Db2	fixed character	fixed_character	PASS
+Db2	fixed character	fixed_character	PASS 2 values
 Db2	national / Unicode character	national_text	PASS
 Db2	long text LOB	long_text	PASS
 Db2	enumeration	enumeration	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "(" was found following "PRIMARY KEY, c ENUM". Expected tokens may include: "DEFAULT".
@@ -64,12 +64,13 @@ Db2	list / multiset / set collection	list_collection	UNSUPPORTED refused: ERROR 
 Db2	map / dictionary	map	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "(" was found following "L PRIMARY KEY, c MAP". Expected tokens may include: ".".
 Db2	range	range	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "INT4RANGE" is an undefined name.
 Db2	multirange	multirange	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "INT4MULTIRANGE" is an undefined name.
-Db2	user-defined enum / domain	domain	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ")" was found following "Y KEY, c CREATE TYPE". Expected tokens may include: "<references_spec>".
+Db2	user-defined enum / domain	domain	PASS
 Db2	full-text search vector / query	full_text	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "TSVECTOR" is an undefined name.
-Db2	native point	native_point	UNSUPPORTED refused: no candidate was tried
-Db2	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
-Db2	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+Db2	native point	native_point	UNSUPPORTED refused: native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry
+Db2	native polygon	native_polygon	UNSUPPORTED refused: native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry
+Db2	native line	native_line	UNSUPPORTED refused: native line is PostgreSQL's line (CLR PostgreSqlLine); this database has no native line type
+Db2	32-bit transaction ID	xid32	PASS
 Db2	vector embedding	vector	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "(" was found following "RIMARY KEY, c VECTOR". Expected tokens may include: "CHECK".
 Db2	hierarchical path	hierarchy	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "HIERARCHYID" is an undefined name.
 Db2	external-file reference	file_reference	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "BFILE" is an undefined name.
-Db2	specialized security label	security_label	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "IDSSECURITYLABEL" is an undefined name.
+Db2	specialized security label	security_label	PASS

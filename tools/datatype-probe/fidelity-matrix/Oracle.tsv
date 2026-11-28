@@ -1,35 +1,35 @@
-Oracle	signed 8-bit	signed_8_bit	PASS
-Oracle	signed 16-bit	signed_16_bit	PASS
-Oracle	signed 32-bit	signed_32_bit	PASS
-Oracle	signed 64-bit	signed_64_bit	PASS
-Oracle	signed 128-bit	signed_128_bit	PASS
-Oracle	unsigned 8-bit	unsigned_8_bit	PASS
-Oracle	unsigned 16-bit	unsigned_16_bit	PASS
-Oracle	unsigned 32-bit	unsigned_32_bit	PASS
-Oracle	unsigned 64-bit	unsigned_64_bit	PASS
-Oracle	arbitrary-size integer	arbitrary_integer	PASS
-Oracle	binary float32	binary_float32	PASS
-Oracle	binary float64	binary_float64	PASS
-Oracle	fixed decimal	fixed_decimal	PASS
-Oracle	boolean	boolean	PASS
+Oracle	signed 8-bit	signed_8_bit	PASS 4 values
+Oracle	signed 16-bit	signed_16_bit	PASS 4 values
+Oracle	signed 32-bit	signed_32_bit	PASS 4 values
+Oracle	signed 64-bit	signed_64_bit	PASS 3 values
+Oracle	signed 128-bit	signed_128_bit	LIMIT 2 edge(s): edge 1 (Int128:-170141183460469231731687303715884105728): DatabaseOperationException: Insert failed on Oracle: ORA-01438: value -170141183460469231731687303715884105728 greater than specified precision (38, 0) for column https://docs.oracle.com/error-help/db/ora-01438/ => server: NUMBER(38) can't hold -2^127: ORA-01438 greater than specified precision (38, 0); edge 2 (Int128:170141183460469231731687303715884105727): DatabaseOperationException: Insert failed on Oracle: ORA-01438: value 170141183460469231731687303715884105727 greater than specified precision (38, 0) for column https://docs.oracle.com/error-help/db/ora-01438/ => server: NUMBER(38) can't hold 2^127-1: ORA-01438 greater than specified precision (38, 0)
+Oracle	unsigned 8-bit	unsigned_8_bit	PASS 3 values
+Oracle	unsigned 16-bit	unsigned_16_bit	PASS 3 values
+Oracle	unsigned 32-bit	unsigned_32_bit	PASS 3 values
+Oracle	unsigned 64-bit	unsigned_64_bit	PASS 3 values
+Oracle	arbitrary-size integer	arbitrary_integer	PASS 3 values
+Oracle	binary float32	binary_float32	LIMIT 1 edge(s): edge 6: wrote float:-0, read float:0 (read as Single) => server: the database does not keep the sign of zero: -0 is stored as 0
+Oracle	binary float64	binary_float64	LIMIT 1 edge(s): edge 6: wrote double:-0, read double:0 (read as Double) => server: the database does not keep the sign of zero: -0 is stored as 0
+Oracle	fixed decimal	fixed_decimal	LIMIT 3 edge(s): edge 1: wrote decimal:0.0000000000000000000000000001, read decimal:0 (read as Decimal) => declared scale is too small: 1E-28 is stored as 0; edge 4 (decimal:79228162514264337593543950335): DatabaseOperationException: Insert failed on Oracle: ORA-01438: value 79228162514264337593543950335 greater than specified precision (18, 4) for column https://docs.oracle.com/error-help/db/ora-01438/ => declared NUMBER(18,4) can't hold the decimal maximum: ORA-01438 greater than precision (18, 4); edge 5 (decimal:-79228162514264337593543950335): DatabaseOperationException: Insert failed on Oracle: ORA-01438: value -79228162514264337593543950335 greater than specified precision (18, 4) for column https://docs.oracle.com/error-help/db/ora-01438/ => declared NUMBER(18,4) can't hold the negative decimal maximum: ORA-01438 greater than precision (18, 4)
+Oracle	boolean	boolean	PASS 2 values
 Oracle	bit / bitstring	bit_string	UNSUPPORTED refused: ORA-03060: Data type BIT is invalid. https://docs.oracle.com/error-help/db/ora-03060/
-Oracle	varying character	varying_character	PASS
-Oracle	unbounded text	unbounded_text	PASS
-Oracle	UUID / GUID	uuid	PASS
-Oracle	calendar date	calendar_date	PASS
+Oracle	varying character	varying_character	LIMIT 1 edge(s): edge 1 (text:): NotNullViolationException: Insert violated a not-null constraint on Oracle: ORA-01400: cannot insert NULL into ("SYSTEM"."type_fidelity"."varying_character") https://docs.oracle.com/error-help/db/ora-01400/ => server: Oracle stores '' as NULL: ORA-01400 cannot insert NULL
+Oracle	unbounded text	unbounded_text	LIMIT 1 edge(s): edge 1 (text:): NotNullViolationException: Insert violated a not-null constraint on Oracle: ORA-01400: cannot insert NULL into ("SYSTEM"."type_fidelity"."unbounded_text") https://docs.oracle.com/error-help/db/ora-01400/ => server: Oracle stores '' as NULL: ORA-01400 cannot insert NULL
+Oracle	UUID / GUID	uuid	PASS 2 values
+Oracle	calendar date	calendar_date	PASS 3 values
 Oracle	time without zone	time_of_day	UNSUPPORTED refused: ORA-03060: Data type TIME is invalid. https://docs.oracle.com/error-help/db/ora-03060/
 Oracle	time without zone	time_span	UNSUPPORTED refused: ORA-03060: Data type TIME is invalid. https://docs.oracle.com/error-help/db/ora-03060/
 Oracle	day-time interval	day_time_interval	PASS
-Oracle	timestamp without zone	timestamp	PASS
-Oracle	timestamp with zone	timestamp_with_zone	PASS
-Oracle	binary LOB	binary	PASS
-Oracle	JSON text / JSON value	json	PASS
-Oracle	IP address	ip_address	PASS
-Oracle	SQL array	int_array	UNSUPPORTED refused: ORA-03099: unexpected item ARRAY in a column definition https://docs.oracle.com/error-help/db/ora-03099/
+Oracle	timestamp without zone	timestamp	PASS 4 values
+Oracle	timestamp with zone	timestamp_with_zone	PASS 3 values
+Oracle	binary LOB	binary	LIMIT 1 edge(s): edge 1 (bytes:): NotNullViolationException: Insert violated a not-null constraint on Oracle: ORA-01400: cannot insert NULL into ("SYSTEM"."type_fidelity"."binary") https://docs.oracle.com/error-help/db/ora-01400/ => server: Oracle stores empty bytes as NULL: ORA-01400 cannot insert NULL
+Oracle	JSON text / JSON value	json	PASS 4 values
+Oracle	IP address	ip_address	PASS 3 values
+Oracle	SQL array	int_array	PASS 2 values
 Oracle	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
 Oracle	decimal floating point	decimal_float	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
 Oracle	money / currency	money	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-Oracle	fixed character	fixed_character	PASS
+Oracle	fixed character	fixed_character	PASS 2 values
 Oracle	national / Unicode character	national_text	PASS
 Oracle	long text LOB	long_text	PASS
 Oracle	enumeration	enumeration	UNSUPPORTED refused: ORA-03060: Data type ENUM is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -44,11 +44,11 @@ Oracle	time with zone	time_zoned	UNSUPPORTED refused: ORA-02000: missing ROWID k
 Oracle	year-only	year_only	PASS
 Oracle	year-month interval	year_month_interval	PASS
 Oracle	generic interval	generic_interval	UNSUPPORTED refused: ORA-30089: missing or invalid <datetime field> https://docs.oracle.com/error-help/db/ora-30089/
-Oracle	row identifier / ROWID	row_identifier	UNSUPPORTED refused: by design: ROWID is a pseudo-column that identifies a row: a ROWID column keeps no value the library writes (it reads back NULL)
+Oracle	row identifier / ROWID	row_identifier	UNSUPPORTED refused: by design: a ROWID is read as its text (ROWIDTOCHAR; live-checked on Oracle 23ai) and is NonInsertable/NonUpdateable, because the database assigns it; the fidelity cell writes a value, so it is refused for that reason only
 Oracle	object identifier / OID	oid	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
 Oracle	transaction ID	transaction_id	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
 Oracle	WAL / log position	wal_position	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-Oracle	native binary JSON	binary_json	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+Oracle	native binary JSON	binary_json	PASS
 Oracle	XML	xml	PASS
 Oracle	BSON	bson	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
 Oracle	variant / dynamic value	variant	UNSUPPORTED refused: by design: ANYDATA is built by its type's constructor functions (ANYDATA.ConvertVarchar2), not bound as a value
@@ -59,17 +59,18 @@ Oracle	line / linestring geometry	linestring	PASS
 Oracle	polygon geometry	polygon	PASS
 Oracle	general geometry	geometry	PASS
 Oracle	geography / geodetic	geography	PASS
-Oracle	fixed-length array	fixed_array	UNSUPPORTED refused: ORA-03099: unexpected item ARRAY in a column definition https://docs.oracle.com/error-help/db/ora-03099/
-Oracle	list / multiset / set collection	list_collection	UNSUPPORTED refused: ORA-03099: unexpected item MULTISET in a column definition https://docs.oracle.com/error-help/db/ora-03099/
+Oracle	fixed-length array	fixed_array	PASS
+Oracle	list / multiset / set collection	list_collection	PASS
 Oracle	map / dictionary	map	UNSUPPORTED refused: ORA-03060: Data type MAP is invalid. https://docs.oracle.com/error-help/db/ora-03060/
 Oracle	range	range	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
 Oracle	multirange	multirange	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-Oracle	user-defined enum / domain	domain	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+Oracle	user-defined enum / domain	domain	PASS
 Oracle	full-text search vector / query	full_text	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-Oracle	native point	native_point	UNSUPPORTED refused: no candidate was tried
-Oracle	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
-Oracle	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
-Oracle	vector embedding	vector	UNSUPPORTED refused: ORA-43853: VECTOR type cannot be used in non-automatic segment space management tablespace "SYSTEM" https://docs.oracle.com/error-help/db/ora-43853/
+Oracle	native point	native_point	UNSUPPORTED refused: native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry
+Oracle	native polygon	native_polygon	UNSUPPORTED refused: native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry
+Oracle	native line	native_line	UNSUPPORTED refused: native line is PostgreSQL's line (CLR PostgreSqlLine); this database has no native line type
+Oracle	32-bit transaction ID	xid32	PASS
+Oracle	vector embedding	vector	PASS
 Oracle	hierarchical path	hierarchy	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
 Oracle	external-file reference	file_reference	PASS
 Oracle	specialized security label	security_label	UNSUPPORTED refused: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/

@@ -1,35 +1,35 @@
-MariaDb	signed 8-bit	signed_8_bit	PASS
-MariaDb	signed 16-bit	signed_16_bit	PASS
-MariaDb	signed 32-bit	signed_32_bit	PASS
-MariaDb	signed 64-bit	signed_64_bit	PASS
-MariaDb	signed 128-bit	signed_128_bit	PASS
-MariaDb	unsigned 8-bit	unsigned_8_bit	PASS
-MariaDb	unsigned 16-bit	unsigned_16_bit	PASS
-MariaDb	unsigned 32-bit	unsigned_32_bit	PASS
-MariaDb	unsigned 64-bit	unsigned_64_bit	PASS
-MariaDb	arbitrary-size integer	arbitrary_integer	PASS
-MariaDb	binary float32	binary_float32	PASS
-MariaDb	binary float64	binary_float64	PASS
-MariaDb	fixed decimal	fixed_decimal	PASS
-MariaDb	boolean	boolean	PASS
-MariaDb	bit / bitstring	bit_string	PASS
-MariaDb	varying character	varying_character	PASS
-MariaDb	unbounded text	unbounded_text	PASS
-MariaDb	UUID / GUID	uuid	PASS
-MariaDb	calendar date	calendar_date	PASS
-MariaDb	time without zone	time_of_day	PASS
-MariaDb	time without zone	time_span	PASS
+MariaDb	signed 8-bit	signed_8_bit	PASS 4 values
+MariaDb	signed 16-bit	signed_16_bit	PASS 4 values
+MariaDb	signed 32-bit	signed_32_bit	PASS 4 values
+MariaDb	signed 64-bit	signed_64_bit	PASS 3 values
+MariaDb	signed 128-bit	signed_128_bit	LIMIT 2 edge(s): edge 1 (Int128:-170141183460469231731687303715884105728): DatabaseOperationException: Insert failed on MariaDb: Out of range value for column 'signed_128_bit' at row 1 => server: DECIMAL(38,0) can't hold -2^127: Out of range value for column; edge 2 (Int128:170141183460469231731687303715884105727): DatabaseOperationException: Insert failed on MariaDb: Out of range value for column 'signed_128_bit' at row 1 => server: DECIMAL(38,0) can't hold 2^127-1: Out of range value for column
+MariaDb	unsigned 8-bit	unsigned_8_bit	PASS 3 values
+MariaDb	unsigned 16-bit	unsigned_16_bit	PASS 3 values
+MariaDb	unsigned 32-bit	unsigned_32_bit	PASS 3 values
+MariaDb	unsigned 64-bit	unsigned_64_bit	PASS 3 values
+MariaDb	arbitrary-size integer	arbitrary_integer	PASS 3 values
+MariaDb	binary float32	binary_float32	LIMIT 4 edge(s): edge 3 (float:NaN): DatabaseOperationException: Insert failed on MariaDb: Out of range value for column 'binary_float32' at row 1 => server: FLOAT has no NaN: Out of range value for column; edge 4 (float:Infinity): DatabaseOperationException: Insert failed on MariaDb: Out of range value for column 'binary_float32' at row 1 => server: FLOAT has no infinity: Out of range value for column; edge 5 (float:-Infinity): DatabaseOperationException: Insert failed on MariaDb: Out of range value for column 'binary_float32' at row 1 => server: no -Infinity in this FLOAT type (observed: Out of range / Domain error / ORA-01426); edge 6: wrote float:-0, read float:0 (read as Single) => server: the database does not keep the sign of zero: -0 is stored as 0
+MariaDb	binary float64	binary_float64	LIMIT 4 edge(s): edge 3 (double:NaN): DatabaseOperationException: Insert failed on MariaDb: Out of range value for column 'binary_float64' at row 1 => server: DOUBLE has no NaN: Out of range value for column; edge 4 (double:Infinity): DatabaseOperationException: Insert failed on MariaDb: Out of range value for column 'binary_float64' at row 1 => server: DOUBLE has no infinity: Out of range value for column; edge 5 (double:-Infinity): DatabaseOperationException: Insert failed on MariaDb: Out of range value for column 'binary_float64' at row 1 => server: no -Infinity in this DOUBLE type (observed: Out of range / Domain error / TDS parameter invalid); edge 6: wrote double:-0, read double:0 (read as Double) => server: the database does not keep the sign of zero: -0 is stored as 0
+MariaDb	fixed decimal	fixed_decimal	LIMIT 3 edge(s): edge 1: wrote decimal:0.0000000000000000000000000001, read decimal:0 (read as Decimal) => declared scale is too small: 1E-28 is stored as 0; edge 4 (decimal:79228162514264337593543950335): DatabaseOperationException: Insert failed on MariaDb: Out of range value for column 'fixed_decimal' at row 1 => declared DECIMAL can't hold the decimal maximum: Out of range value for column; edge 5 (decimal:-79228162514264337593543950335): DatabaseOperationException: Insert failed on MariaDb: Out of range value for column 'fixed_decimal' at row 1 => declared DECIMAL can't hold the negative decimal maximum: Out of range value for column
+MariaDb	boolean	boolean	PASS 2 values
+MariaDb	bit / bitstring	bit_string	LIMIT 1 edge(s): edge 1 (bits:): NotNullViolationException: Insert violated a not-null constraint on MariaDb: Column 'bit_string' cannot be null => server: a zero-length BIT is refused: Column cannot be null
+MariaDb	varying character	varying_character	PASS 5 values
+MariaDb	unbounded text	unbounded_text	PASS 4 values
+MariaDb	UUID / GUID	uuid	PASS 2 values
+MariaDb	calendar date	calendar_date	PASS 3 values
+MariaDb	time without zone	time_of_day	PASS 3 values
+MariaDb	time without zone	time_span	PASS 3 values
 MariaDb	day-time interval	day_time_interval	UNSUPPORTED refused: Unknown data type: 'INTERVAL'
-MariaDb	timestamp without zone	timestamp	PASS
+MariaDb	timestamp without zone	timestamp	LIMIT 2 edge(s): edge 2 (instant:504911232000000000): DatabaseOperationException: Insert failed on MariaDb: Incorrect datetime value: '1601-01-01 00:00:00' for column `crud_test_b995682ba0`.`type_fidelity`.`timestamp` at row 1 => declared TIMESTAMP(6) covers 1970 to 2038 only: Incorrect datetime value; edge 3 (instant:3155378975990000000): DatabaseOperationException: Insert failed on MariaDb: Incorrect datetime value: '9999-12-31 23:59:59' for column `crud_test_b995682ba0`.`type_fidelity`.`timestamp` at row 1 => declared TIMESTAMP(6) ends in 2038: Incorrect datetime value
 MariaDb	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
-MariaDb	binary LOB	binary	PASS
-MariaDb	JSON text / JSON value	json	PASS
-MariaDb	IP address	ip_address	PASS
+MariaDb	binary LOB	binary	PASS 3 values
+MariaDb	JSON text / JSON value	json	PASS 4 values
+MariaDb	IP address	ip_address	PASS 3 values
 MariaDb	SQL array	int_array	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near ')' at line 1
 MariaDb	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: Unknown data type: 'UHUGEINT'
 MariaDb	decimal floating point	decimal_float	UNSUPPORTED refused: Unknown data type: 'DECFLOAT'
 MariaDb	money / currency	money	UNSUPPORTED refused: Unknown data type: 'MONEY'
-MariaDb	fixed character	fixed_character	PASS
+MariaDb	fixed character	fixed_character	PASS 2 values
 MariaDb	national / Unicode character	national_text	PASS
 MariaDb	long text LOB	long_text	PASS
 MariaDb	enumeration	enumeration	PASS
@@ -66,10 +66,11 @@ MariaDb	range	range	UNSUPPORTED refused: Unknown data type: 'INT4RANGE'
 MariaDb	multirange	multirange	UNSUPPORTED refused: Unknown data type: 'INT4MULTIRANGE'
 MariaDb	user-defined enum / domain	domain	UNSUPPORTED refused: Unknown data type: 'CREATE'
 MariaDb	full-text search vector / query	full_text	UNSUPPORTED refused: Unknown data type: 'TSVECTOR'
-MariaDb	native point	native_point	UNSUPPORTED refused: no candidate was tried
-MariaDb	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
-MariaDb	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
-MariaDb	vector embedding	vector	UNSUPPORTED refused: Unknown data type: 'VECTOR'
+MariaDb	native point	native_point	UNSUPPORTED refused: native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry
+MariaDb	native polygon	native_polygon	UNSUPPORTED refused: native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry
+MariaDb	native line	native_line	UNSUPPORTED refused: native line is PostgreSQL's line (CLR PostgreSqlLine); this database has no native line type
+MariaDb	32-bit transaction ID	xid32	PASS
+MariaDb	vector embedding	vector	PASS
 MariaDb	hierarchical path	hierarchy	UNSUPPORTED refused: Unknown data type: 'HIERARCHYID'
 MariaDb	external-file reference	file_reference	UNSUPPORTED refused: Unknown data type: 'BFILE'
 MariaDb	specialized security label	security_label	UNSUPPORTED refused: Unknown data type: 'IDSSECURITYLABEL'

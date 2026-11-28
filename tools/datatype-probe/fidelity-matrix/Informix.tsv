@@ -1,35 +1,35 @@
-Informix	signed 8-bit	signed_8_bit	PASS
-Informix	signed 16-bit	signed_16_bit	PASS
-Informix	signed 32-bit	signed_32_bit	PASS
+Informix	signed 8-bit	signed_8_bit	PASS 4 values
+Informix	signed 16-bit	signed_16_bit	LIMIT 1 edge(s): edge 1 (Int16:-32768): DatabaseOperationException: Insert failed on Informix: ERROR [HY019] [Informix][Informix ODBC Driver][Informix]Value exceeds limit of SMALLINT precision => server: SMALLINT's minimum is its NULL sentinel: Value exceeds limit of SMALLINT precision
+Informix	signed 32-bit	signed_32_bit	LIMIT 1 edge(s): edge 1 (Int32:-2147483648): DatabaseOperationException: Insert failed on Informix: ERROR [HY019] [Informix][Informix ODBC Driver][Informix]Value exceeds limit of INTEGER precision => server: INTEGER's minimum is its NULL sentinel: Value exceeds limit of INTEGER precision
 Informix	signed 64-bit	signed_64_bit	UNSUPPORTED refused: server: Informix's BIGINT and INT8 exclude -9223372036854775808, their NULL sentinel; the server refuses the value (Value will not fit in a BIGINT or an INT8, confirmed live 2026-11-06)
 Informix	signed 128-bit	signed_128_bit	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (hugeint) not found.
-Informix	unsigned 8-bit	unsigned_8_bit	PASS
-Informix	unsigned 16-bit	unsigned_16_bit	PASS
-Informix	unsigned 32-bit	unsigned_32_bit	PASS
-Informix	unsigned 64-bit	unsigned_64_bit	PASS
+Informix	unsigned 8-bit	unsigned_8_bit	PASS 3 values
+Informix	unsigned 16-bit	unsigned_16_bit	PASS 3 values
+Informix	unsigned 32-bit	unsigned_32_bit	PASS 3 values
+Informix	unsigned 64-bit	unsigned_64_bit	PASS 3 values
 Informix	arbitrary-size integer	arbitrary_integer	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]The scale exceeds the maximum precision specified.
-Informix	binary float32	binary_float32	PASS
-Informix	binary float64	binary_float64	PASS
-Informix	fixed decimal	fixed_decimal	PASS
-Informix	boolean	boolean	PASS
+Informix	binary float32	binary_float32	LIMIT 4 edge(s): edge 2 (float:1E-45): DatabaseOperationException: Insert failed on Informix: ERROR [HY019] [Informix][Informix ODBC Driver][Informix]Value will not fit in a SMALLFLOAT. => server: SMALLFLOAT can't hold the denormal 1E-45: Value will not fit in a SMALLFLOAT; edge 3 (float:NaN): DatabaseOperationException: Insert failed on Informix: ERROR [HY019] [Informix][Informix ODBC Driver][Informix]Value will not fit in a SMALLFLOAT. => server: Informix FLOAT/SMALLFLOAT has no NaN or infinity (observed: Value will not fit in a SMALLFLOAT); edge 4 (float:Infinity): DatabaseOperationException: Insert failed on Informix: ERROR [HY019] [Informix][Informix ODBC Driver][Informix]Value will not fit in a SMALLFLOAT. => server: Informix FLOAT/SMALLFLOAT has no NaN or infinity (observed: Value will not fit in a SMALLFLOAT); edge 5 (float:-Infinity): DatabaseOperationException: Insert failed on Informix: ERROR [HY019] [Informix][Informix ODBC Driver][Informix]Value will not fit in a SMALLFLOAT. => server: Informix FLOAT/SMALLFLOAT has no NaN or infinity (observed: Value will not fit in a SMALLFLOAT)
+Informix	binary float64	binary_float64	LIMIT 3 edge(s): edge 3 (double:NaN): DatabaseOperationException: Insert failed on Informix: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Value will not fit in a FLOAT. => server: FLOAT has no NaN: Value will not fit in a FLOAT; edge 4 (double:Infinity): DatabaseOperationException: Insert failed on Informix: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Value will not fit in a FLOAT. => server: Informix FLOAT has no infinity (observed: Value will not fit in a FLOAT); edge 5 (double:-Infinity): DatabaseOperationException: Insert failed on Informix: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Value will not fit in a FLOAT. => server: Informix FLOAT has no infinity (observed: Value will not fit in a FLOAT)
+Informix	fixed decimal	fixed_decimal	LIMIT 3 edge(s): edge 1: wrote decimal:0.0000000000000000000000000001, read decimal:0 (read as Decimal) => declared scale is too small: 1E-28 is stored as 0; edge 4 (decimal:79228162514264337593543950335): DatabaseOperationException: Insert failed on Informix: ERROR [22003] [Informix][Informix ODBC Driver][Informix]Decimal or money value exceeds maximum precision. => declared precision can't hold the decimal maximum (observed in the run); edge 5 (decimal:-79228162514264337593543950335): DatabaseOperationException: Insert failed on Informix: ERROR [22003] [Informix][Informix ODBC Driver][Informix]Decimal or money value exceeds maximum precision. => declared precision can't hold the negative decimal maximum (observed in the run)
+Informix	boolean	boolean	PASS 2 values
 Informix	bit / bitstring	bit_string	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (bit) not found.
-Informix	varying character	varying_character	PASS
-Informix	unbounded text	unbounded_text	PASS
-Informix	UUID / GUID	uuid	PASS
-Informix	calendar date	calendar_date	PASS
-Informix	time without zone	time_of_day	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (time) not found.
-Informix	time without zone	time_span	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (time) not found.
+Informix	varying character	varying_character	LIMIT 2 edge(s): edge 2: wrote text:  padded  , read text:  padded (read as String) => server: trailing spaces are trimmed on read; edge 3 (text:😀 non-BMP): DatabaseOperationException: Insert failed on Informix: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]An illegal character has been found in the statement. => server: characters outside the declared character set are refused (observed: could not be converted / illegal character)
+Informix	unbounded text	unbounded_text	PASS 4 values
+Informix	UUID / GUID	uuid	PASS 2 values
+Informix	calendar date	calendar_date	PASS 3 values
+Informix	time without zone	time_of_day	PASS 3 values
+Informix	time without zone	time_span	PASS 3 values
 Informix	day-time interval	day_time_interval	PASS
-Informix	timestamp without zone	timestamp	PASS
+Informix	timestamp without zone	timestamp	LIMIT 1 edge(s): edge 1: wrote instant:639268047301234560, read instant:639268047301230000 (read as DateTime) => server: the declared timestamp keeps milliseconds only; 100-ns ticks are truncated
 Informix	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
-Informix	binary LOB	binary	PASS
-Informix	JSON text / JSON value	json	PASS
-Informix	IP address	ip_address	PASS
-Informix	SQL array	int_array	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+Informix	binary LOB	binary	PASS 3 values
+Informix	JSON text / JSON value	json	LIMIT 3 edge(s): edge 1 (json:[]): DatabaseOperationException: Insert failed on Informix: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]User Defined Routine error. sqlerrm(json_in)[ => server: the Informix JSON column holds objects only; json_in refuses arrays, null and scalars (observed); edge 2 (json:null): DatabaseOperationException: Insert failed on Informix: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]User Defined Routine error. sqlerrm(json_in)[ => server: the Informix JSON column holds objects only; json_in refuses arrays, null and scalars (observed); edge 3 (json:"text"): DatabaseOperationException: Insert failed on Informix: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]User Defined Routine error. sqlerrm(json_in)[ => server: the Informix JSON column holds objects only; json_in refuses arrays, null and scalars (observed)
+Informix	IP address	ip_address	PASS 3 values
+Informix	SQL array	int_array	PASS 2 values
 Informix	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (uhugeint) not found.
-Informix	decimal floating point	decimal_float	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (decfloat) not found.
+Informix	decimal floating point	decimal_float	PASS
 Informix	money / currency	money	PASS
-Informix	fixed character	fixed_character	PASS
+Informix	fixed character	fixed_character	PASS 2 values
 Informix	national / Unicode character	national_text	PASS
 Informix	long text LOB	long_text	PASS
 Informix	enumeration	enumeration	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
@@ -50,7 +50,7 @@ Informix	transaction ID	transaction_id	UNSUPPORTED refused: ERROR [HY000] [Infor
 Informix	WAL / log position	wal_position	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (pg_lsn) not found.
 Informix	native binary JSON	binary_json	PASS
 Informix	XML	xml	PASS
-Informix	BSON	bson	UNSUPPORTED refused: by design: Informix writes a BSON document from its JSON text, and the server refuses raw bytes as BSON (No cast from byte to json, confirmed live 2026-11-06)
+Informix	BSON	bson	UNSUPPORTED refused: by design: raw bytes have no cast to JSON on Informix (No cast from byte to json, confirmed live); Informix BSON is written from JSON text, covered by the native binary JSON row
 Informix	variant / dynamic value	variant	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (variant) not found.
 Informix	IP network / CIDR	cidr	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (cidr) not found.
 Informix	MAC address	mac_address	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (macaddr) not found.
@@ -58,17 +58,18 @@ Informix	point geometry	point	UNSUPPORTED refused: ERROR [HY000] [Informix][Info
 Informix	line / linestring geometry	linestring	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (linestring) not found.
 Informix	polygon geometry	polygon	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (polygon) not found.
 Informix	general geometry	geometry	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (geometry) not found.
-Informix	geography / geodetic	geography	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (geography) not found.
+Informix	geography / geodetic	geography	UNSUPPORTED refused: no st_geometry type in the test database (sysxtdtypes; CREATE TABLE: Type (st_geometry) not found); the probe's acceptance was a false positive
 Informix	fixed-length array	fixed_array	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
-Informix	list / multiset / set collection	list_collection	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+Informix	list / multiset / set collection	list_collection	PASS
 Informix	map / dictionary	map	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
 Informix	range	range	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (int4range) not found.
 Informix	multirange	multirange	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (int4multirange) not found.
 Informix	user-defined enum / domain	domain	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
 Informix	full-text search vector / query	full_text	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (tsvector) not found.
-Informix	native point	native_point	UNSUPPORTED refused: no candidate was tried
-Informix	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
-Informix	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+Informix	native point	native_point	UNSUPPORTED refused: native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry
+Informix	native polygon	native_polygon	UNSUPPORTED refused: native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry
+Informix	native line	native_line	UNSUPPORTED refused: native line is PostgreSQL's line (CLR PostgreSqlLine); this database has no native line type
+Informix	32-bit transaction ID	xid32	PASS
 Informix	vector embedding	vector	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (vector) not found.
 Informix	hierarchical path	hierarchy	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (hierarchyid) not found.
 Informix	external-file reference	file_reference	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (bfile) not found.

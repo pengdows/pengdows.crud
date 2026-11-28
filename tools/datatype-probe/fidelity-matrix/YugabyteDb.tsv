@@ -1,38 +1,38 @@
-YugabyteDb	signed 8-bit	signed_8_bit	PASS
-YugabyteDb	signed 16-bit	signed_16_bit	PASS
-YugabyteDb	signed 32-bit	signed_32_bit	PASS
-YugabyteDb	signed 64-bit	signed_64_bit	PASS
-YugabyteDb	signed 128-bit	signed_128_bit	PASS
-YugabyteDb	unsigned 8-bit	unsigned_8_bit	PASS
-YugabyteDb	unsigned 16-bit	unsigned_16_bit	PASS
-YugabyteDb	unsigned 32-bit	unsigned_32_bit	PASS
-YugabyteDb	unsigned 64-bit	unsigned_64_bit	PASS
-YugabyteDb	arbitrary-size integer	arbitrary_integer	PASS
-YugabyteDb	binary float32	binary_float32	PASS
-YugabyteDb	binary float64	binary_float64	PASS
-YugabyteDb	fixed decimal	fixed_decimal	PASS
-YugabyteDb	boolean	boolean	PASS
-YugabyteDb	bit / bitstring	bit_string	PASS
-YugabyteDb	varying character	varying_character	PASS
-YugabyteDb	unbounded text	unbounded_text	PASS
-YugabyteDb	UUID / GUID	uuid	PASS
-YugabyteDb	calendar date	calendar_date	PASS
-YugabyteDb	time without zone	time_of_day	PASS
-YugabyteDb	time without zone	time_span	PASS
+YugabyteDb	signed 8-bit	signed_8_bit	PASS 4 values
+YugabyteDb	signed 16-bit	signed_16_bit	PASS 4 values
+YugabyteDb	signed 32-bit	signed_32_bit	PASS 4 values
+YugabyteDb	signed 64-bit	signed_64_bit	PASS 3 values
+YugabyteDb	signed 128-bit	signed_128_bit	LIMIT 2 edge(s): edge 1 (Int128:-170141183460469231731687303715884105728): DatabaseOperationException: Insert failed on YugabyteDb: 22003: numeric field overflow  DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information. => server: NUMERIC(38,0) can't hold -2^127: 22003 numeric field overflow; edge 2 (Int128:170141183460469231731687303715884105727): DatabaseOperationException: Insert failed on YugabyteDb: 22003: numeric field overflow  DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information. => server: NUMERIC(38,0) can't hold 2^127-1: 22003 numeric field overflow
+YugabyteDb	unsigned 8-bit	unsigned_8_bit	PASS 3 values
+YugabyteDb	unsigned 16-bit	unsigned_16_bit	PASS 3 values
+YugabyteDb	unsigned 32-bit	unsigned_32_bit	PASS 3 values
+YugabyteDb	unsigned 64-bit	unsigned_64_bit	PASS 3 values
+YugabyteDb	arbitrary-size integer	arbitrary_integer	PASS 3 values
+YugabyteDb	binary float32	binary_float32	PASS 7 values
+YugabyteDb	binary float64	binary_float64	PASS 8 values
+YugabyteDb	fixed decimal	fixed_decimal	LIMIT 3 edge(s): edge 1: wrote decimal:0.0000000000000000000000000001, read decimal:0 (read as Decimal) => declared scale is too small: 1E-28 is stored as 0; edge 4 (decimal:79228162514264337593543950335): DatabaseOperationException: Insert failed on YugabyteDb: 22003: numeric field overflow  DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information. => declared NUMERIC can't hold the decimal maximum: 22003 numeric field overflow; edge 5 (decimal:-79228162514264337593543950335): DatabaseOperationException: Insert failed on YugabyteDb: 22003: numeric field overflow  DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information. => declared NUMERIC can't hold the negative decimal maximum: 22003 numeric field overflow
+YugabyteDb	boolean	boolean	PASS 2 values
+YugabyteDb	bit / bitstring	bit_string	PASS 2 values
+YugabyteDb	varying character	varying_character	PASS 5 values
+YugabyteDb	unbounded text	unbounded_text	PASS 4 values
+YugabyteDb	UUID / GUID	uuid	PASS 2 values
+YugabyteDb	calendar date	calendar_date	PASS 3 values
+YugabyteDb	time without zone	time_of_day	PASS 3 values
+YugabyteDb	time without zone	time_span	PASS 3 values
 YugabyteDb	day-time interval	day_time_interval	PASS
-YugabyteDb	timestamp without zone	timestamp	PASS
-YugabyteDb	timestamp with zone	timestamp_with_zone	PASS
-YugabyteDb	binary LOB	binary	PASS
-YugabyteDb	JSON text / JSON value	json	PASS
-YugabyteDb	IP address	ip_address	PASS
-YugabyteDb	SQL array	int_array	PASS
+YugabyteDb	timestamp without zone	timestamp	PASS 4 values
+YugabyteDb	timestamp with zone	timestamp_with_zone	PASS 3 values
+YugabyteDb	binary LOB	binary	PASS 3 values
+YugabyteDb	JSON text / JSON value	json	PASS 4 values
+YugabyteDb	IP address	ip_address	PASS 3 values
+YugabyteDb	SQL array	int_array	PASS 2 values
 YugabyteDb	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: 42704: type "uhugeint" does not exist POSITION: 55
 YugabyteDb	decimal floating point	decimal_float	UNSUPPORTED refused: 42704: type "decfloat" does not exist POSITION: 55
 YugabyteDb	money / currency	money	PASS
-YugabyteDb	fixed character	fixed_character	PASS
+YugabyteDb	fixed character	fixed_character	PASS 2 values
 YugabyteDb	national / Unicode character	national_text	PASS
 YugabyteDb	long text LOB	long_text	PASS
-YugabyteDb	enumeration	enumeration	UNSUPPORTED refused: 42704: type "enum" does not exist POSITION: 56
+YugabyteDb	enumeration	enumeration	PASS
 YugabyteDb	set-valued enum	set_value	UNSUPPORTED refused: 42704: type "set" does not exist POSITION: 56
 YugabyteDb	fixed binary	fixed_binary	UNSUPPORTED refused: 42704: type "binary" does not exist POSITION: 56
 YugabyteDb	varying binary	varying_binary	PASS
@@ -49,7 +49,7 @@ YugabyteDb	object identifier / OID	oid	PASS
 YugabyteDb	transaction ID	transaction_id	UNSUPPORTED refused: upstream: YugabyteDB's xid8 adds high bits on write: 4294967296 (0x100000000) reads back as 18700287606784 (0x110200000000), so no raw integer round-trips
 YugabyteDb	WAL / log position	wal_position	PASS
 YugabyteDb	native binary JSON	binary_json	PASS
-YugabyteDb	XML	xml	UNSUPPORTED refused: server: this database has no working xml column type. Map the property as string and store it in a text column; the library writes the text as is, and de/serialization stays in the application
+YugabyteDb	XML	xml	UNSUPPORTED refused: server: YugabyteDB accepts an XML column, but an INSERT of an XML value fails with 'unsupported XML feature' (YugabyteDb suite); the values are refused
 YugabyteDb	BSON	bson	PASS
 YugabyteDb	variant / dynamic value	variant	UNSUPPORTED refused: 42704: type "variant" does not exist POSITION: 56
 YugabyteDb	IP network / CIDR	cidr	PASS
@@ -64,10 +64,11 @@ YugabyteDb	list / multiset / set collection	list_collection	UNSUPPORTED refused:
 YugabyteDb	map / dictionary	map	UNSUPPORTED refused: 42601: syntax error at or near "," POSITION: 71
 YugabyteDb	range	range	PASS
 YugabyteDb	multirange	multirange	PASS
-YugabyteDb	user-defined enum / domain	domain	UNSUPPORTED refused: 42601: syntax error at or near "CREATE" POSITION: 56
+YugabyteDb	user-defined enum / domain	domain	PASS
 YugabyteDb	full-text search vector / query	full_text	PASS
 YugabyteDb	native point	native_point	PASS
 YugabyteDb	native polygon	native_polygon	PASS
+YugabyteDb	native line	native_line	PASS
 YugabyteDb	32-bit transaction ID	xid32	PASS
 YugabyteDb	vector embedding	vector	UNSUPPORTED refused: 42704: type "vector" does not exist POSITION: 56
 YugabyteDb	hierarchical path	hierarchy	UNSUPPORTED refused: 42704: type "hierarchyid" does not exist POSITION: 56

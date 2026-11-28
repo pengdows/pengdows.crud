@@ -1,0 +1,76 @@
+InterBase	signed 8-bit	signed_8_bit	PASS 4 values
+InterBase	signed 16-bit	signed_16_bit	PASS 4 values
+InterBase	signed 32-bit	signed_32_bit	PASS 4 values
+InterBase	signed 64-bit	signed_64_bit	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	signed 128-bit	signed_128_bit	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	unsigned 8-bit	unsigned_8_bit	PASS 3 values
+InterBase	unsigned 16-bit	unsigned_16_bit	PASS 3 values
+InterBase	unsigned 32-bit	unsigned_32_bit	PASS 3 values
+InterBase	unsigned 64-bit	unsigned_64_bit	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 62 UNSIGNED
+InterBase	arbitrary-size integer	arbitrary_integer	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -842 Precision must be from 1 to 18
+InterBase	binary float32	binary_float32	PASS 7 values
+InterBase	binary float64	binary_float64	PASS 8 values
+InterBase	fixed decimal	fixed_decimal	LIMIT 3 edge(s): edge 1: wrote decimal:0.0000000000000000000000000001, read decimal:0 (read as Decimal) => declared scale is too small: 1E-28 is stored as 0; edge 4 (decimal:79228162514264337593543950335): OverflowException: Value was either too large or too small for a Decimal. => declared precision can't hold the decimal maximum (observed in the run); edge 5 (decimal:-79228162514264337593543950335): OverflowException: Value was either too large or too small for a Decimal. => declared precision can't hold the negative decimal maximum (observed in the run)
+InterBase	boolean	boolean	PASS 2 values
+InterBase	bit / bitstring	bit_string	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 58 (
+InterBase	varying character	varying_character	PASS 5 values
+InterBase	unbounded text	unbounded_text	PASS 4 values
+InterBase	UUID / GUID	uuid	PASS 2 values
+InterBase	calendar date	calendar_date	PASS 3 values
+InterBase	time without zone	time_of_day	PASS 3 values
+InterBase	time without zone	time_span	PASS 3 values
+InterBase	day-time interval	day_time_interval	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 65 DAY
+InterBase	timestamp without zone	timestamp	LIMIT 1 edge(s): edge 1: wrote instant:639268047301234560, read instant:639268047301234000 (read as DateTime) => server: the declared timestamp keeps milliseconds only; 100-ns ticks are truncated
+InterBase	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 66 WITH
+InterBase	binary LOB	binary	PASS 3 values
+InterBase	JSON text / JSON value	json	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	IP address	ip_address	PASS 3 values
+InterBase	SQL array	int_array	UNSUPPORTED refused: by design: InterBase arrays have fixed dimensions (INTEGER[10] is accepted, results/InterBase.jsonl); there is no variable-length array to map
+InterBase	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	decimal floating point	decimal_float	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	money / currency	money	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	fixed character	fixed_character	PASS 2 values
+InterBase	national / Unicode character	national_text	PASS
+InterBase	long text LOB	long_text	PASS
+InterBase	enumeration	enumeration	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 60 (
+InterBase	set-valued enum	set_value	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 56 SET
+InterBase	fixed binary	fixed_binary	PASS
+InterBase	varying binary	varying_binary	PASS
+InterBase	legacy long binary	legacy_binary	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 61 RAW
+InterBase	rowversion / timestamp token	rowversion	UNSUPPORTED refused: InterBase has no rowversion type: its TIMESTAMP is a date-time, which cannot hold the eight token bytes
+InterBase	local-zone timestamp	local_timestamp	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 66 WITH
+InterBase	second-precision datetime	second_datetime	PASS
+InterBase	time with zone	time_zoned	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 61 WITH
+InterBase	year-only	year_only	PASS
+InterBase	year-month interval	year_month_interval	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 65 YEAR
+InterBase	generic interval	generic_interval	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	row identifier / ROWID	row_identifier	PASS
+InterBase	object identifier / OID	oid	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	transaction ID	transaction_id	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	WAL / log position	wal_position	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	native binary JSON	binary_json	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	XML	xml	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	BSON	bson	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	variant / dynamic value	variant	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	IP network / CIDR	cidr	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	MAC address	mac_address	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	point geometry	point	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	line / linestring geometry	linestring	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	polygon geometry	polygon	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	general geometry	geometry	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	geography / geodetic	geography	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	fixed-length array	fixed_array	PASS
+InterBase	list / multiset / set collection	list_collection	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 64 MULTISET
+InterBase	map / dictionary	map	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 59 (
+InterBase	range	range	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	multirange	multirange	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	user-defined enum / domain	domain	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 56 CREATE
+InterBase	full-text search vector / query	full_text	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	native point	native_point	UNSUPPORTED refused: native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry
+InterBase	native polygon	native_polygon	UNSUPPORTED refused: native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry
+InterBase	native line	native_line	UNSUPPORTED refused: native line is PostgreSQL's line (CLR PostgreSqlLine); this database has no native line type
+InterBase	32-bit transaction ID	xid32	PASS
+InterBase	vector embedding	vector	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 62 (
+InterBase	hierarchical path	hierarchy	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	external-file reference	file_reference	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+InterBase	specialized security label	security_label	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.

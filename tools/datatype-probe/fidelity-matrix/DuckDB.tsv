@@ -1,35 +1,35 @@
-DuckDB	signed 8-bit	signed_8_bit	PASS
-DuckDB	signed 16-bit	signed_16_bit	PASS
-DuckDB	signed 32-bit	signed_32_bit	PASS
-DuckDB	signed 64-bit	signed_64_bit	PASS
-DuckDB	signed 128-bit	signed_128_bit	PASS
-DuckDB	unsigned 8-bit	unsigned_8_bit	PASS
-DuckDB	unsigned 16-bit	unsigned_16_bit	PASS
-DuckDB	unsigned 32-bit	unsigned_32_bit	PASS
-DuckDB	unsigned 64-bit	unsigned_64_bit	PASS
-DuckDB	arbitrary-size integer	arbitrary_integer	PASS
-DuckDB	binary float32	binary_float32	PASS
-DuckDB	binary float64	binary_float64	PASS
-DuckDB	fixed decimal	fixed_decimal	PASS
-DuckDB	boolean	boolean	PASS
-DuckDB	bit / bitstring	bit_string	PASS
-DuckDB	varying character	varying_character	PASS
-DuckDB	unbounded text	unbounded_text	PASS
-DuckDB	UUID / GUID	uuid	PASS
-DuckDB	calendar date	calendar_date	PASS
-DuckDB	time without zone	time_of_day	PASS
-DuckDB	time without zone	time_span	PASS
+DuckDB	signed 8-bit	signed_8_bit	PASS 4 values
+DuckDB	signed 16-bit	signed_16_bit	PASS 4 values
+DuckDB	signed 32-bit	signed_32_bit	PASS 4 values
+DuckDB	signed 64-bit	signed_64_bit	PASS 3 values
+DuckDB	signed 128-bit	signed_128_bit	PASS 4 values
+DuckDB	unsigned 8-bit	unsigned_8_bit	PASS 3 values
+DuckDB	unsigned 16-bit	unsigned_16_bit	PASS 3 values
+DuckDB	unsigned 32-bit	unsigned_32_bit	PASS 3 values
+DuckDB	unsigned 64-bit	unsigned_64_bit	PASS 3 values
+DuckDB	arbitrary-size integer	arbitrary_integer	PASS 3 values
+DuckDB	binary float32	binary_float32	PASS 7 values
+DuckDB	binary float64	binary_float64	PASS 8 values
+DuckDB	fixed decimal	fixed_decimal	LIMIT 3 edge(s): edge 1: wrote decimal:0.0000000000000000000000000001, read decimal:0 (read as Decimal) => declared scale is too small: 1E-28 is stored as 0; edge 4 (decimal:79228162514264337593543950335): DatabaseOperationException: Insert failed on DuckDB: Conversion Error: Casting value "79228162514264337593543950335" to type DECIMAL(18,4) failed: value is out of range!  LINE 1: ... INTO "type_fidelity" ("id", "fixed_decimal") VALUES ($i0, $i1)                                                                       ^^^ => declared DECIMAL(18,4) can't hold the decimal maximum: Conversion Error; edge 5 (decimal:-79228162514264337593543950335): DatabaseOperationException: Insert failed on DuckDB: Conversion Error: Casting value "-79228162514264337593543950335" to type DECIMAL(18,4) failed: value is out of range!  LINE 1: ... INTO "type_fidelity" ("id", "fixed_decimal") VALUES ($i0, $i1)                                                                       ^^^ => declared DECIMAL(18,4) can't hold the negative decimal maximum: Conversion Error, value is out of range
+DuckDB	boolean	boolean	PASS 2 values
+DuckDB	bit / bitstring	bit_string	LIMIT 1 edge(s): edge 1: wrote bits:, read bits:0 (read as BitArray) => server: BIT pads a zero-length value to a zero
+DuckDB	varying character	varying_character	PASS 5 values
+DuckDB	unbounded text	unbounded_text	PASS 4 values
+DuckDB	UUID / GUID	uuid	PASS 2 values
+DuckDB	calendar date	calendar_date	PASS 3 values
+DuckDB	time without zone	time_of_day	PASS 3 values
+DuckDB	time without zone	time_span	PASS 3 values
 DuckDB	day-time interval	day_time_interval	PASS
-DuckDB	timestamp without zone	timestamp	PASS
-DuckDB	timestamp with zone	timestamp_with_zone	PASS
-DuckDB	binary LOB	binary	PASS
-DuckDB	JSON text / JSON value	json	PASS
-DuckDB	IP address	ip_address	PASS
-DuckDB	SQL array	int_array	PASS
-DuckDB	unsigned 128-bit	unsigned_128_bit	PASS
+DuckDB	timestamp without zone	timestamp	PASS 4 values
+DuckDB	timestamp with zone	timestamp_with_zone	PASS 3 values
+DuckDB	binary LOB	binary	PASS 3 values
+DuckDB	JSON text / JSON value	json	PASS 4 values
+DuckDB	IP address	ip_address	PASS 3 values
+DuckDB	SQL array	int_array	PASS 2 values
+DuckDB	unsigned 128-bit	unsigned_128_bit	PASS 3 values
 DuckDB	decimal floating point	decimal_float	UNSUPPORTED refused: Catalog Error: Type with name DECFLOAT does not exist! Did you mean "JSON"? LINE 1: CREATE TABLE pr76 (id INTEGER NOT NULL PRIMARY KEY, c DECFLOAT)
 DuckDB	money / currency	money	UNSUPPORTED refused: Catalog Error: Type with name MONEY does not exist! Did you mean "JSON"? LINE 1: CREATE TABLE pr91 (id INTEGER NOT NULL PRIMARY KEY, c MONEY)
-DuckDB	fixed character	fixed_character	PASS
+DuckDB	fixed character	fixed_character	PASS 2 values
 DuckDB	national / Unicode character	national_text	PASS
 DuckDB	long text LOB	long_text	PASS
 DuckDB	enumeration	enumeration	PASS
@@ -54,10 +54,10 @@ DuckDB	BSON	bson	PASS
 DuckDB	variant / dynamic value	variant	UNSUPPORTED refused: server: VARIANT needs storage version v1.5.0 or later and the testbed's database file is v1.0.0 (an in-memory database accepts it, confirmed live)
 DuckDB	IP network / CIDR	cidr	PASS
 DuckDB	MAC address	mac_address	UNSUPPORTED refused: Catalog Error: Type with name MACADDR does not exist! Did you mean "main.INTEGER"? LINE 1: CREATE TABLE pr274 (id INTEGER NOT NULL PRIMARY KEY, c MACADDR)
-DuckDB	point geometry	point	UNSUPPORTED refused: by design: DuckDB has no POINT type; the spatial extension has one GEOMETRY type, which DuckDB.NET cannot read (see general geometry)
-DuckDB	line / linestring geometry	linestring	UNSUPPORTED refused: by design: DuckDB has no LINESTRING type; the spatial extension has one GEOMETRY type, which DuckDB.NET cannot read (see general geometry)
-DuckDB	polygon geometry	polygon	UNSUPPORTED refused: by design: DuckDB has no POLYGON type; the spatial extension has one GEOMETRY type, which DuckDB.NET cannot read (see general geometry)
-DuckDB	general geometry	geometry	UNSUPPORTED refused: upstream: DuckDB.NET names a GEOMETRY column (spatial extension) and throws "Unrecognised type Geometry" when it reads it (confirmed live); the library refuses such a result set by column name, and ST_AsText(column) reads it
+DuckDB	point geometry	point	PASS
+DuckDB	line / linestring geometry	linestring	PASS
+DuckDB	polygon geometry	polygon	PASS
+DuckDB	general geometry	geometry	PASS
 DuckDB	geography / geodetic	geography	UNSUPPORTED refused: server: DuckDB has no GEOGRAPHY type (Catalog Error: Type with name GEOGRAPHY does not exist, confirmed live)
 DuckDB	fixed-length array	fixed_array	PASS
 DuckDB	list / multiset / set collection	list_collection	PASS
@@ -68,6 +68,7 @@ DuckDB	user-defined enum / domain	domain	PASS
 DuckDB	full-text search vector / query	full_text	UNSUPPORTED refused: Catalog Error: Type with name TSVECTOR does not exist! Did you mean "JSON"? LINE 1: CREATE TABLE pr347 (id INTEGER NOT NULL PRIMARY KEY, c TSVECTOR)
 DuckDB	native point	native_point	UNSUPPORTED refused: native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry
 DuckDB	native polygon	native_polygon	UNSUPPORTED refused: native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry
+DuckDB	native line	native_line	UNSUPPORTED refused: native line is PostgreSQL's line (CLR PostgreSqlLine); this database has no native line type
 DuckDB	32-bit transaction ID	xid32	PASS
 DuckDB	vector embedding	vector	PASS
 DuckDB	hierarchical path	hierarchy	UNSUPPORTED refused: Catalog Error: Type with name HIERARCHYID does not exist! Did you mean "main.INTEGER"? LINE 1: CREATE TABLE pr355 (id INTEGER NOT NULL PRIMARY KEY, c HIERARCHYID)

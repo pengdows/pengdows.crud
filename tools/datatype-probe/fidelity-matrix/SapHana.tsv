@@ -1,0 +1,76 @@
+SapHana	signed 8-bit	signed_8_bit	PASS 4 values
+SapHana	signed 16-bit	signed_16_bit	PASS 4 values
+SapHana	signed 32-bit	signed_32_bit	PASS 4 values
+SapHana	signed 64-bit	signed_64_bit	PASS 3 values
+SapHana	signed 128-bit	signed_128_bit	LIMIT 2 edge(s): edge 1 (Int128:-170141183460469231731687303715884105728): DatabaseOperationException: Insert failed on SapHana: Numeric overflow for parameter/column (2) source type UTF8, target type FIXED16, value '-170141183460469231731687303715884105728' => server: HANA FIXED16 can't hold -2^127: Numeric overflow for FIXED16 (observed); edge 2 (Int128:170141183460469231731687303715884105727): DatabaseOperationException: Insert failed on SapHana: Numeric overflow for parameter/column (2) source type UTF8, target type FIXED16, value '170141183460469231731687303715884105727 => server: HANA FIXED16 can't hold 2^127-1: Numeric overflow for FIXED16 (observed)
+SapHana	unsigned 8-bit	unsigned_8_bit	PASS 3 values
+SapHana	unsigned 16-bit	unsigned_16_bit	PASS 3 values
+SapHana	unsigned 32-bit	unsigned_32_bit	PASS 3 values
+SapHana	unsigned 64-bit	unsigned_64_bit	PASS 3 values
+SapHana	arbitrary-size integer	arbitrary_integer	PASS 3 values
+SapHana	binary float32	binary_float32	LIMIT 5 edge(s): edge 2: wrote float:1E-45, read float:0 (read as Single) => server: HANA REAL reads 1E-45 back as 0 (observed: read as Single 0); edge 3 (float:NaN): DatabaseOperationException: Insert failed on SapHana: Conversion of parameter/column (2) from data type FLOAT to REAL failed (provided number of out range '-nan') => server: HANA REAL has no NaN (observed: Conversion of parameter from FLOAT to REAL failed, '-nan'); edge 4 (float:Infinity): DatabaseOperationException: Insert failed on SapHana: Conversion of parameter/column (2) from data type FLOAT to REAL failed (provided number of out range 'inf') => server: HANA REAL has no infinity (observed: Conversion of parameter from FLOAT to REAL failed, 'inf'); edge 5 (float:-Infinity): DatabaseOperationException: Insert failed on SapHana: Conversion of parameter/column (2) from data type FLOAT to REAL failed (provided number of out range '-inf') => server: HANA REAL has no -infinity (observed: Conversion of parameter from FLOAT to REAL failed, '-inf'); edge 6: wrote float:-0, read float:0 (read as Single) => server: HANA REAL reads -0 back as 0 (observed: read as Single 0)
+SapHana	binary float64	binary_float64	LIMIT 4 edge(s): edge 3 (double:NaN): DatabaseOperationException: Insert failed on SapHana: Conversion of parameter/column (2) from data type DOUBLE to DOUBLE failed (provided number of out range '-nan') => server: HANA DOUBLE has no NaN (observed: Conversion of parameter from DOUBLE to DOUBLE failed, '-nan'); edge 4 (double:Infinity): DatabaseOperationException: Insert failed on SapHana: Conversion of parameter/column (2) from data type DOUBLE to DOUBLE failed (provided number of out range 'inf') => server: HANA DOUBLE has no infinity (observed: Conversion of parameter from DOUBLE to DOUBLE failed, 'inf'); edge 5 (double:-Infinity): DatabaseOperationException: Insert failed on SapHana: Conversion of parameter/column (2) from data type DOUBLE to DOUBLE failed (provided number of out range '-inf') => server: HANA DOUBLE has no -infinity (observed: Conversion of parameter from DOUBLE to DOUBLE failed, '-inf'); edge 6: wrote double:-0, read double:0 (read as Double) => server: HANA DOUBLE reads -0 back as 0 (observed: read as Double 0)
+SapHana	fixed decimal	fixed_decimal	LIMIT 3 edge(s): edge 1: wrote decimal:0.0000000000000000000000000001, read decimal:0 (read as Decimal) => declared DECIMAL(19,4) scale is too small: 1E-28 is stored as 0 (observed); edge 4 (decimal:79228162514264337593543950335): DatabaseOperationException: Insert failed on SapHana: Numeric overflow for parameter/column (2) source type DECIMAL, target type FIXED8, value '79228162514264337593543950335.0000', target precision 19, target scale 4 => declared DECIMAL(19,4) can't hold the decimal maximum: Numeric overflow, precision 19 scale 4 (observed); edge 5 (decimal:-79228162514264337593543950335): DatabaseOperationException: Insert failed on SapHana: Numeric overflow for parameter/column (2) source type DECIMAL, target type FIXED8, value '-79228162514264337593543950335.0000', target precision 19, target scale 4 => declared DECIMAL(19,4) can't hold the negative decimal maximum: Numeric overflow, precision 19 scale 4 (observed)
+SapHana	boolean	boolean	PASS 2 values
+SapHana	bit / bitstring	bit_string	UNSUPPORTED refused: sql syntax error: incorrect syntax near "BIT": line 1 col 55 (at pos 55)
+SapHana	varying character	varying_character	PASS 5 values
+SapHana	unbounded text	unbounded_text	PASS 4 values
+SapHana	UUID / GUID	uuid	PASS 2 values
+SapHana	calendar date	calendar_date	PASS 3 values
+SapHana	time without zone	time_of_day	PASS 3 values
+SapHana	time without zone	time_span	PASS 3 values
+SapHana	day-time interval	day_time_interval	UNSUPPORTED refused: sql syntax error: incorrect syntax near "INTERVAL": line 1 col 56 (at pos 56)
+SapHana	timestamp without zone	timestamp	PASS 4 values
+SapHana	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: sql syntax error: incorrect syntax near "WITH": line 1 col 66 (at pos 66)
+SapHana	binary LOB	binary	PASS 3 values
+SapHana	JSON text / JSON value	json	UNSUPPORTED refused: sql syntax error: incorrect syntax near "JSON": line 1 col 56 (at pos 56)
+SapHana	IP address	ip_address	PASS 3 values
+SapHana	SQL array	int_array	PASS 2 values
+SapHana	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: sql syntax error: incorrect syntax near "UHUGEINT": line 1 col 55 (at pos 55)
+SapHana	decimal floating point	decimal_float	PASS
+SapHana	money / currency	money	UNSUPPORTED refused: sql syntax error: incorrect syntax near "MONEY": line 1 col 55 (at pos 55)
+SapHana	fixed character	fixed_character	PASS 2 values
+SapHana	national / Unicode character	national_text	PASS
+SapHana	long text LOB	long_text	PASS
+SapHana	enumeration	enumeration	UNSUPPORTED refused: sql syntax error: incorrect syntax near "ENUM": line 1 col 56 (at pos 56)
+SapHana	set-valued enum	set_value	UNSUPPORTED refused: sql syntax error: incorrect syntax near "SET": line 1 col 56 (at pos 56)
+SapHana	fixed binary	fixed_binary	PASS
+SapHana	varying binary	varying_binary	PASS
+SapHana	legacy long binary	legacy_binary	UNSUPPORTED refused: sql syntax error: incorrect syntax near "LONG": line 1 col 56 (at pos 56)
+SapHana	rowversion / timestamp token	rowversion	PASS
+SapHana	local-zone timestamp	local_timestamp	UNSUPPORTED refused: sql syntax error: incorrect syntax near "WITH": line 1 col 66 (at pos 66)
+SapHana	second-precision datetime	second_datetime	PASS
+SapHana	time with zone	time_zoned	UNSUPPORTED refused: sql syntax error: incorrect syntax near "WITH": line 1 col 61 (at pos 61)
+SapHana	year-only	year_only	PASS
+SapHana	year-month interval	year_month_interval	UNSUPPORTED refused: sql syntax error: incorrect syntax near "INTERVAL": line 1 col 56 (at pos 56)
+SapHana	generic interval	generic_interval	UNSUPPORTED refused: sql syntax error: incorrect syntax near "INTERVAL": line 1 col 56 (at pos 56)
+SapHana	row identifier / ROWID	row_identifier	PASS
+SapHana	object identifier / OID	oid	UNSUPPORTED refused: sql syntax error: incorrect syntax near "OID": line 1 col 56 (at pos 56)
+SapHana	transaction ID	transaction_id	UNSUPPORTED refused: sql syntax error: incorrect syntax near "XID": line 1 col 56 (at pos 56)
+SapHana	WAL / log position	wal_position	UNSUPPORTED refused: sql syntax error: incorrect syntax near "PG_LSN": line 1 col 56 (at pos 56)
+SapHana	native binary JSON	binary_json	UNSUPPORTED refused: sql syntax error: incorrect syntax near "JSONB": line 1 col 56 (at pos 56)
+SapHana	XML	xml	PASS
+SapHana	BSON	bson	UNSUPPORTED refused: sql syntax error: incorrect syntax near "BSON": line 1 col 56 (at pos 56)
+SapHana	variant / dynamic value	variant	UNSUPPORTED refused: sql syntax error: incorrect syntax near "VARIANT": line 1 col 56 (at pos 56)
+SapHana	IP network / CIDR	cidr	UNSUPPORTED refused: sql syntax error: incorrect syntax near "CIDR": line 1 col 56 (at pos 56)
+SapHana	MAC address	mac_address	UNSUPPORTED refused: sql syntax error: incorrect syntax near "MACADDR": line 1 col 56 (at pos 56)
+SapHana	point geometry	point	PASS
+SapHana	line / linestring geometry	linestring	PASS
+SapHana	polygon geometry	polygon	PASS
+SapHana	general geometry	geometry	PASS
+SapHana	geography / geodetic	geography	PASS
+SapHana	fixed-length array	fixed_array	PASS
+SapHana	list / multiset / set collection	list_collection	UNSUPPORTED refused: sql syntax error: incorrect syntax near "MULTISET": line 1 col 64 (at pos 64)
+SapHana	map / dictionary	map	UNSUPPORTED refused: sql syntax error: incorrect syntax near "MAP": line 1 col 56 (at pos 56)
+SapHana	range	range	UNSUPPORTED refused: sql syntax error: incorrect syntax near "INT4RANGE": line 1 col 56 (at pos 56)
+SapHana	multirange	multirange	UNSUPPORTED refused: sql syntax error: incorrect syntax near "INT4MULTIRANGE": line 1 col 56 (at pos 56)
+SapHana	user-defined enum / domain	domain	UNSUPPORTED refused: sql syntax error: incorrect syntax near "CREATE": line 1 col 56 (at pos 56)
+SapHana	full-text search vector / query	full_text	UNSUPPORTED refused: sql syntax error: incorrect syntax near "TSVECTOR": line 1 col 56 (at pos 56)
+SapHana	native point	native_point	UNSUPPORTED refused: native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry
+SapHana	native polygon	native_polygon	UNSUPPORTED refused: native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry
+SapHana	native line	native_line	UNSUPPORTED refused: native line is PostgreSQL's line (CLR PostgreSqlLine); this database has no native line type
+SapHana	32-bit transaction ID	xid32	PASS
+SapHana	vector embedding	vector	UNSUPPORTED refused: server: REAL_VECTOR is refused by SAP HANA Express 2.00.088 (latest) and 2.00.082, whose catalogue has no vector type (results/versions/SapHana-2.00.088-latest.jsonl); a newer HANA release is needed
+SapHana	hierarchical path	hierarchy	UNSUPPORTED refused: sql syntax error: incorrect syntax near "HIERARCHYID": line 1 col 56 (at pos 56)
+SapHana	external-file reference	file_reference	UNSUPPORTED refused: sql syntax error: incorrect syntax near "BFILE": line 1 col 56 (at pos 56)
+SapHana	specialized security label	security_label	UNSUPPORTED refused: sql syntax error: incorrect syntax near "IDSSECURITYLABEL": line 1 col 56 (at pos 56)

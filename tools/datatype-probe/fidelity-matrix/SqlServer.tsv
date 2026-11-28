@@ -1,35 +1,35 @@
-SqlServer	signed 8-bit	signed_8_bit	PASS
-SqlServer	signed 16-bit	signed_16_bit	PASS
-SqlServer	signed 32-bit	signed_32_bit	PASS
-SqlServer	signed 64-bit	signed_64_bit	PASS
-SqlServer	signed 128-bit	signed_128_bit	PASS
-SqlServer	unsigned 8-bit	unsigned_8_bit	PASS
-SqlServer	unsigned 16-bit	unsigned_16_bit	PASS
-SqlServer	unsigned 32-bit	unsigned_32_bit	PASS
-SqlServer	unsigned 64-bit	unsigned_64_bit	PASS
-SqlServer	arbitrary-size integer	arbitrary_integer	PASS
-SqlServer	binary float32	binary_float32	PASS
-SqlServer	binary float64	binary_float64	PASS
-SqlServer	fixed decimal	fixed_decimal	PASS
-SqlServer	boolean	boolean	PASS
+SqlServer	signed 8-bit	signed_8_bit	PASS 4 values
+SqlServer	signed 16-bit	signed_16_bit	PASS 4 values
+SqlServer	signed 32-bit	signed_32_bit	PASS 4 values
+SqlServer	signed 64-bit	signed_64_bit	PASS 3 values
+SqlServer	signed 128-bit	signed_128_bit	LIMIT 2 edge(s): edge 1 (Int128:-170141183460469231731687303715884105728): DatabaseOperationException: Insert failed on SqlServer: Arithmetic overflow error converting nvarchar to data type numeric. The statement has been terminated. => server: NUMERIC(38,0) can't hold -2^127: Arithmetic overflow converting nvarchar to numeric; edge 2 (Int128:170141183460469231731687303715884105727): DatabaseOperationException: Insert failed on SqlServer: Arithmetic overflow error converting nvarchar to data type numeric. The statement has been terminated. => server: NUMERIC(38,0) can't hold 2^127-1: Arithmetic overflow converting nvarchar to numeric
+SqlServer	unsigned 8-bit	unsigned_8_bit	PASS 3 values
+SqlServer	unsigned 16-bit	unsigned_16_bit	PASS 3 values
+SqlServer	unsigned 32-bit	unsigned_32_bit	PASS 3 values
+SqlServer	unsigned 64-bit	unsigned_64_bit	PASS 3 values
+SqlServer	arbitrary-size integer	arbitrary_integer	PASS 3 values
+SqlServer	binary float32	binary_float32	LIMIT 3 edge(s): edge 3 (float:NaN): DatabaseOperationException: Insert failed on SqlServer: The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. Parameter 4 ("@i1"): The supplied value is not a valid instance of data type real. Check the source data for invalid values. An example of an invalid value is data of numeric type with scale greater than precision. => server: REAL has no NaN: the TDS parameter is not a valid float; edge 4 (float:Infinity): DatabaseOperationException: Insert failed on SqlServer: The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. Parameter 4 ("@i1"): The supplied value is not a valid instance of data type real. Check the source data for invalid values. An example of an invalid value is data of numeric type with scale greater than precision. => server: REAL has no infinity: the TDS parameter is not a valid float; edge 5 (float:-Infinity): DatabaseOperationException: Insert failed on SqlServer: The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. Parameter 4 ("@i1"): The supplied value is not a valid instance of data type real. Check the source data for invalid values. An example of an invalid value is data of numeric type with scale greater than precision. => server: no -Infinity in this FLOAT type (observed: Out of range / Domain error / ORA-01426)
+SqlServer	binary float64	binary_float64	LIMIT 3 edge(s): edge 3 (double:NaN): DatabaseOperationException: Insert failed on SqlServer: The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. Parameter 4 ("@i1"): The supplied value is not a valid instance of data type float. Check the source data for invalid values. An example of an invalid value is data of numeric type with scale greater than precision. => server: FLOAT has no NaN: the TDS parameter is not a valid float; edge 4 (double:Infinity): DatabaseOperationException: Insert failed on SqlServer: The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. Parameter 4 ("@i1"): The supplied value is not a valid instance of data type float. Check the source data for invalid values. An example of an invalid value is data of numeric type with scale greater than precision. => server: FLOAT has no infinity: the TDS parameter is not a valid float; edge 5 (double:-Infinity): DatabaseOperationException: Insert failed on SqlServer: The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. Parameter 4 ("@i1"): The supplied value is not a valid instance of data type float. Check the source data for invalid values. An example of an invalid value is data of numeric type with scale greater than precision. => server: no -Infinity in this DOUBLE type (observed: Out of range / Domain error / TDS parameter invalid)
+SqlServer	fixed decimal	fixed_decimal	LIMIT 3 edge(s): edge 1: wrote decimal:0.0000000000000000000000000001, read decimal:0 (read as Decimal) => declared scale is too small: 1E-28 is stored as 0; edge 4 (decimal:79228162514264337593543950335): DatabaseOperationException: Insert failed on SqlServer: Arithmetic overflow error converting numeric to data type numeric. The statement has been terminated. => declared NUMERIC can't hold the decimal maximum: Arithmetic overflow converting numeric; edge 5 (decimal:-79228162514264337593543950335): DatabaseOperationException: Insert failed on SqlServer: Arithmetic overflow error converting numeric to data type numeric. The statement has been terminated. => declared NUMERIC can't hold the negative decimal maximum: Arithmetic overflow converting numeric
+SqlServer	boolean	boolean	PASS 2 values
 SqlServer	bit / bitstring	bit_string	UNSUPPORTED refused: by design: a BIT column holds one bit; a bit string of any length is not representable without a length-bearing column
-SqlServer	varying character	varying_character	PASS
-SqlServer	unbounded text	unbounded_text	PASS
-SqlServer	UUID / GUID	uuid	PASS
-SqlServer	calendar date	calendar_date	PASS
-SqlServer	time without zone	time_of_day	PASS
-SqlServer	time without zone	time_span	PASS
+SqlServer	varying character	varying_character	LIMIT 1 edge(s): edge 3: wrote text:😀 non-BMP, read text:?? non-BMP (read as String) => declared VARCHAR is not Unicode: the non-BMP character is stored as ??
+SqlServer	unbounded text	unbounded_text	PASS 4 values
+SqlServer	UUID / GUID	uuid	PASS 2 values
+SqlServer	calendar date	calendar_date	PASS 3 values
+SqlServer	time without zone	time_of_day	PASS 3 values
+SqlServer	time without zone	time_span	PASS 3 values
 SqlServer	day-time interval	day_time_interval	UNSUPPORTED refused: Incorrect syntax near 'DAY'.
-SqlServer	timestamp without zone	timestamp	PASS
-SqlServer	timestamp with zone	timestamp_with_zone	PASS
-SqlServer	binary LOB	binary	PASS
-SqlServer	JSON text / JSON value	json	PASS
-SqlServer	IP address	ip_address	PASS
+SqlServer	timestamp without zone	timestamp	PASS 4 values
+SqlServer	timestamp with zone	timestamp_with_zone	PASS 3 values
+SqlServer	binary LOB	binary	PASS 3 values
+SqlServer	JSON text / JSON value	json	LIMIT 2 edge(s): edge 2 (json:null): DatabaseOperationException: Insert failed on SqlServer: JSON text is not properly formatted. Unexpected character 'n' is found at position 0. => server: the json type refuses the bare JSON null: Unexpected character 'n'; edge 3 (json:"text"): DatabaseOperationException: Insert failed on SqlServer: JSON text is not properly formatted. Unexpected character '"' is found at position 0. => server: the json type refuses a bare JSON string: Unexpected character '"'
+SqlServer	IP address	ip_address	PASS 3 values
 SqlServer	SQL array	int_array	UNSUPPORTED refused: Incorrect syntax near 'ARRAY'.
 SqlServer	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: Column, parameter, or variable #2: Cannot find data type UHUGEINT.
 SqlServer	decimal floating point	decimal_float	UNSUPPORTED refused: Column, parameter, or variable #2: Cannot find data type DECFLOAT.
 SqlServer	money / currency	money	PASS
-SqlServer	fixed character	fixed_character	PASS
+SqlServer	fixed character	fixed_character	PASS 2 values
 SqlServer	national / Unicode character	national_text	PASS
 SqlServer	long text LOB	long_text	PASS
 SqlServer	enumeration	enumeration	UNSUPPORTED refused: Incorrect syntax near 'a'.
@@ -37,7 +37,7 @@ SqlServer	set-valued enum	set_value	UNSUPPORTED refused: The definition for colu
 SqlServer	fixed binary	fixed_binary	PASS
 SqlServer	varying binary	varying_binary	PASS
 SqlServer	legacy long binary	legacy_binary	PASS
-SqlServer	rowversion / timestamp token	rowversion	PASS generated bytes:00000000000007D9
+SqlServer	rowversion / timestamp token	rowversion	PASS generated bytes:00000000000007DE
 SqlServer	local-zone timestamp	local_timestamp	UNSUPPORTED refused: Incorrect syntax near the keyword 'WITH'. Incorrect syntax near the keyword 'with'. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause
 SqlServer	second-precision datetime	second_datetime	PASS
 SqlServer	time with zone	time_zoned	UNSUPPORTED refused: Incorrect syntax near the keyword 'WITH'. Incorrect syntax near the keyword 'with'. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause
@@ -64,11 +64,12 @@ SqlServer	list / multiset / set collection	list_collection	UNSUPPORTED refused: 
 SqlServer	map / dictionary	map	UNSUPPORTED refused: Incorrect syntax near '('.
 SqlServer	range	range	UNSUPPORTED refused: Column, parameter, or variable #2: Cannot find data type INT4RANGE.
 SqlServer	multirange	multirange	UNSUPPORTED refused: Column, parameter, or variable #2: Cannot find data type INT4MULTIRANGE.
-SqlServer	user-defined enum / domain	domain	UNSUPPORTED refused: The definition for column 'c' must include a data type.
+SqlServer	user-defined enum / domain	domain	PASS
 SqlServer	full-text search vector / query	full_text	UNSUPPORTED refused: Column, parameter, or variable #2: Cannot find data type TSVECTOR.
-SqlServer	native point	native_point	UNSUPPORTED refused: no candidate was tried
-SqlServer	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
-SqlServer	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+SqlServer	native point	native_point	UNSUPPORTED refused: native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry
+SqlServer	native polygon	native_polygon	UNSUPPORTED refused: native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry
+SqlServer	native line	native_line	UNSUPPORTED refused: native line is PostgreSQL's line (CLR PostgreSqlLine); this database has no native line type
+SqlServer	32-bit transaction ID	xid32	PASS
 SqlServer	vector embedding	vector	PASS
 SqlServer	hierarchical path	hierarchy	PASS
 SqlServer	external-file reference	file_reference	UNSUPPORTED refused: Column, parameter, or variable #2: Cannot find data type BFILE.

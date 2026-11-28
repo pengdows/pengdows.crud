@@ -1,35 +1,35 @@
-SingleStore	signed 8-bit	signed_8_bit	PASS
-SingleStore	signed 16-bit	signed_16_bit	PASS
-SingleStore	signed 32-bit	signed_32_bit	PASS
-SingleStore	signed 64-bit	signed_64_bit	PASS
-SingleStore	signed 128-bit	signed_128_bit	PASS
-SingleStore	unsigned 8-bit	unsigned_8_bit	PASS
-SingleStore	unsigned 16-bit	unsigned_16_bit	PASS
-SingleStore	unsigned 32-bit	unsigned_32_bit	PASS
-SingleStore	unsigned 64-bit	unsigned_64_bit	PASS
-SingleStore	arbitrary-size integer	arbitrary_integer	PASS
-SingleStore	binary float32	binary_float32	PASS
-SingleStore	binary float64	binary_float64	PASS
-SingleStore	fixed decimal	fixed_decimal	PASS
-SingleStore	boolean	boolean	PASS
-SingleStore	bit / bitstring	bit_string	PASS
-SingleStore	varying character	varying_character	PASS
-SingleStore	unbounded text	unbounded_text	PASS
-SingleStore	UUID / GUID	uuid	PASS
-SingleStore	calendar date	calendar_date	PASS
-SingleStore	time without zone	time_of_day	PASS
-SingleStore	time without zone	time_span	PASS
+SingleStore	signed 8-bit	signed_8_bit	PASS 4 values
+SingleStore	signed 16-bit	signed_16_bit	PASS 4 values
+SingleStore	signed 32-bit	signed_32_bit	PASS 4 values
+SingleStore	signed 64-bit	signed_64_bit	PASS 3 values
+SingleStore	signed 128-bit	signed_128_bit	LIMIT 2 edge(s): edge 1 (Int128:-170141183460469231731687303715884105728): DatabaseOperationException: Insert failed on SingleStore: Leaf Error (127.0.0.1:3307): Out of range value for column 'signed_128_bit' => server: DECIMAL(38,0) can't hold -2^127: Out of range value for column; edge 2 (Int128:170141183460469231731687303715884105727): DatabaseOperationException: Insert failed on SingleStore: Leaf Error (127.0.0.1:3307): Out of range value for column 'signed_128_bit' => server: DECIMAL(38,0) can't hold 2^127-1: Leaf Error, out of range value for column
+SingleStore	unsigned 8-bit	unsigned_8_bit	PASS 3 values
+SingleStore	unsigned 16-bit	unsigned_16_bit	PASS 3 values
+SingleStore	unsigned 32-bit	unsigned_32_bit	PASS 3 values
+SingleStore	unsigned 64-bit	unsigned_64_bit	PASS 3 values
+SingleStore	arbitrary-size integer	arbitrary_integer	PASS 3 values
+SingleStore	binary float32	binary_float32	LIMIT 4 edge(s): edge 3 (float:NaN): DatabaseOperationException: Insert failed on SingleStore: Unknown column 'NaN' in 'field list' => server: FLOAT has no NaN: the NaN text is read as a column name; edge 4 (float:Infinity): DatabaseOperationException: Insert failed on SingleStore: Unknown column 'Infinity' in 'field list' => server: FLOAT has no infinity: the text is read as a column name; edge 5 (float:-Infinity): DatabaseOperationException: Insert failed on SingleStore: Unknown column 'Infinity' in 'field list' => server: no -Infinity in this FLOAT type (observed: Out of range / Domain error / ORA-01426); edge 6: wrote float:-0, read float:0 (read as Single) => server: the database does not keep the sign of zero: -0 is stored as 0
+SingleStore	binary float64	binary_float64	LIMIT 4 edge(s): edge 3 (double:NaN): DatabaseOperationException: Insert failed on SingleStore: Unknown column 'NaN' in 'field list' => server: DOUBLE has no NaN: the NaN text is read as a column name; edge 4 (double:Infinity): DatabaseOperationException: Insert failed on SingleStore: Unknown column 'Infinity' in 'field list' => server: DOUBLE has no infinity: the text is read as a column name; edge 5 (double:-Infinity): DatabaseOperationException: Insert failed on SingleStore: Unknown column 'Infinity' in 'field list' => server: no -Infinity in this DOUBLE type (observed: Out of range / Domain error / TDS parameter invalid); edge 6: wrote double:-0, read double:0 (read as Double) => server: the database does not keep the sign of zero: -0 is stored as 0
+SingleStore	fixed decimal	fixed_decimal	LIMIT 3 edge(s): edge 1: wrote decimal:0.0000000000000000000000000001, read decimal:0 (read as Decimal) => declared scale is too small: 1E-28 is stored as 0; edge 4 (decimal:79228162514264337593543950335): DatabaseOperationException: Insert failed on SingleStore: Leaf Error (127.0.0.1:3307): Out of range value for column 'fixed_decimal' => declared precision can't hold the decimal maximum (observed in the run); edge 5 (decimal:-79228162514264337593543950335): DatabaseOperationException: Insert failed on SingleStore: Leaf Error (127.0.0.1:3307): Out of range value for column 'fixed_decimal' => declared precision can't hold the negative decimal maximum (observed in the run)
+SingleStore	boolean	boolean	PASS 2 values
+SingleStore	bit / bitstring	bit_string	LIMIT 1 edge(s): edge 1 (bits:): NotNullViolationException: Insert violated a not-null constraint on SingleStore: Leaf Error (127.0.0.1:3307): Column 'bit_string' cannot be null => server: a zero-length BIT is refused: Column cannot be null
+SingleStore	varying character	varying_character	PASS 5 values
+SingleStore	unbounded text	unbounded_text	PASS 4 values
+SingleStore	UUID / GUID	uuid	PASS 2 values
+SingleStore	calendar date	calendar_date	LIMIT 1 edge(s): edge 1 (DateOnly:01/01/0001): DatabaseOperationException: Insert failed on SingleStore: Leaf Error (127.0.0.1:3307): Invalid DATE/TIME in type conversion for column 'calendar_date' => server: the DATE range starts after 0001-01-01: Invalid DATE/TIME
+SingleStore	time without zone	time_of_day	PASS 3 values
+SingleStore	time without zone	time_span	PASS 3 values
 SingleStore	day-time interval	day_time_interval	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL DAY TO SECOND(6))' at line 1
-SingleStore	timestamp without zone	timestamp	PASS
+SingleStore	timestamp without zone	timestamp	LIMIT 2 edge(s): edge 2 (instant:504911232000000000): DataMappingException: Could not read column 'timestamp' into Cell_Timestamp.Value (DateTime): Unable to convert MySQL date/time to System.DateTime, set AllowZeroDateTime=True or ConvertZeroDateTime=True in the connection string. See https://mysqlconnector.net/connection-options/ => declared TIMESTAMP covers 1970 to 2038 only: the stored value can't be read; edge 3 (instant:3155378975990000000): DataMappingException: Could not read column 'timestamp' into Cell_Timestamp.Value (DateTime): Unable to convert MySQL date/time to System.DateTime, set AllowZeroDateTime=True or ConvertZeroDateTime=True in the connection string. See https://mysqlconnector.net/connection-options/ => driver or server: 9999-12-31 23:59:59 can't be read back by the declared type (observed: MySQL zero-date / Incorrect value)
 SingleStore	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
-SingleStore	binary LOB	binary	PASS
-SingleStore	JSON text / JSON value	json	PASS
-SingleStore	IP address	ip_address	PASS
+SingleStore	binary LOB	binary	PASS 3 values
+SingleStore	JSON text / JSON value	json	PASS 4 values
+SingleStore	IP address	ip_address	PASS 3 values
 SingleStore	SQL array	int_array	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY)' at line 1
 SingleStore	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'UHUGEINT)' at line 1
 SingleStore	decimal floating point	decimal_float	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DECFLOAT)' at line 1
 SingleStore	money / currency	money	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MONEY)' at line 1
-SingleStore	fixed character	fixed_character	PASS
+SingleStore	fixed character	fixed_character	PASS 2 values
 SingleStore	national / Unicode character	national_text	PASS
 SingleStore	long text LOB	long_text	PASS
 SingleStore	enumeration	enumeration	PASS
@@ -58,7 +58,7 @@ SingleStore	point geometry	point	UNSUPPORTED refused: You have an error in your 
 SingleStore	line / linestring geometry	linestring	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'LINESTRING)' at line 1
 SingleStore	polygon geometry	polygon	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'POLYGON)' at line 1
 SingleStore	general geometry	geometry	UNSUPPORTED refused: Feature 'GEOMETRY types (try GEOGRAPHY or GEOGRAPHYPOINT)' is not supported by SingleStore.
-SingleStore	geography / geodetic	geography	UNSUPPORTED refused: Feature 'GEOGRAPHY column type in COLUMNAR TABLE' is not supported by SingleStore.
+SingleStore	geography / geodetic	geography	PASS
 SingleStore	fixed-length array	fixed_array	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY[10])' at line 1
 SingleStore	list / multiset / set collection	list_collection	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1
 SingleStore	map / dictionary	map	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MAP(VARCHAR(10),INTEGER))' at line 1
@@ -66,9 +66,10 @@ SingleStore	range	range	UNSUPPORTED refused: You have an error in your SQL synta
 SingleStore	multirange	multirange	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4MULTIRANGE)' at line 1
 SingleStore	user-defined enum / domain	domain	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
 SingleStore	full-text search vector / query	full_text	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'TSVECTOR)' at line 1
-SingleStore	native point	native_point	UNSUPPORTED refused: no candidate was tried
-SingleStore	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
-SingleStore	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+SingleStore	native point	native_point	UNSUPPORTED refused: native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry
+SingleStore	native polygon	native_polygon	UNSUPPORTED refused: native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry
+SingleStore	native line	native_line	UNSUPPORTED refused: native line is PostgreSQL's line (CLR PostgreSqlLine); this database has no native line type
+SingleStore	32-bit transaction ID	xid32	PASS
 SingleStore	vector embedding	vector	PASS
 SingleStore	hierarchical path	hierarchy	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'HIERARCHYID)' at line 1
 SingleStore	external-file reference	file_reference	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BFILE)' at line 1

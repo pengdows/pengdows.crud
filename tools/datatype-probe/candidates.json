@@ -1,9 +1,9 @@
 {
   "signed 8-bit": [
-    "TINYINT",
     "INT1",
     "NUMBER(3,0)",
     "SMALLINT",
+    "BIGINT",
     "INT2",
     "INTEGER storage",
     "TINYINT is unsigned; use SMALLINT"

@@ -1,35 +1,35 @@
-FlatFile	signed 8-bit	signed_8_bit	PASS
-FlatFile	signed 16-bit	signed_16_bit	PASS
-FlatFile	signed 32-bit	signed_32_bit	PASS
-FlatFile	signed 64-bit	signed_64_bit	PASS
-FlatFile	signed 128-bit	signed_128_bit	PASS
-FlatFile	unsigned 8-bit	unsigned_8_bit	PASS
-FlatFile	unsigned 16-bit	unsigned_16_bit	PASS
-FlatFile	unsigned 32-bit	unsigned_32_bit	PASS
-FlatFile	unsigned 64-bit	unsigned_64_bit	PASS
-FlatFile	arbitrary-size integer	arbitrary_integer	PASS
-FlatFile	binary float32	binary_float32	PASS
-FlatFile	binary float64	binary_float64	PASS
-FlatFile	fixed decimal	fixed_decimal	PASS
-FlatFile	boolean	boolean	PASS
+FlatFile	signed 8-bit	signed_8_bit	PASS 4 values
+FlatFile	signed 16-bit	signed_16_bit	PASS 4 values
+FlatFile	signed 32-bit	signed_32_bit	PASS 4 values
+FlatFile	signed 64-bit	signed_64_bit	PASS 3 values
+FlatFile	signed 128-bit	signed_128_bit	LIMIT 2 edge(s): edge 1 (Int128:-170141183460469231731687303715884105728): DatabaseOperationException: Insert failed on FlatFile: Value '-170141183460469231731687303715884105728' exceeds NUMERIC(38,0) for column 'signed_128_bit'. => server: NUMERIC(38,0) can't hold -2^127: the value exceeds the declared precision; edge 2 (Int128:170141183460469231731687303715884105727): DatabaseOperationException: Insert failed on FlatFile: Value '170141183460469231731687303715884105727' exceeds NUMERIC(38,0) for column 'signed_128_bit'. => server: NUMERIC(38,0) can't hold 2^127-1: the value exceeds the declared precision
+FlatFile	unsigned 8-bit	unsigned_8_bit	PASS 3 values
+FlatFile	unsigned 16-bit	unsigned_16_bit	PASS 3 values
+FlatFile	unsigned 32-bit	unsigned_32_bit	PASS 3 values
+FlatFile	unsigned 64-bit	unsigned_64_bit	PASS 3 values
+FlatFile	arbitrary-size integer	arbitrary_integer	PASS 3 values
+FlatFile	binary float32	binary_float32	PASS 7 values
+FlatFile	binary float64	binary_float64	PASS 8 values
+FlatFile	fixed decimal	fixed_decimal	LIMIT 3 edge(s): edge 1: wrote decimal:0.0000000000000000000000000001, read decimal:0 (read as Decimal) => declared scale is too small: 1E-28 is stored as 0; edge 4 (decimal:79228162514264337593543950335): DatabaseOperationException: Insert failed on FlatFile: Value '79228162514264337593543950335' exceeds DECIMAL(18,4) for column 'fixed_decimal'. => declared DECIMAL(18,4) can't hold the decimal maximum: the value exceeds the declared precision; edge 5 (decimal:-79228162514264337593543950335): DatabaseOperationException: Insert failed on FlatFile: Value '-79228162514264337593543950335' exceeds DECIMAL(18,4) for column 'fixed_decimal'. => declared precision can't hold the negative decimal maximum (observed in the run)
+FlatFile	boolean	boolean	PASS 2 values
 FlatFile	bit / bitstring	bit_string	UNSUPPORTED refused: SQL feature 'BIT data types' is not implemented by pengdows.flatfile.
-FlatFile	varying character	varying_character	PASS
-FlatFile	unbounded text	unbounded_text	PASS
-FlatFile	UUID / GUID	uuid	PASS
-FlatFile	calendar date	calendar_date	PASS
-FlatFile	time without zone	time_of_day	PASS
-FlatFile	time without zone	time_span	PASS
-FlatFile	day-time interval	day_time_interval	UNSUPPORTED refused: Expected identifier at position 55, but found 'Interval'.
-FlatFile	timestamp without zone	timestamp	PASS
-FlatFile	timestamp with zone	timestamp_with_zone	PASS
-FlatFile	binary LOB	binary	PASS
-FlatFile	JSON text / JSON value	json	PASS
-FlatFile	IP address	ip_address	PASS
+FlatFile	varying character	varying_character	PASS 5 values
+FlatFile	unbounded text	unbounded_text	PASS 4 values
+FlatFile	UUID / GUID	uuid	PASS 2 values
+FlatFile	calendar date	calendar_date	PASS 3 values
+FlatFile	time without zone	time_of_day	PASS 3 values
+FlatFile	time without zone	time_span	PASS 3 values
+FlatFile	day-time interval	day_time_interval	PASS
+FlatFile	timestamp without zone	timestamp	PASS 4 values
+FlatFile	timestamp with zone	timestamp_with_zone	PASS 3 values
+FlatFile	binary LOB	binary	PASS 3 values
+FlatFile	JSON text / JSON value	json	PASS 4 values
+FlatFile	IP address	ip_address	PASS 3 values
 FlatFile	SQL array	int_array	UNSUPPORTED refused: Expected token 'RightParen' at position 63, but found 'Identifier'.
 FlatFile	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: Unknown SQL data type 'UHUGEINT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
 FlatFile	decimal floating point	decimal_float	UNSUPPORTED refused: Unknown SQL data type 'DECFLOAT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
 FlatFile	money / currency	money	UNSUPPORTED refused: SQL syntax extension 'MONEY' is not valid ISO SQL, at position 54.
-FlatFile	fixed character	fixed_character	PASS
+FlatFile	fixed character	fixed_character	PASS 2 values
 FlatFile	national / Unicode character	national_text	PASS
 FlatFile	long text LOB	long_text	PASS
 FlatFile	enumeration	enumeration	UNSUPPORTED refused: Expected token 'NumericLiteral' at position 60, but found 'StringLiteral'.
@@ -42,8 +42,8 @@ FlatFile	local-zone timestamp	local_timestamp	UNSUPPORTED refused: Expected toke
 FlatFile	second-precision datetime	second_datetime	PASS
 FlatFile	time with zone	time_zoned	PASS
 FlatFile	year-only	year_only	PASS
-FlatFile	year-month interval	year_month_interval	UNSUPPORTED refused: Expected identifier at position 55, but found 'Interval'.
-FlatFile	generic interval	generic_interval	UNSUPPORTED refused: Expected identifier at position 55, but found 'Interval'.
+FlatFile	year-month interval	year_month_interval	PASS
+FlatFile	generic interval	generic_interval	UNSUPPORTED refused: pengdows.flatfile stores an INTERVAL as a TimeSpan: a generic interval has months, which have no fixed length
 FlatFile	row identifier / ROWID	row_identifier	PASS
 FlatFile	object identifier / OID	oid	UNSUPPORTED refused: Unknown SQL data type 'OID'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
 FlatFile	transaction ID	transaction_id	UNSUPPORTED refused: Unknown SQL data type 'XID'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
@@ -66,9 +66,10 @@ FlatFile	range	range	UNSUPPORTED refused: Unknown SQL data type 'INT4RANGE'. Use
 FlatFile	multirange	multirange	UNSUPPORTED refused: Unknown SQL data type 'INT4MULTIRANGE'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
 FlatFile	user-defined enum / domain	domain	UNSUPPORTED refused: Expected identifier at position 55, but found 'Create'.
 FlatFile	full-text search vector / query	full_text	UNSUPPORTED refused: Unknown SQL data type 'TSVECTOR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
-FlatFile	native point	native_point	UNSUPPORTED refused: no candidate was tried
-FlatFile	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
-FlatFile	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+FlatFile	native point	native_point	UNSUPPORTED refused: native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry
+FlatFile	native polygon	native_polygon	UNSUPPORTED refused: native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry
+FlatFile	native line	native_line	UNSUPPORTED refused: native line is PostgreSQL's line (CLR PostgreSqlLine); this database has no native line type
+FlatFile	32-bit transaction ID	xid32	PASS
 FlatFile	vector embedding	vector	UNSUPPORTED refused: Unknown SQL data type 'VECTOR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
 FlatFile	hierarchical path	hierarchy	UNSUPPORTED refused: Unknown SQL data type 'HIERARCHYID'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
 FlatFile	external-file reference	file_reference	UNSUPPORTED refused: Unknown SQL data type 'BFILE'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.

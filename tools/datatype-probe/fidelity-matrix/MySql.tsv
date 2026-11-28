@@ -1,35 +1,35 @@
-MySql	signed 8-bit	signed_8_bit	PASS
-MySql	signed 16-bit	signed_16_bit	PASS
-MySql	signed 32-bit	signed_32_bit	PASS
-MySql	signed 64-bit	signed_64_bit	PASS
-MySql	signed 128-bit	signed_128_bit	PASS
-MySql	unsigned 8-bit	unsigned_8_bit	PASS
-MySql	unsigned 16-bit	unsigned_16_bit	PASS
-MySql	unsigned 32-bit	unsigned_32_bit	PASS
-MySql	unsigned 64-bit	unsigned_64_bit	PASS
-MySql	arbitrary-size integer	arbitrary_integer	PASS
-MySql	binary float32	binary_float32	PASS
-MySql	binary float64	binary_float64	PASS
-MySql	fixed decimal	fixed_decimal	PASS
-MySql	boolean	boolean	PASS
-MySql	bit / bitstring	bit_string	PASS
-MySql	varying character	varying_character	PASS
-MySql	unbounded text	unbounded_text	PASS
-MySql	UUID / GUID	uuid	PASS
-MySql	calendar date	calendar_date	PASS
-MySql	time without zone	time_of_day	PASS
-MySql	time without zone	time_span	PASS
+MySql	signed 8-bit	signed_8_bit	PASS 4 values
+MySql	signed 16-bit	signed_16_bit	PASS 4 values
+MySql	signed 32-bit	signed_32_bit	PASS 4 values
+MySql	signed 64-bit	signed_64_bit	PASS 3 values
+MySql	signed 128-bit	signed_128_bit	LIMIT 2 edge(s): edge 1 (Int128:-170141183460469231731687303715884105728): DatabaseOperationException: Insert failed on MySql: Out of range value for column 'signed_128_bit' at row 1 => server: DECIMAL(38,0) can't hold -2^127: Out of range value for column; edge 2 (Int128:170141183460469231731687303715884105727): DatabaseOperationException: Insert failed on MySql: Out of range value for column 'signed_128_bit' at row 1 => server: DECIMAL(38,0) can't hold 2^127-1: Out of range value for column
+MySql	unsigned 8-bit	unsigned_8_bit	PASS 3 values
+MySql	unsigned 16-bit	unsigned_16_bit	PASS 3 values
+MySql	unsigned 32-bit	unsigned_32_bit	PASS 3 values
+MySql	unsigned 64-bit	unsigned_64_bit	PASS 3 values
+MySql	arbitrary-size integer	arbitrary_integer	PASS 3 values
+MySql	binary float32	binary_float32	LIMIT 3 edge(s): edge 3 (float:NaN): DatabaseOperationException: Insert failed on MySql: Out of range value for column 'binary_float32' at row 1 => server: FLOAT has no NaN: Out of range value for column; edge 4 (float:Infinity): DatabaseOperationException: Insert failed on MySql: Out of range value for column 'binary_float32' at row 1 => server: FLOAT has no infinity: Out of range value for column; edge 5 (float:-Infinity): DatabaseOperationException: Insert failed on MySql: Out of range value for column 'binary_float32' at row 1 => server: no -Infinity in this FLOAT type (observed: Out of range / Domain error / ORA-01426)
+MySql	binary float64	binary_float64	LIMIT 3 edge(s): edge 3 (double:NaN): DatabaseOperationException: Insert failed on MySql: Out of range value for column 'binary_float64' at row 1 => server: DOUBLE has no NaN: Out of range value for column; edge 4 (double:Infinity): DatabaseOperationException: Insert failed on MySql: Out of range value for column 'binary_float64' at row 1 => server: DOUBLE has no infinity: Out of range value for column; edge 5 (double:-Infinity): DatabaseOperationException: Insert failed on MySql: Out of range value for column 'binary_float64' at row 1 => server: no -Infinity in this DOUBLE type (observed: Out of range / Domain error / TDS parameter invalid)
+MySql	fixed decimal	fixed_decimal	LIMIT 3 edge(s): edge 1: wrote decimal:0.0000000000000000000000000001, read decimal:0 (read as Decimal) => declared scale is too small: 1E-28 is stored as 0; edge 4 (decimal:79228162514264337593543950335): DatabaseOperationException: Insert failed on MySql: Out of range value for column 'fixed_decimal' at row 1 => declared DECIMAL can't hold the decimal maximum: Out of range value for column; edge 5 (decimal:-79228162514264337593543950335): DatabaseOperationException: Insert failed on MySql: Out of range value for column 'fixed_decimal' at row 1 => declared DECIMAL can't hold the negative decimal maximum: Out of range value for column
+MySql	boolean	boolean	PASS 2 values
+MySql	bit / bitstring	bit_string	LIMIT 1 edge(s): edge 1 (bits:): NotNullViolationException: Insert violated a not-null constraint on MySql: Column 'bit_string' cannot be null => server: a zero-length BIT is refused: Column cannot be null
+MySql	varying character	varying_character	PASS 5 values
+MySql	unbounded text	unbounded_text	PASS 4 values
+MySql	UUID / GUID	uuid	PASS 2 values
+MySql	calendar date	calendar_date	PASS 3 values
+MySql	time without zone	time_of_day	PASS 3 values
+MySql	time without zone	time_span	PASS 3 values
 MySql	day-time interval	day_time_interval	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL DAY TO SECOND(6))' at line 1
-MySql	timestamp without zone	timestamp	PASS
+MySql	timestamp without zone	timestamp	LIMIT 2 edge(s): edge 2 (instant:504911232000000000): DatabaseOperationException: Insert failed on MySql: Incorrect datetime value: '1601-01-01 00:00:00.000000' for column 'timestamp' at row 1 => declared TIMESTAMP(6) covers 1970 to 2038 only: Incorrect datetime value; edge 3 (instant:3155378975990000000): DatabaseOperationException: Insert failed on MySql: Incorrect datetime value: '9999-12-31 23:59:59.000000' for column 'timestamp' at row 1 => declared TIMESTAMP(6) ends in 2038: Incorrect datetime value
 MySql	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
-MySql	binary LOB	binary	PASS
-MySql	JSON text / JSON value	json	PASS
-MySql	IP address	ip_address	PASS
+MySql	binary LOB	binary	PASS 3 values
+MySql	JSON text / JSON value	json	PASS 4 values
+MySql	IP address	ip_address	PASS 3 values
 MySql	SQL array	int_array	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY)' at line 1
 MySql	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'UHUGEINT)' at line 1
 MySql	decimal floating point	decimal_float	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DECFLOAT)' at line 1
 MySql	money / currency	money	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MONEY)' at line 1
-MySql	fixed character	fixed_character	PASS
+MySql	fixed character	fixed_character	PASS 2 values
 MySql	national / Unicode character	national_text	PASS
 MySql	long text LOB	long_text	PASS
 MySql	enumeration	enumeration	PASS
@@ -66,10 +66,11 @@ MySql	range	range	UNSUPPORTED refused: You have an error in your SQL syntax; che
 MySql	multirange	multirange	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4MULTIRANGE)' at line 1
 MySql	user-defined enum / domain	domain	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
 MySql	full-text search vector / query	full_text	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'TSVECTOR)' at line 1
-MySql	native point	native_point	UNSUPPORTED refused: no candidate was tried
-MySql	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
-MySql	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
-MySql	vector embedding	vector	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VECTOR(3))' at line 1
+MySql	native point	native_point	UNSUPPORTED refused: native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry
+MySql	native polygon	native_polygon	UNSUPPORTED refused: native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry
+MySql	native line	native_line	UNSUPPORTED refused: native line is PostgreSQL's line (CLR PostgreSqlLine); this database has no native line type
+MySql	32-bit transaction ID	xid32	PASS
+MySql	vector embedding	vector	PASS
 MySql	hierarchical path	hierarchy	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'HIERARCHYID)' at line 1
 MySql	external-file reference	file_reference	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BFILE)' at line 1
 MySql	specialized security label	security_label	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'IDSSECURITYLABEL)' at line 1

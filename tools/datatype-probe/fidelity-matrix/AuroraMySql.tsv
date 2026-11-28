@@ -1,0 +1,76 @@
+AuroraMySql	signed 8-bit	signed_8_bit	PASS 4 values
+AuroraMySql	signed 16-bit	signed_16_bit	PASS 4 values
+AuroraMySql	signed 32-bit	signed_32_bit	PASS 4 values
+AuroraMySql	signed 64-bit	signed_64_bit	PASS 3 values
+AuroraMySql	signed 128-bit	signed_128_bit	LIMIT 2 edge(s): edge 1 (Int128:-170141183460469231731687303715884105728): DatabaseOperationException: Insert failed on AuroraMySql: Out of range value for column 'signed_128_bit' at row 1 => server: DECIMAL(38,0) can't hold -2^127: Out of range value for column; edge 2 (Int128:170141183460469231731687303715884105727): DatabaseOperationException: Insert failed on AuroraMySql: Out of range value for column 'signed_128_bit' at row 1 => server: DECIMAL(38,0) can't hold 2^127-1: Out of range value for column
+AuroraMySql	unsigned 8-bit	unsigned_8_bit	PASS 3 values
+AuroraMySql	unsigned 16-bit	unsigned_16_bit	PASS 3 values
+AuroraMySql	unsigned 32-bit	unsigned_32_bit	PASS 3 values
+AuroraMySql	unsigned 64-bit	unsigned_64_bit	PASS 3 values
+AuroraMySql	arbitrary-size integer	arbitrary_integer	PASS 3 values
+AuroraMySql	binary float32	binary_float32	LIMIT 3 edge(s): edge 3 (float:NaN): DatabaseOperationException: Insert failed on AuroraMySql: Out of range value for column 'binary_float32' at row 1 => server: FLOAT has no NaN: Out of range value for column; edge 4 (float:Infinity): DatabaseOperationException: Insert failed on AuroraMySql: Out of range value for column 'binary_float32' at row 1 => server: FLOAT has no infinity: Out of range value for column; edge 5 (float:-Infinity): DatabaseOperationException: Insert failed on AuroraMySql: Out of range value for column 'binary_float32' at row 1 => server: no -Infinity in this FLOAT type (observed: Out of range / Domain error / ORA-01426)
+AuroraMySql	binary float64	binary_float64	LIMIT 3 edge(s): edge 3 (double:NaN): DatabaseOperationException: Insert failed on AuroraMySql: Out of range value for column 'binary_float64' at row 1 => server: DOUBLE has no NaN: Out of range value for column; edge 4 (double:Infinity): DatabaseOperationException: Insert failed on AuroraMySql: Out of range value for column 'binary_float64' at row 1 => server: DOUBLE has no infinity: Out of range value for column; edge 5 (double:-Infinity): DatabaseOperationException: Insert failed on AuroraMySql: Out of range value for column 'binary_float64' at row 1 => server: no -Infinity in this DOUBLE type (observed: Out of range / Domain error / TDS parameter invalid)
+AuroraMySql	fixed decimal	fixed_decimal	LIMIT 3 edge(s): edge 1: wrote decimal:0.0000000000000000000000000001, read decimal:0 (read as Decimal) => declared scale is too small: 1E-28 is stored as 0; edge 4 (decimal:79228162514264337593543950335): DatabaseOperationException: Insert failed on AuroraMySql: Out of range value for column 'fixed_decimal' at row 1 => declared DECIMAL can't hold the decimal maximum: Out of range value for column; edge 5 (decimal:-79228162514264337593543950335): DatabaseOperationException: Insert failed on AuroraMySql: Out of range value for column 'fixed_decimal' at row 1 => declared DECIMAL can't hold the negative decimal maximum: Out of range value for column
+AuroraMySql	boolean	boolean	PASS 2 values
+AuroraMySql	bit / bitstring	bit_string	LIMIT 1 edge(s): edge 1 (bits:): NotNullViolationException: Insert violated a not-null constraint on AuroraMySql: Column 'bit_string' cannot be null => server: a zero-length BIT is refused: Column cannot be null
+AuroraMySql	varying character	varying_character	PASS 5 values
+AuroraMySql	unbounded text	unbounded_text	PASS 4 values
+AuroraMySql	UUID / GUID	uuid	PASS 2 values
+AuroraMySql	calendar date	calendar_date	PASS 3 values
+AuroraMySql	time without zone	time_of_day	PASS 3 values
+AuroraMySql	time without zone	time_span	PASS 3 values
+AuroraMySql	day-time interval	day_time_interval	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL DAY TO SECOND(6))' at line 1
+AuroraMySql	timestamp without zone	timestamp	LIMIT 2 edge(s): edge 2 (instant:504911232000000000): DatabaseOperationException: Insert failed on AuroraMySql: Incorrect datetime value: '1601-01-01 00:00:00.000000' for column 'timestamp' at row 1 => declared TIMESTAMP(6) covers 1970 to 2038 only: Incorrect datetime value; edge 3 (instant:3155378975990000000): DatabaseOperationException: Insert failed on AuroraMySql: Incorrect datetime value: '9999-12-31 23:59:59.000000' for column 'timestamp' at row 1 => declared TIMESTAMP(6) ends in 2038: Incorrect datetime value
+AuroraMySql	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+AuroraMySql	binary LOB	binary	PASS 3 values
+AuroraMySql	JSON text / JSON value	json	PASS 4 values
+AuroraMySql	IP address	ip_address	PASS 3 values
+AuroraMySql	SQL array	int_array	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY)' at line 1
+AuroraMySql	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'UHUGEINT)' at line 1
+AuroraMySql	decimal floating point	decimal_float	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DECFLOAT)' at line 1
+AuroraMySql	money / currency	money	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MONEY)' at line 1
+AuroraMySql	fixed character	fixed_character	PASS 2 values
+AuroraMySql	national / Unicode character	national_text	PASS
+AuroraMySql	long text LOB	long_text	PASS
+AuroraMySql	enumeration	enumeration	PASS
+AuroraMySql	set-valued enum	set_value	PASS
+AuroraMySql	fixed binary	fixed_binary	PASS
+AuroraMySql	varying binary	varying_binary	PASS
+AuroraMySql	legacy long binary	legacy_binary	PASS
+AuroraMySql	rowversion / timestamp token	rowversion	PASS
+AuroraMySql	local-zone timestamp	local_timestamp	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH LOCAL TIME ZONE)' at line 1
+AuroraMySql	second-precision datetime	second_datetime	PASS
+AuroraMySql	time with zone	time_zoned	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+AuroraMySql	year-only	year_only	PASS
+AuroraMySql	year-month interval	year_month_interval	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL YEAR TO MONTH)' at line 1
+AuroraMySql	generic interval	generic_interval	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL)' at line 1
+AuroraMySql	row identifier / ROWID	row_identifier	PASS
+AuroraMySql	object identifier / OID	oid	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'OID)' at line 1
+AuroraMySql	transaction ID	transaction_id	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XID)' at line 1
+AuroraMySql	WAL / log position	wal_position	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'PG_LSN)' at line 1
+AuroraMySql	native binary JSON	binary_json	PASS
+AuroraMySql	XML	xml	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XML)' at line 1
+AuroraMySql	BSON	bson	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BSON)' at line 1
+AuroraMySql	variant / dynamic value	variant	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VARIANT)' at line 1
+AuroraMySql	IP network / CIDR	cidr	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CIDR)' at line 1
+AuroraMySql	MAC address	mac_address	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MACADDR)' at line 1
+AuroraMySql	point geometry	point	PASS
+AuroraMySql	line / linestring geometry	linestring	PASS
+AuroraMySql	polygon geometry	polygon	PASS
+AuroraMySql	general geometry	geometry	PASS
+AuroraMySql	geography / geodetic	geography	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'GEOGRAPHY)' at line 1
+AuroraMySql	fixed-length array	fixed_array	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY[10])' at line 1
+AuroraMySql	list / multiset / set collection	list_collection	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1
+AuroraMySql	map / dictionary	map	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MAP(VARCHAR(10),INTEGER))' at line 1
+AuroraMySql	range	range	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4RANGE)' at line 1
+AuroraMySql	multirange	multirange	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4MULTIRANGE)' at line 1
+AuroraMySql	user-defined enum / domain	domain	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
+AuroraMySql	full-text search vector / query	full_text	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'TSVECTOR)' at line 1
+AuroraMySql	native point	native_point	UNSUPPORTED refused: native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry
+AuroraMySql	native polygon	native_polygon	UNSUPPORTED refused: native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry
+AuroraMySql	native line	native_line	UNSUPPORTED refused: native line is PostgreSQL's line (CLR PostgreSqlLine); this database has no native line type
+AuroraMySql	32-bit transaction ID	xid32	PASS
+AuroraMySql	vector embedding	vector	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VECTOR(3))' at line 1
+AuroraMySql	hierarchical path	hierarchy	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'HIERARCHYID)' at line 1
+AuroraMySql	external-file reference	file_reference	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BFILE)' at line 1
+AuroraMySql	specialized security label	security_label	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'IDSSECURITYLABEL)' at line 1

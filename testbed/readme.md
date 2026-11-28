@@ -171,7 +171,7 @@ one's actual skip behavior and adds a column.
 testbed/
 ├── Program.cs                        Entry point; parses args and env vars
 ├── ParallelTestOrchestrator.cs       Starts containers, runs TestProvider per DB, collects results
-├── TestProvider.cs                   Base class: CreateTable, scalar-UDF, idle-unload probe (~466 lines)
+├── TestProvider.cs                   Base class: CreateTable, scalar-UDF, idle-unload probe (~469 lines)
 ├── TestContainer.cs                  Shared container startup / wait-for-ready logic
 ├── Sqlite/                           SQLite — no container (file/memory based)
 ├── DuckDb/
