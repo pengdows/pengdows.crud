@@ -104,8 +104,8 @@ daylight-saving changes, which local time can't do. See [utc-and-time.md](utc-an
 
 `ResolveAuditTimestamp` (`BaseTableGateway.Audit.cs`) throws `InvalidOperationException` if
 `IAuditValues.TimestampOffset` is non-null but its `Offset` isn't exactly `TimeSpan.Zero` — a
-resolver cannot supply a local-time-with-offset value. If `TimestampOffset` is null, `UtcNow` is
-used directly. The resolved UTC instant is then coerced to whatever the target property's type
+resolver cannot supply a local-time-with-offset value. If `TimestampOffset` is null, the resolver's `UtcNow` is
+used when it is set, and `DateTime.UtcNow` otherwise (both as a zero-offset `DateTimeOffset`). The resolved UTC instant is then coerced to whatever the target property's type
 actually is (`DateTime` or `DateTimeOffset`) via `CoerceTimestamp`.
 
 ## User-ID coercion
@@ -114,7 +114,8 @@ actually is (`DateTime` or `DateTimeOffset`) via `CoerceTimestamp`.
 numeric identity) is coerced to the audit property's actual .NET type before assignment. A
 `string` UserId being assigned to a `Guid`-typed `CreatedBy` property is parsed via `Guid.TryParse`
 (throwing `InvalidOperationException` with the attempted value if it doesn't parse); every other
-mismatch goes through `TypeCoercionHelper.ConvertWithCache` — the same general-purpose coercion
+mismatch goes through `ConverterResolution.ConvertWithCache` (`types/coercion/ConverterResolution.cs`, called from
+`BaseTableGateway.Audit.cs`) — the same general-purpose coercion
 path used elsewhere in the library.
 
 ## Batch operations resolve once, not once per row

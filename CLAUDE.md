@@ -23,7 +23,7 @@ No LINQ, no tracking, no surprises — explicit SQL control with database-agnost
 Traditional classifications place data access tools on a 1D spectrum from **Heavy ORMs** (EF Core, Hibernate) to **Micro-ORMs** (Dapper, sqlx). `pengdows.crud` breaks this spectrum by occupying the **Explicit SQL + High Execution Governance** quadrant:
 
 1. **NOT an ORM / Unit of Work**: No change tracking, no entity state machines, no LINQ-to-SQL translation, no dirty checking.
-2. **NOT a Micro-ORM / Mapper like Dapper**: While it offers zero-overhead mapping, it provides full **execution lifecycle governance** (`PoolGovernor`, adaptive `DbMode` coercion, turnstiles, ANSI session normalization, dialect capability synthesis, and audit rollback) that Dapper completely ignores.
+2. **NOT a Micro-ORM / Mapper like Dapper**: While its row mapping measures at parity with Dapper (not zero overhead; PostgreSQL equal-footing run 2026-11-27, Pengdows ÷ Dapper 0.96–1.03), it provides full **execution lifecycle governance** (`PoolGovernor`, adaptive `DbMode` coercion, turnstiles, ANSI session normalization, dialect capability synthesis, and audit rollback) that Dapper completely ignores.
 3. **NOT a Query Builder like jOOQ / SqlKata**: `ISqlContainer` allows SQL building, but its primary duty is binding SQL, parameters, and intent to a governed connection lifecycle and transaction lease.
 4. **Core Thesis**: `DatabaseContext` is a **singleton execution coordinator** that acts as the single execution authority for pools, admission, dialects, transactions, and metrics.
 5. **Canonical Comparison Reference**: See [`docs/positioning/dal-taxonomy-and-comparison.md`](./docs/positioning/dal-taxonomy-and-comparison.md) for full comparisons across .NET, Java, Go, Rust, and Python.
@@ -316,8 +316,8 @@ public int Version { get; set; }
 **`PrimaryKeyTableGateway<T>`** — always uses `[PrimaryKey]` columns as the conflict key. Throws `NotSupportedException` if the entity has no updateable non-key columns (pure junction table with only PK columns), unless the dialect supports pure-key upsert (Firebird).
 
 **SQL generated depends on database:**
-- `MERGE` when the dialect's `SupportsMerge` is true (SQL Server, Oracle, PostgreSQL 15+, DuckDB 1.4+, …)
-- otherwise `INSERT ... ON CONFLICT` (PostgreSQL < 15, YugabyteDB, CockroachDB, Spanner, SQLite, …)
+- `MERGE` when the dialect's `SupportsMerge` is true and it does not prefer ON CONFLICT (SQL Server, Oracle, DuckDB 1.4+, …). PostgreSQL 15+ has MERGE, but its dialect sets `UpsertPrefersOnConflict`, so it uses `ON CONFLICT` at every version
+- otherwise `INSERT ... ON CONFLICT` (PostgreSQL (all versions), YugabyteDB, CockroachDB, Spanner, SQLite, …)
 - otherwise `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL/MariaDB/TiDB/SingleStore)
 - InterBase and Access have none of the three: `UpsertAsync`/`BuildUpsert` throw `NotSupportedException` (as does the unrecognized-database SQL-92 fallback)
 
@@ -477,7 +477,7 @@ See `docs/parameter-naming-convention.md` for full per-operation detail.
 
 | Mode | Value | Use Case |
 |------|-------|----------|
-| `Standard` | 0 | **Production default** — pool per operation |
+| `Standard` | 0 | **Production default** on client-server databases (what `Best` resolves to there, except Firebird and Db2 LUW) — pool per operation |
 | `PreventDatabaseUnload` | 1 | Databases that unload when idle (SQL Server LocalDB, Firebird, Db2 LUW): one sentinel connection keeps the database loaded |
 | `SingleWriter` | 2 | File-based SQLite/DuckDB/Access/pengdows.flatfile — serializes writes via turnstile governor |
 | `SingleConnection` | 4 | In-memory `:memory:` databases |
@@ -527,7 +527,7 @@ await txn.RollbackToSavepointAsync("checkpoint1");
 
 Always use `Context.BeginTransaction()` which pins the connection for the transaction's lifetime.
 
-**Isolation fails up, never down.** An explicit `IsolationLevel` is used as-is if supported, otherwise the weakest supported level at least as strong (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot is above ReadCommitted and satisfied only by Snapshot/Serializable; RepeatableRead only by Serializable) — e.g. `ReadCommitted` on CockroachDB/DuckDB runs as `Serializable`; if nothing at or above exists (e.g. `Serializable` on TiDB/Snowflake/SingleStore) it throws `InvalidOperationException`. An `IsolationProfile` throws `TransactionModeNotSupportedException` rather than run below its guarantee (`StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile; `SafeNonBlockingReads` on SQL Server with neither snapshot isolation nor READ_COMMITTED_SNAPSHOT). A `BeginTransaction` with neither a level nor a profile asked for nothing, so it gets the database default silently (a read uses the `SafeNonBlockingReads` mapping when the engine honors it, otherwise ReadCommitted, else Serializable). See `docs/transactions.md`.
+**Isolation fails up, never down.** An explicit `IsolationLevel` is used as-is if supported, otherwise the weakest supported level at least as strong (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot is above ReadCommitted and satisfied only by Snapshot/Serializable; RepeatableRead only by Serializable) — e.g. `ReadCommitted` on CockroachDB/DuckDB runs as `Serializable`; if nothing at or above exists (e.g. `Serializable` on TiDB/Snowflake/SingleStore) it throws `InvalidOperationException`. An `IsolationProfile` throws `TransactionModeNotSupportedException` rather than run below its guarantee (`StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile; `SafeNonBlockingReads` on SQL Server with neither snapshot isolation nor READ_COMMITTED_SNAPSHOT). A `BeginTransaction` with neither a level nor a profile asked for nothing, so it never throws and never logs. A concrete level is always resolved (no unset level is sent to the provider): a read uses the `SafeNonBlockingReads` mapping when the engine honors it, otherwise a read or a write takes ReadCommitted, else Serializable, else the first level the product supports. See `docs/transactions.md`.
 
 ## Exception Hierarchy
 
@@ -593,7 +593,7 @@ if (info.ConstraintKind == DbConstraintKind.ForeignKey) { /* 409 response */ }
 | `ProviderErrorCode` | `int?` | Provider-specific numeric error code when available |
 | `SqlState` | `string?` | SQLSTATE code when available |
 
-`ISqlDialect` also exposes targeted boolean helpers: `IsUniqueViolation`, `IsForeignKeyViolation`, `IsNotNullViolation`, `IsCheckConstraintViolation` — all accept `DbException` and default to `false` in the interface (overridden per dialect).
+`ISqlDialect` also exposes targeted boolean helpers: `IsUniqueViolation`, `IsForeignKeyViolation`, `IsNotNullViolation`, `IsCheckConstraintViolation` — all accept `DbException`. `IsUniqueViolation` has no default in the interface and every dialect must implement it; the other three default to `false` in the interface (overridden per dialect).
 
 ## DI Lifetime Rules
 
@@ -814,7 +814,7 @@ those are neither created nor deleted. The clusters are billed while they exist 
 ### SQL Generation
 - Database-agnostic SQL with dialect-specific optimizations
 - Automatic parameterization prevents SQL injection
-- Provider-specific UPSERT: MERGE where supported (SQL Server/Oracle/PostgreSQL 15+), else ON CONFLICT (e.g. PostgreSQL < 15, SQLite), else ON DUPLICATE KEY (MySQL/MariaDB)
+- Provider-specific UPSERT: MERGE where supported and the dialect does not prefer ON CONFLICT (SQL Server/Oracle/DuckDB 1.4+), else ON CONFLICT (PostgreSQL at every version, SQLite), else ON DUPLICATE KEY (MySQL/MariaDB)
 - Schema-aware operations with proper object name quoting
 - Dialect is accessible via `context.Dialect` (`ISqlDialect`) from any `IDatabaseContext`
 

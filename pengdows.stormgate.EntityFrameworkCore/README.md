@@ -246,7 +246,7 @@ That gives applications using a provider which accepts an externally supplied
 `DbConnection` a meaningful offline test path:
 
 ```csharp
-var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
 var options = new DbContextOptionsBuilder<AppDbContext>()
     .UseSqlite(factory.CreateConnection()!, contextOwnsConnection: false) // or your provider's external-DbConnection overload
     .UseStormGate(interceptor)

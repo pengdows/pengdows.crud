@@ -1,5 +1,8 @@
 # A/B: pengdows.crud 2.0.5 vs 2.0.6, tiers 2 and 3 (real databases), 2026-10-11
 
+> Note (2026-11-26): `ConnectionPoolProtectionBenchmarks` was removed in commit 28d5903a. Its pool rows below are invalid
+> (its read rows ran two leases per operation for pengdows); see `docs/connection-governance-investigation-2026-10.md`.
+
 Method: `benchmarks/run-main-vs-3.0.sh tier2 2` then `tier3 2`, `v2.0.5` (7ee63f14) against `HEAD` (2ec8e488), net10.0,
 2 rounds, arms alternating order, same benchmark code on both (seven harness files that use APIs 2.0.5 lacks excluded from the
 baseline arm only). AMD Ryzen 9 5950X, no builds during the run. Tier 2 = embedded (DuckDB, SQLite, pool protection);

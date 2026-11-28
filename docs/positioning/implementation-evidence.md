@@ -85,7 +85,7 @@ changes — `pengdows.crud.Tests/ReadOnlyConnectionRejectsWriteTests.cs`,
 
 ## Complete analyzer rule list (principle 9)
 
-The `pengdows.crud.analyzers` Roslyn package currently defines six rules:
+The `pengdows.crud.analyzers` Roslyn package currently defines seven rules:
 
 - **PGC001** — DI registrations of `DatabaseContext`/`TableGateway`/`PrimaryKeyTableGateway`
   as `AddScoped`/`AddTransient` are errors; these types must be singletons.
@@ -99,6 +99,8 @@ The `pengdows.crud.analyzers` Roslyn package currently defines six rules:
   (`DataSource`, the SQL-standard-level heuristics, internal bookkeeping types, the inert type
   attributes), and on assigning `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle`, which are
   fixed at construction (the setters are no-ops; 3.0 makes them `init`).
+- **PGC030** — an error: application code must not call `WrapForStoredProc` directly (an implementation
+  detail); execute the container with `CommandType.StoredProcedure` instead (`DirectStoredProcedureWrapperAnalyzer`).
 - **PGC029** — an error, opt-in (`<PengdowsMultiTenancy>true</PengdowsMultiTenancy>`): every call to a
   gateway execution/build method must supply a non-null `IDatabaseContext`/`ITransactionContext`
   instead of relying on the gateway's default context (`GatewayCallSiteContextAnalyzer`).

@@ -25,7 +25,7 @@ strategy. This does not describe durable Firebird embedded databases, where `Sta
 their connection and concurrency semantics fit the deployment (`Best` selects `PreventDatabaseUnload` for Firebird, never `SingleConnection`). See
 [`docs/connection/connection-modes.md`](docs/connection/connection-modes.md).
 
-`PreventDatabaseUnload`/`KeepAlive` is exactly `Standard` mode plus unused passive sentinel connections. The sentinels never execute commands, open transactions, or serve readers. Every real read and write still follows the identical open-late/close-early path as `Standard` through its own ephemeral pooled connection. The sentinels exist only to keep the database loaded so the next real operation does not pay the slow database reload/startup cost after an idle period. When `Best` selects this mode for SQL Server LocalDB, Firebird, or Db2 LUW, an explicit `Standard` request is supported and disables the sentinels.
+`PreventDatabaseUnload`/`KeepAlive` is exactly `Standard` mode plus unused passive sentinel connections. The sentinels never execute commands, open transactions, or serve readers. On Firebird and InterBase, a DDL statement closes the sentinels for its duration and reopens them afterwards (`SqlContainer.cs`, DDL pool reset). Every real read and write still follows the identical open-late/close-early path as `Standard` through its own ephemeral pooled connection. The sentinels exist only to keep the database loaded so the next real operation does not pay the slow database reload/startup cost after an idle period. When `Best` selects this mode for SQL Server LocalDB, Firebird, or Db2 LUW, an explicit `Standard` request is supported and disables the sentinels.
 
 ## A minimal example
 
@@ -118,7 +118,7 @@ disposes (`using` / `await using`); it does not extend to a lease the caller dro
 
 Do not generalize the PostgreSQL result to every database or workload. The governed per-operation
 strategy can be slower than a pinned connection for tiny local operations; the SQLite file run,
-for example, reports 1.04–1.26x per-operation Dapper for its measured CRUD cases. Choose pengdows
+for example, reports 1.03–1.17x per-operation Dapper for its single-row file/WAL cases. Choose pengdows
 when the execution contract matters and the measured overhead is acceptable for your workload. For
 the detailed comparison and its limitations, read
 [`docs/positioning/dal-taxonomy-and-comparison.md`](docs/positioning/dal-taxonomy-and-comparison.md)
@@ -178,10 +178,11 @@ boundary.
   database behaves the same. A product counts as supported only when its provider, dialect, type
   mappings, transactions, CRUD, batches, upserts, read-only behavior, and real integration suite
   meet the documented contract.
-- **Guardrails and observability are built in.** The analyzer package currently ships six named
+- **Guardrails and observability are built in.** The analyzer package currently ships seven named
   rules: PGC001 (singleton lifetimes), PGC008 (unparameterized SQL values), PGC025 (gateway
-  context use), PGC026 (identifier-wrapping shape), PGC028 (2.x compatibility-only APIs), and
-  opt-in PGC029 (explicit contexts for multi-tenancy). `DatabaseMetrics`, tracing, pool/mode
+  context use), PGC026 (identifier-wrapping shape), PGC028 (2.x compatibility-only APIs), opt-in
+  PGC029 (explicit contexts for multi-tenancy), and PGC030 (do not call `WrapForStoredProc` directly;
+  execute with `CommandType.StoredProcedure`). `DatabaseMetrics`, tracing, pool/mode
   contention data, and the optional OpenTelemetry adapter expose what the execution pipeline is
   doing rather than leaving production diagnosis to provider-specific guesswork.
 - **The API scales from a simple query to a serious data layer.** It supports explicit
@@ -211,7 +212,7 @@ and it detects the product and coerces to the correct mode automatically (full s
 `:memory:` SQLite/DuckDB → `SingleConnection`; explicit `Standard` is honored where the dialect
 permits it — including an explicit override to disable the sentinels when `Best` would select
 `PreventDatabaseUnload` — while SQLite and pengdows.flatfile coerce it to `SingleWriter`), and every downstream gateway call behaves
-consistently while the lifecycle and capability details remain database-specific.
+consistently while the lifecycle and capability details remain database-specific. When the configured maximum pool size is below 2, `Best` falls back to `Standard` and logs why, because the PreventDatabaseUnload sentinel needs a second pooled connection.
 
 ## Why a DBA may standardize on pengdows.crud for SaaS
 
@@ -232,10 +233,15 @@ from unloading so the next real operation avoids reload/startup cost. This makes
 near-impossible on completed and governed paths, while a genuinely hung command or undisposed
 reader remains the application's responsibility through cancellation, timeouts, and disposal.
 
-Reader and writer pools can be separated. Read connections can receive provider session and
-connection-string read-only settings so writes are rejected even when code requests the wrong
-path. Use separate read and write credentials when possible: settings are defense in depth, while
-database credentials are the authorization boundary.
+Reader and writer pools are separated by connection string, and only when the context has a dedicated read
+string (`ReadOnlyConnectionString` that differs from the write string). Read-intent work (`ExecutionType.Read`)
+then opens on that string, rewritten with the dialect's read-only parameter where one exists (PostgreSQL
+`Options='-c default_transaction_read_only=on'`, SQL Server `ApplicationIntent=ReadOnly`, SQLite `Mode=ReadOnly`,
+DuckDB `access_mode=READ_ONLY`) and a `-ro` application-name suffix, so it is a different provider pool with its
+own governor. Without a dedicated string, reads share the write pool and get only the read-only session settings.
+DuckDB never routes reads to the reader string, because a read-only file connection can still block writers.
+These parameters are defense in depth: `ApplicationIntent=ReadOnly` is only a routing hint, and database
+credentials are the authorization boundary.
 
 The database remains the source of truth for entity shape. `pengdows.poco.mint` can inspect the
 database and generate attributed POCOs as part of a build, or a DBA can generate and review the
@@ -360,10 +366,9 @@ for the comparison methodology and limitations.
   per-operation connection strategy can cost more than a pinned connection on tiny local writes;
   the trade is lifecycle isolation, provider-session normalization, and concurrency control. The
   benchmark suite reports workload-specific comparisons rather than one marketing number: the
-  dated PostgreSQL run is at parity with Dapper (within 3% on reads, up to 8% slower on writes) and 1.1x to 1.5x faster than EF Core,
-  while on SQLite pengdows.crud takes 1.2x to 1.5x a plain per-operation Dapper's time (in-memory,
-  2026-10-03), narrowing to 1.04x to 1.26x when that Dapper does the same session work (file,
-  2026-10-13), and a pinned writer is faster. Start with [`benchmarks/CrudBenchmarks/README.md`](benchmarks/CrudBenchmarks/README.md)
+  2026-11-27 PostgreSQL equal-footing run is at parity with Dapper (Pengdows ÷ Dapper 0.96 to 1.03 across operations and record counts) and EF Core is 1.2x to 1.7x slower (2026-10-19 cross-framework ratios),
+  while on SQLite (in-memory, 2026-10-03) pengdows.crud takes 1.17x to 1.54x a plain per-operation Dapper's time for single-row operations and 0.94x to 0.95x for the two multi-row reads,
+  and on a shared-cache memory database (2026-10-13) 1.04x to 1.26x per operation, and 1.03x to 1.17x on a file/WAL database (same run), against per-operation Dapper. A pinned writer is faster. Start with [`benchmarks/CrudBenchmarks/README.md`](benchmarks/CrudBenchmarks/README.md)
   and its dated result files before quoting any ratio.
 - [`docs/transactions.md`](docs/transactions.md) — `ITransactionContext`, isolation
   profiles and the "fails up, never down" isolation rule (an unsupported explicit level resolves to
@@ -380,8 +385,7 @@ for the comparison methodology and limitations.
 - [`docs/connection/ownership-and-shutdown.md`](docs/connection/ownership-and-shutdown.md) —
   precisely what the context/transaction/reader/gateway/sentinel/registry each own, `PoolGovernor`'s
   close/drain/dispose lifecycle, `DatabaseContext`'s exact shutdown sequence, and which operations
-  throw `ObjectDisposedException` after disposal (connection-touching operations and
-  `BeginTransaction` do; `CreateSqlContainer` itself does not — executing the container does).
+  throw `ObjectDisposedException` after disposal (`CreateSqlContainer`, `BeginTransaction` and executing a container all do; `ValidateCanCreateContainer` calls `ThrowIfDisposed`).
 - [`docs/connection/release-guarantees.md`](docs/connection/release-guarantees.md) — what connection
   ownership guarantees when something fails: every failure path (open, execute, close/dispose throwing,
   cancellation, readers and streams, transactions, governor and context disposal) with the unit test that

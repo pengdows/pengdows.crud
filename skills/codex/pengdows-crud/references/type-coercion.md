@@ -1,6 +1,6 @@
 # Type Coercion
 
-pengdows.crud provides robust type coercion between .NET types and database types through the `TypeCoercionHelper` class. This enables seamless mapping between POCOs and SQL data across different database providers.
+pengdows.crud provides robust type coercion between .NET types and database types through its internal coercion pipeline (`TypeCoercionHelper`, `CoercionRegistry`); there is no public coercion API to call. This enables seamless mapping between POCOs and SQL data across different database providers.
 
 ## Overview
 
@@ -11,9 +11,9 @@ Type coercion handles the conversion between:
 - Cross-database type compatibility (e.g., Oracle NUMBER to .NET int)
 - String-to-enum conversions with configurable failure modes
 
-## TypeCoercionHelper
+## Coercion Pipeline (internal)
 
-The core coercion logic provides:
+The internal coercion logic provides:
 
 - Safe conversion with null handling
 - Enum parsing from strings or numeric values
@@ -234,7 +234,7 @@ Enables optimistic concurrency control:
 
 ```csharp
 [Version]
-[Column("version")]
+[Column("version", DbType.Int32)]
 public int Version { get; set; }
 ```
 

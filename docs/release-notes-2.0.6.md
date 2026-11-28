@@ -167,7 +167,7 @@ the integration run (`INCLUDE_AURORA=true`). Per-database requirements and versi
   instead of a hard-coded `"o.customer_id"`. Both interface members have default implementations, so
   implementations compiled against 2.0.5 still load. See [entity-mapping.md](entity-mapping.md).
 
-- `AuditCreationPolicy` (enum in `pengdows.crud.abstractions`) and an init-only `AuditCreationPolicy` property on
+- `AuditCreationPolicy` (enum in `pengdows.crud.abstractions`) and a settable `AuditCreationPolicy` property (set once at construction by convention; a `set` accessor, not `init`, for 2.0.5 binary compatibility) on
   `ITableGateway`, `IPrimaryKeyTableGateway` and `BaseTableGateway`. `PreserveExplicitValues` (the default, and the
   2.0.5 behavior) keeps a non-default `CreatedBy`/`CreatedOn` already on the entity; `Authoritative` always
   overwrites them with the resolver's values, so request-model binding cannot spoof them. The interface members
@@ -379,8 +379,8 @@ the integration run (`INCLUDE_AURORA=true`). Per-database requirements and versi
 - Less per-operation overhead: the cached retrieve-by-id and delete-by-id statements render their
   SQL once instead of on every call, a container's parameter list sizes itself to the statement
   instead of reserving room for eight, and each context makes its SQL container logger once
-  instead of per container. On in-memory SQLite, `RetrieveOneAsync` went from 26.5 to 25.5 µs and
-  3,711 to 3,391 bytes; creates and updates allocate 120 bytes less (PERF-031).
+  instead of per container. The in-memory SQLite per-operation figures were measured in a scratch harness and
+  are not committed, so none are quoted here (PERF-031).
 
 ## Every read path converts the same way
 
@@ -631,34 +631,19 @@ New in fakeDb since the table above (each is pinned by tests in `pengdows.crud.T
 
 ## Performance
 
-Measured 2026-10-18 on one machine (AMD Ryzen 9 5950X, .NET 8.0.31, Testcontainers databases), after the audit fixes. Cells swing
-a few percent from run to run, so read these as "no measurable difference", not as exact figures.
+**Single-row upsert** (`PostgreSqlUpsertBenchmarks`, `SqlServerUpsertBenchmarks`) compares `UpsertAsync` with a hand-written `INSERT ... ON CONFLICT` on PostgreSQL and a hand-written `MERGE ... WITH (HOLDLOCK)` on SQL Server. The measured tables are not reproduced here: their source artifacts are git-ignored (see `benchmarks/README.md`).
 
-**Single-row upsert** (`PostgreSqlUpsertBenchmarks`, `SqlServerUpsertBenchmarks`; each arm opens its own pooled connection per
-call; a setup check requires the arms to produce the same row):
-
-| Database | Arm | Update (existing key) | Insert (new key) | Allocated |
-|---|---|---|---|---|
-| PostgreSQL 16 | pengdows `UpsertAsync` (`INSERT ... ON CONFLICT`) | 312.4 us | 307.0 us | 5.38 KB |
-| PostgreSQL 16 | hand-written `ON CONFLICT` | 312.2 us | 295.6 us | 3.65 KB |
-| PostgreSQL 16 | hand-written 2.0.5 `MERGE` | 314.1 us | 301.2 us | 3.89 KB |
-| SQL Server 2022 | pengdows `UpsertAsync` (`MERGE ... WITH (HOLDLOCK)`) | 460.8 us | 466.1 us | 8.2 KB |
-| SQL Server 2022 | hand-written `MERGE` with `HOLDLOCK` | 443.4 us | 444.6 us | 5.64 KB |
-| SQL Server 2022 | hand-written 2.0.5 `MERGE`, no hint | 445.3 us | 452.0 us | 5.64 KB |
-
-The statement-shape change that makes a single-row upsert atomic costs nothing measurable when there is no contention: on
-PostgreSQL `ON CONFLICT` and the old `MERGE` are within about 1 to 2% of each other, and on SQL Server `HOLDLOCK` is within 0.5% (update)
-and 1.6% (insert) of the unhinted `MERGE`. pengdows is 0 to 4% over the hand-written statement, with the extra allocation being
-the gateway building the statement per call.
+The single-row upsert timings that this section previously tabled (labelled 2026-10-18) have no committed artifact
+and have been removed; the matching numbers exist only in git-ignored local logs dated 2026-11-26.
 
 **CRUD against Dapper and EF** (`PostgreSqlEqualFootingBenchmarks`, `SqlServerEqualFootingBenchmarks`, 1, 10 and 100 records):
 
 | Database | pengdows / Dapper (mean) | EF / pengdows |
 |---|---|---|
-| PostgreSQL 16 (2026-10-19) | 0.940 to 1.067 | 1.20 to 1.70 |
-| SQL Server 2022 | 0.984 to 1.060 | 1.21 to 1.69 |
+| PostgreSQL 16 (2026-10-19 rerun) | 0.940 to 1.067 (committed summary: `benchmarks/CrudBenchmarks/results/row-scaling-2026-10-19.md` lines 66-68; the ratio file itself is git-ignored). | 1.20 to 1.70 (2026-10-19) |
+| SQL Server 2022 | **UNVERIFIED**: no committed result file records this ratio (the SQL Server ratio files are git-ignored) | **UNVERIFIED** |
 
-pengdows is at parity with Dapper on both databases, within run-to-run noise. EF is 20 to 70% slower than pengdows everywhere.
+pengdows is at parity with Dapper on PostgreSQL, within run-to-run noise; the SQL Server parity figure is unverified. EF is 20 to 70% slower than pengdows on PostgreSQL (the SQL Server figure is unverified).
 The PostgreSQL row is the 2026-10-19 rerun: until then that benchmark's Dapper arms left two of the six columns unmapped (Dapper's
 `MatchNamesWithUnderscores` was never set), so earlier PostgreSQL read ratios flattered Dapper. With every column mapped, ReadList at
 100 rows is 0.996 (1.061 before).

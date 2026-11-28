@@ -43,7 +43,7 @@ Use the lowest number (closest to Standard) possible for best results. Best, wil
 * `KeepAlive` is the old name for this mode, retained only as an `[Obsolete]` compatibility alias with the identical underlying value (`1`) — use `PreventDatabaseUnload` in new code. Because both names share the value, `ToString()`, logs and serialized configuration may print `PreventDatabaseUnload` for a mode you set as `KeepAlive`; both names parse back to the same value, but compare the enum value, not its text.
 
 ### SingleWriter
-* Identical to Standard (no pinned connections); governor profile: writable connections capped at 1 concurrent writer, read-only connections allow 0 writers; writer-starvation-prevention turnstile enabled.
+* Identical to Standard (no pinned connections); governor profile: writable connections capped at 1 concurrent writer; the read-only pool is not capped by this mode (read-only connections cannot write; see `read-only-enforcement.md`); writer-starvation-prevention turnstile enabled.
 * A writer-preference turnstile pauses new readers when a writer is queued, guaranteeing fairness for SQLite/DuckDB workloads.
 * Triggered automatically for the file-based embedded engines (SQLite, DuckDB, Microsoft Access, pengdows.flatfile) and shared in-memory pools so writers serialize safely without blocking the entire process (see Connection Pooling).
 
@@ -78,7 +78,8 @@ The context installs read and write `PoolGovernor` instances in every mode excep
 ## Integration with Transactions
 
 * Inside a TransactionContext, the pinned connection stays open for the life of the transaction.
-* Outside transactions, connections are opened per-operation and closed immediately after.
+* Outside transactions, in Standard, PreventDatabaseUnload and SingleWriter, each operation acquires a connection from the provider pool and releases it when the operation completes. A plain reader or container holds its connection only while it runs (or until a reader is disposed).
+* In SingleConnection there is no per-operation connection: every operation uses the one persistent connection, and the context never reconnects it.
 
 ## Observability
 
@@ -88,7 +89,7 @@ The context installs read and write `PoolGovernor` instances in every mode excep
 ## Timeout Recommendations
 
 * Set connection timeouts as **low as reasonable** to avoid hanging on transient failures.
-* Because pengdows.crud reconnects for every call, long timeouts are unnecessary.
+* In Standard, PreventDatabaseUnload and SingleWriter, each operation checks a connection out of the provider pool, so long connection timeouts are rarely needed. SingleConnection keeps one persistent connection and does not reconnect it. Transactions pin one connection for their whole lifetime.
 
 ## Related Documentation
 

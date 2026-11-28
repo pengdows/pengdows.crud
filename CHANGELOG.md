@@ -16,10 +16,10 @@ and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/rel
 
 ### Changed (behavior a 2.0.5 user can notice)
 - Measured: on a WAL file the SingleWriter writer turnstile (`EnableSingleWriterFairness`, on by default) keeps write latency bounded under
-  continuous readers (slowest write about 38 ms against 0.9 to 3.9 s with it off) at the cost of read throughput; see
+  continuous readers (slowest write about 38 ms with it on; the with-it-off comparison is not in a committed result, so no figure is quoted for it) at the cost of read throughput; see
   [docs/connection-pooling.md](docs/connection-pooling.md). The default is unchanged.
 - DuckDB: validated on DuckDB.NET 1.5.6.1 (the release carrying our negative-interval and `TimeSpan` binding fixes), which the
-  tests and testbed now use. It exposed one change: that release sends a `TimeSpan` as an `INTERVAL` even for a `TIME` column,
+  unit tests (`pengdows.crud.Tests`) use; the testbed uses DuckDB.NET 2.0.1-preview.1. It exposed one change: that release sends a `TimeSpan` as an `INTERVAL` even for a `TIME` column,
   which DuckDB cannot cast to `TIME` in a `MERGE` source, so a `TimeSpan` within a day written to a `TIME` column is now bound as a
   `TimeOnly` (correct on 1.5.6 and 1.5.6.1). See [docs/supported-databases.md](docs/supported-databases.md).
 - The refusal of `SafeNonBlockingReads` on SQL Server now says what to enable (`ALLOW_SNAPSHOT_ISOLATION` or
@@ -71,7 +71,7 @@ and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/rel
   report themselves as MySQL or PostgreSQL, so detection uses the existing dialect, and each passed the same
   integration suite as the vanilla engine with the same number of checks. EDB Postgres Extended is not claimed (no
   public image to verify against).
-- `AuditCreationPolicy` (init-only on the gateways) to choose how a gateway treats audit fields on create; see
+- `AuditCreationPolicy` (settable, but set once at construction by convention; `set` rather than `init` so 2.0.5 implementers stay binary compatible) to choose how a gateway treats audit fields on create; see
   [docs/audit-fields.md](docs/audit-fields.md).
 - `ColumnName(...)` on the gateways and as an `IDatabaseContext` extension, for the mapped column name in custom SQL.
 - `ClampPoolsToServerConnectionLimit` and `ResourceConnectionHeadroom` on `DatabaseContextConfiguration` (opt-in).

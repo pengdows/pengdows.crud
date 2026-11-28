@@ -47,9 +47,9 @@ In pengdows.crud: Marked with `[PrimaryKey]` attribute. May span multiple column
 ```csharp
 public class User
 {
-    [Id] public Guid Id { get; set; }              // Surrogate key for FKs
-    [PrimaryKey] public string Username { get; set; } // Business identity
-    [Column("email")] public string Email { get; set; }
+    [Id] [Column("id", DbType.Guid)] public Guid Id { get; set; }              // Surrogate key for FKs
+    [PrimaryKey] [Column("username", DbType.String)] public string Username { get; set; } // Business identity
+    [Column("email", DbType.String)] public string Email { get; set; }
 }
 ```
 
@@ -239,9 +239,9 @@ await gateway.UpsertAsync(new User { Username = "john_doe", Email = "john@exampl
 [Table("order_items")]
 public class OrderItem
 {
-    [PrimaryKey(1)] [Column("order_id")] public int OrderId { get; set; }
-    [PrimaryKey(2)] [Column("product_id")] public int ProductId { get; set; }
-    [Column("quantity")] public int Quantity { get; set; }
+    [PrimaryKey(1)] [Column("order_id", DbType.Int32)] public int OrderId { get; set; }
+    [PrimaryKey(2)] [Column("product_id", DbType.Int32)] public int ProductId { get; set; }
+    [Column("quantity", DbType.Int32)] public int Quantity { get; set; }
 }
 
 var pkGateway = new PrimaryKeyTableGateway<OrderItem>(context);

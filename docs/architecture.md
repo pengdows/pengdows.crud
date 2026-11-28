@@ -56,7 +56,7 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 ### 3. Performance Over Magic
 - **Compiled property setters**: Generated Expression trees instead of reflection
 - **Plan caching**: Column ordinals, type extractors cached per schema
-- **Minimal allocations**: StringBuilder pooling, cached delegates
+- **Minimal allocations**: a stack-scratch builder (`SbLite`, `internal/SbLite.cs`; there is no StringBuilder pool), cached delegates
 
 ### 4. Explicit Over Implicit
 - **No change tracking**: User controls when to save
@@ -154,7 +154,8 @@ private long _totalConnectionFailures;
 
 // Connection counts are pool leases, counted by the governors (Interlocked inside PoolGovernor)
 public long NumberOfOpenConnections =>
-    LeasesInUse(_readerGovernor) + LeasesInUse(_writerGovernor) + LeasesInUse(_persistentLeaseGovernor);
+    LeasesInUse(_readerGovernor) + LeasesInUse(_writerGovernor) +
+    LeasesInUse(_persistentReaderLeases) + LeasesInUse(_persistentWriterLeases);
 
 // Increments are atomic
 Interlocked.Increment(ref _totalConnectionsCreated);
@@ -321,7 +322,7 @@ var value = await container.ExecuteScalarRequiredAsync<int>();
 - Context lock: Reserved for future use, no-op today avoids overhead
 - Connection lock: Actual synchronization happens here for shared connections
 
-**Performance benefit**: Standard mode has zero locking overhead (both locks are NoOp).
+**Performance benefit**: Standard mode has zero locking overhead for ephemeral connections (both locks are NoOp). Exception: DuckDB serializes connection opens in every mode. `DuckDbDialect.cs:52` sets `RequiresSerializedConnectionOpen`, and `DatabaseContext.Initialization.cs` (around lines 397-400) creates a `SemaphoreSlim(1, 1)` `_connectionOpenGate` for it.
 
 ---
 
@@ -958,7 +959,7 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 **When it's correct**:
 - SQLite `:memory:` → **REQUIRED** (each connection = separate database)
 - Firebird embedded → **NOT REQUIRED**; embedded Firebird behaves like a client-server database, so `Best` resolves to `PreventDatabaseUnload` (sentinels only) and work uses separate attachments
-- Small embedded databases → **OPTIMAL** (no connection overhead)
+- Small embedded databases → **OPTIMAL** (no connection overhead: **UNVERIFIED**, not measured in the repo; the SQLite results show a fixed 7 to 13 µs per operation over Dapper, `benchmarks/CrudBenchmarks/results/sqlite-equal-footing-run-2026-10-03.md`)
 
 **When it's suboptimal**:
 - PostgreSQL, SQL Server, MySQL → Use Standard instead (supports concurrency)
@@ -1080,7 +1081,7 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 - TransactionContext **must** use resolved native level
 - Read Committed Snapshot Isolation (RCSI) detection happens at init
 
-**Enforcement**: IsolationResolver.cs, TransactionContext.cs
+**Enforcement**: isolation/IsolationResolver.cs, TransactionContext.cs
 
 ---
 
@@ -1090,10 +1091,7 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 
 **Benchmark**: `benchmarks/CrudBenchmarks/Internal/ReaderMappingBenchmark.cs`
 
-**Results** (AMD Ryzen 9 5950X, .NET 8.0.22):
-- **100 rows**: 161.6 µs vs 969.7 µs = **6.0x faster** than pure reflection
-- **1,000 rows**: 1.76 ms vs 9.80 ms = **5.57x faster** than pure reflection
-- **Per-row**: ~1,700ns vs ~9,700ns
+**Results**: no committed result file records a figure for this benchmark, so no speed-up is cited here; run the benchmark to measure it.
 
 **How it works**:
 1. First query: Introspect reader schema, build plan
@@ -1101,7 +1099,7 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 3. Compile to delegate (cached)
 4. Subsequent queries: Direct delegate invocation (no reflection)
 
-**Code**: `pengdows.crud/DataReaderMapper.cs` — `CompileSetter<T>()` builds the compiled `Expression` setter delegate, cached in `_setterCache` per target type/property/field type.
+**Code**: `pengdows.crud/DataReaderMapper.cs` — `BuildSetterBody<T>(SetterCacheKey, ...)` builds the compiled `Expression` setter body for each property; the bindings are keyed by `SetterCacheKey` (target type, property, field type, coercion and enum mode) and held in the cached mapping plan (`_planCache`).
 
 ### SQL Template Caching
 
@@ -1200,10 +1198,10 @@ Measured, not projected — see `benchmarks/CrudBenchmarks/results/` for the und
 
 | Scenario | Result | Source |
 |----------|--------|--------|
-| PostgreSQL equal-footing CRUD (identical Npgsql auto-prepare config for all three frameworks, every column mapped), 1–100 records | pengdows.crud within about 7% of Dapper's mean time across read/filter/aggregate/create/update/delete scenarios (`P÷D` 0.940–1.067); EF Core 1.20–1.70x slower than pengdows.crud. Runs before 2026-10-19 left two Dapper columns unmapped | `PostgreSqlEqualFootingBenchmarks-20261019-101454`, `row-scaling-2026-10-19.md` |
+| PostgreSQL equal-footing CRUD (identical Npgsql auto-prepare config for all three frameworks, every column mapped), 1–100 records | pengdows.crud within about 7% of Dapper's mean time across read/filter/aggregate/create/update/delete scenarios (`P÷D` 0.940–1.067); EF Core 1.20–1.70x slower than pengdows.crud. Runs before 2026-10-19 left two Dapper columns unmapped | `row-scaling-2026-10-19.md` lines 66-68 (the PostgreSQL rerun with every column mapped) |
 | Reads of 1 to 10,000 rows, PostgreSQL and SQL Server | Level with Dapper up to 1,000 rows; at 10,000 rows 0.77–0.86 of Dapper's time, about 213 bytes per row against Dapper's 284–309 | `row-scaling-2026-10-19.md` |
 
-Other benchmark suites (e.g. `HydrationHotPathBenchmarks.cs`, `SQLiteWriteContentionBenchmarks.cs`, `SqlServerEqualFootingBenchmarks.cs`) live in `benchmarks/CrudBenchmarks/`, but no results for them are checked in on this branch — run them yourself before quoting numbers.
+Other benchmark suites (e.g. `HydrationHotPathBenchmarks.cs`, `SQLiteWriteContentionBenchmarks.cs`, `SqlServerEqualFootingBenchmarks.cs`) live in `benchmarks/CrudBenchmarks/`, the checked-in results are `results/hydration-hotpath-run-2026-08-13.md` (invalid for connection-cost claims: one persistent connection on both sides), `results/sqlite-write-contention-run-2026-08-13.md` (its 268/348 counts are stale) and `results/sqlserver-equal-footing-run-2026-08-13.md`; read their notes before quoting numbers.
 
 **Design trade-off**: pengdows.crud prioritizes **control + testability** at near-parity performance with raw Dapper; where the library does governance work a raw query path doesn't (connection governance, session-setting enforcement), that cost is visible and is a correctness choice, not an oversight.
 

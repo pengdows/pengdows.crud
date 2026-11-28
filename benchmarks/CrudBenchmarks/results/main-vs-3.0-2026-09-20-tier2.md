@@ -1,5 +1,8 @@
 # main (2.0.5) vs 3.0 — tier 2 (embedded concurrency, pool protection, DuckDB)
 
+> Note (2026-11-26): `ConnectionPoolProtectionBenchmarks` was removed in commit 28d5903a. Its pool rows below are invalid
+> (its read rows ran two leases per operation for pengdows); see `docs/connection-governance-investigation-2026-10.md`.
+
 Same harness (3.0's, with `BASELINE_2X` guard), library swapped. 2 rounds per arm, alternating order
 (main, 3.0, 3.0, main). BenchmarkDotNet class-defined jobs, net8.0 runtime 8.0.31.
 

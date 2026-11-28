@@ -1,6 +1,6 @@
 # Unified database datatype cross-reference
 
-Merged from `database_datatype_cross_reference(1).xlsx` and `pengdows_datatype_crossref.xlsx`. Generated 2026-11-03.
+Merged from `database_datatype_cross_reference.xlsx` and `pengdows_datatype_crossref.xlsx`. Generated 2026-11-03.
 
 **Scope:** 94 distinct semantic concepts across 23 named database products, excluding the `Unknown` enum value. The merged concepts are not an exhaustive catalog of all possible SQL names, UDTs, or extension types.
 
@@ -22,7 +22,7 @@ Merged from `database_datatype_cross_reference(1).xlsx` and `pengdows_datatype_c
 
 - Primary concepts: **77**; extra, non-equivalent concepts retained: **17**.
 - Total cells in unified status matrix: **2,162**.
-- Cell status counts: `N` 573, `A` 113, `V` 49, `E` 35, `R` 59, `X` 1,016, `?` 317.
+- Cell status counts (recounted 2026-11-27 from the 282 matrix rows, lines 61-357: 94 concepts × 3 tables, 8 status cells per row in the 1–8 and 9–16 tables and 7 in the 17–23 table): `N` 571, `A` 110, `V` 49, `E` 35, `R` 59, `X` 1,021, `?` 317 (sum 2,162).
 - Status disagreements on semantically matched categories: **205** (listed later).
 - Source correction notes retained: **13**.
 

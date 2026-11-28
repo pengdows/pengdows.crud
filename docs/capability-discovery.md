@@ -76,8 +76,8 @@ the legacy SQL-standard heuristic properties, which are retained only for 2.x co
 
 **Identity & versioning:** `DatabaseType`, `ProductInfo` (`IDatabaseProductInfo`), `IsInitialized`,
 `IsFallbackDialect`, `GetCompatibilityWarning()`, `CanUseModernFeatures`, and
-`HasBasicCompatibility`. Do not use `SqlStandardLevel`, `StandardCompliance`, or
-`MaxSupportedStandard`; they are coarse compatibility heuristics retained only for 2.x binary
+`HasBasicCompatibility`. Do not use `SqlStandardLevel` or `MaxSupportedStandard` on `ISqlDialect`, or
+`StandardCompliance` on `IDataSourceInformation`; they are coarse compatibility heuristics retained only for 2.x binary
 compatibility. Query the specific `Supports*` capability instead.
 
 **Parameters & identifiers:** `ParameterMarker`, `SupportsNamedParameters`,
@@ -100,8 +100,9 @@ as — most databases `DbType.Boolean`, SQLite `DbType.Int32`).
 `SupportsTruncateTable`.
 
 **Upsert/merge — read the caveat below before branching on these:** `SupportsMerge`,
-`RequiresMergeStatementTerminator`, `MergeUpdateRequiresTargetAlias`,
-`SupportsInsertOnConflict`, `SupportsOnConflictWhere`, `SupportsOnDuplicateKey`.
+`MergeUpdateRequiresTargetAlias`, `SupportsInsertOnConflict`, `SupportsOnConflictWhere`,
+`SupportsOnDuplicateKey`. (`RequiresMergeStatementTerminator` is not on `ISqlDialect`: it is internal plumbing on
+`IInternalSqlDialect`, so consumers cannot read it.)
 
 **Generated keys:** `SupportsInsertReturning`, `InsertReturningClauseBeforeValues`,
 `GetGeneratedKeyPlan()` (returns a `GeneratedKeyPlan` enum value — see `docs/generated-keys.md`),
@@ -162,7 +163,7 @@ separate, more granular stability promise published beyond that: no documented d
 "these flags are guaranteed forever" and "these might be renamed." In practice:
 
 - **Additive changes are low-risk.** Several members are C# default-interface-method members
-  (`IsPrepareExhausted`, `RequiresMergeStatementTerminator`, `SupportsOnConflictWhere`,
+  (`IsPrepareExhausted`, `SupportsOnConflictWhere`,
   `GetLastInsertedIdFromCommand`, `ClassifyException`, `AnalyzeException`, `WrapSimpleName`,
   `ReplaceNeutralTokens`, `RenderMergeOnClause`, `IsForeignKeyViolation`, `IsNotNullViolation`,
   `IsCheckConstraintViolation`) specifically so a new capability flag can be added

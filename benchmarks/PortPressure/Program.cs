@@ -3,6 +3,7 @@
 //   uncontrolled      Dapper, pooling off: every operation opens its own TCP connection.
 //   governed-default  Pengdows, Standard mode, default pool (up to 100 connections, more than the server allows).
 //   governed-capped   Pengdows, Standard mode, pool capped at the server's connection limit (Maximum Pool Size=20).
+//   governed-clamped  Pengdows, Standard mode, default pool with ClampPoolsToServerConnectionLimit (the library reads the server limit).
 // Usage: PortPressure <arm> <connection-string-without-pool-settings>
 using System.Collections.Concurrent;
 using System.Data;
@@ -16,7 +17,7 @@ using pengdows.crud.metrics;
 const int Parallelism = 1000;
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("usage: PortPressure <uncontrolled|governed-default|governed-capped> <connection-string>");
+    Console.Error.WriteLine("usage: PortPressure <uncontrolled|governed-default|governed-capped|governed-clamped> <connection-string>");
     return 2;
 }
 
@@ -45,15 +46,17 @@ if (arm == "uncontrolled")
         }
     })));
 }
-else if (arm == "governed-default" || arm == "governed-capped")
+else if (arm == "governed-default" || arm == "governed-capped" || arm == "governed-clamped")
 {
     var connStr = arm == "governed-capped" ? baseConn + ";Maximum Pool Size=20" : baseConn;
+    var clamp = arm == "governed-clamped";
     using var ctx = new DatabaseContext(new DatabaseContextConfiguration
     {
         ConnectionString = connStr,
         DbMode = DbMode.Standard,
         ReadWriteMode = ReadWriteMode.ReadWrite,
         PoolAcquireTimeout = TimeSpan.FromSeconds(30),
+        ClampPoolsToServerConnectionLimit = clamp,
         EnableMetrics = true
     }, NpgsqlFactory.Instance);
     await Task.WhenAll(Enumerable.Range(0, Parallelism).Select(i => Task.Run(async () =>

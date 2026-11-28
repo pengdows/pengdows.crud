@@ -34,7 +34,7 @@ shipped.
 
 That isn't just a philosophical stance — it's directly observable, and the property worth
 leading with is one that should hold across every run and every setting, not a single
-snapshot. Workload: 100 concurrent writers, 50 sequential writes each, against a shared
+snapshot. Workload: 100 concurrent writers, each committing one transaction of 50 writes, against a shared
 in-memory SQLite database with `busy_timeout=10ms` (`SQLiteWriteContentionBenchmarks` in this
 repo's own benchmark suite, `benchmarks/CrudBenchmarks/`), with pengdows.crud, Dapper, and EF
 Core each running the identical write storm and every "database is locked" exception counted
@@ -42,13 +42,12 @@ per framework.
 
 The claim is not "pengdows loses fewer writes than Dapper at 10ms" — a claim about Dapper's
 configuration, which anyone can retune — but "pengdows's failure count and latency are
-invariant to `busy_timeout`, because it never depends on `busy_timeout` in the first place."
+invariant to `busy_timeout`, because it never depends on `busy_timeout` in the first place. (This is one paired run, not a general result: on a WAL file, pengdows completed the storm in 76 ms at both `busy_timeout` 10 and 5,000 with no failed writes; `benchmarks/CrudBenchmarks/results/sqlite-file-writer-patterns-run-2026-10-13.md`.)"
 `SingleWriter` mode's `PoolGovernor` serializes write *admission* before any writer reaches the
-database, so a pengdows writer never contends for SQLite's lock with another pengdows writer at
-all — `busy_timeout` governs what happens during lock contention, and pengdows structurally has
+database, so, within one `DatabaseContext` (one governor, one process), a pengdows writer never contends for SQLite's lock with another writer from that context. Each context has its own governor (`docs/architecture.md`, around lines 759-761), so writers in separate contexts, separate processes or other tools can still produce `SQLITE_BUSY` — `busy_timeout` governs what happens during lock contention, and pengdows structurally has
 none to govern. Dapper and EF have no admission control, so every writer races straight for
 SQLite's lock, and Microsoft.Data.Sqlite's own retry mechanism (`Thread.Sleep(150)` between
-attempts, bounded by the connection's `CommandTimeout`) is the only thing standing between them
+attempts, bounded by the connection's `CommandTimeout`; **UNVERIFIED**: stated only in code comments, no vendor source is in the repo) is the only thing standing between them
 and the database. Raising `busy_timeout` (and the matching `CommandTimeout`, which must move
 with it — the retry loop is bounded by the latter, not the PRAGMA) doesn't remove that
 dependency; it trades failures for latency. `busy_timeout` is blind, uncoordinated retry; the
@@ -64,7 +63,7 @@ that travels. Run the benchmark on your own hardware to reproduce it. The `busy_
 is a `[Params(10, 5000)]` axis in the benchmark (`BusyTimeoutMs`, with the command timeout scaled
 to match), so one run produces both settings. That workload runs on a shared-cache in-memory database, where a lock conflict is `SQLITE_LOCKED`, which, as SQLite documents it, the
 busy handler does not retry. Against a WAL file on disk (2026-10-13, `benchmarks/CrudBenchmarks/results/sqlite-file-writer-patterns-run-2026-10-13.md`)
-the same kind of storm lost no writes for any arm, and the uncoordinated Dapper arm ran 5 to 6 times slower than the coordinated ones, so there the
+the same kind of storm lost no writes for any arm, and the uncoordinated Dapper per-op arm ran roughly 5 times slower than the coordinated ones (441 ms against 76 ms on net10.0), so there the
 protection shows as time, not as lost writes; losses appear when the queue takes longer to drain than the command timeout.
 
 This same posture — respecting the database's real constraints instead of assuming
@@ -189,8 +188,8 @@ since 6.0) may keep the physical connection open between writes. What differs fr
 writer is that nothing in the concurrency mechanism depends on that physical connection
 surviving. The price is the per-write check-out; what it buys is the write-storm result above
 (no failed writes, whatever `busy_timeout` is). Microbenchmarks of tiny writes against
-a named shared-cache SQLite memory database show a pinned-writer Dapper arm several times faster than any per-operation arm,
-because it never checks a connection out, and on a DuckDB file the gap is 18 to 25%
+a named shared-cache SQLite memory database show a pinned-writer Dapper arm several times faster than any per-operation arm (Create: 7.5 µs pinned against 26.4 µs per-operation, shared-cache memory, `benchmarks/CrudBenchmarks/results/sqlite-file-writer-patterns-run-2026-10-13.md`),
+because it never checks a connection out, and no committed result file quantifies the DuckDB-file gap
 (`benchmarks/CrudBenchmarks/README.md`, "Reading the Dapper arms"). The file-backed SQLite
 measurement is now also present: on a WAL file, coordinated arms completed the write storm in
 about 70–76 ms while uncoordinated per-operation Dapper completed it in about 440–460 ms, with
@@ -647,7 +646,7 @@ resource a tenant's workload touches.
 | `pengdows.crud` | Core DAL: gateways, `ISqlContainer`, dialects — the architecture itself (principles 1–10) |
 | `pengdows.crud.abstractions` | Public interfaces/enums — the coordinated boundary's contract surface |
 | `pengdows.crud.fakeDb` | Fake ADO.NET provider — falsifiability for principle 10 |
-| `pengdows.crud.analyzers` | Roslyn rules PGC001/008/025/026/028/029 — compile-time enforcement, principle 9 |
+| `pengdows.crud.analyzers` | Roslyn rules PGC001/008/025/026/028/029/030 — compile-time enforcement, principle 9 |
 | `pengdows.poco.mint.cli` + Dockerized web UI | Schema-first POCO generation, built on `IDatabaseContext`/`ISqlDialect` — see principle 1 |
 | `pengdows.hangfire` | SQL-first Hangfire job storage — a real downstream consumer, showing the architecture generalizes past CRUD |
 | `pengdows.stormgate` | ADO.NET connection admission control — a sibling package, not wired into `DatabaseContext`'s own governance |

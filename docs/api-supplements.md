@@ -29,8 +29,10 @@ attribute-driven compiled-plan path, `GetOrBuildRecordsetPlan`/`MapReaderToObjec
 no corresponding entity) to any POCO by column-name matching.
 
 `TypeCoercionOptions.TimePolicy` is read internally (gates `DateTime`→`DateTimeOffset` coercion)
-but is not externally configurable through the normal gateway/context path — `BaseTableGateway`/
-`SqlContainer` only ever override `TypeCoercionOptions.Provider`. `TypeCoercionOptions.JsonPreference`
+but is not externally configurable through the normal gateway/context path — `TypeCoercionOptions.For(dialect)`
+(used by `BaseTableGateway`) builds per-dialect options that override `Provider` and the dialect-specific
+fields (`BinaryJsonIsBson`, `GuidBytesBigEndian`, `ReadsOffsetTimestampsFromValue`, `OffsetTimestampDataTypeName`,
+`ReadsCollectionLiterals`, `ReadsCollectionJson`) and leave `TimePolicy` at its default. `TypeCoercionOptions.JsonPreference`
 (`JsonPassThrough`) is still part of the record's positional shape but is never read anywhere, not
 even internally — setting it has no effect.
 

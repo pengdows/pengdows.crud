@@ -65,7 +65,7 @@ dotnet pack <project>.csproj -c Release
 
 ## Coding Style & Naming Conventions
 
-- Projects multi-target `net8.0;net10.0` (the analyzers project targets `netstandard2.0`); keep code valid for C# 12 (the `net8.0` default language version). `Nullable` and `ImplicitUsings` enabled.
+- Projects multi-target `net8.0;net10.0` (the analyzers project targets `netstandard2.0`); use the SDK-default language version per target (no `LangVersion` override in the repo; `net8.0` defaults to C# 12). `Nullable` and `ImplicitUsings` enabled.
 - File-scoped namespaces; keep lowercase namespaces (`pengdows.crud.*`).
 - Indentation: 4 spaces; follow existing brace style; prefer expression-bodied members when clearer.
 - Minimize public APIs; make types/members `internal` when possible. `WarningsAsErrors=true`.
@@ -236,9 +236,10 @@ The `[Version]` attribute enables optimistic concurrency control:
 2. **Fallback:** `[Id]` column ONLY if writable (`[Id(true)]` or `[Id]`)
 3. **Error:** Throws if no `[PrimaryKey]` AND `[Id]` is not writable (`[Id(false)]`)
 
-**SQL generated depends on database** (`MERGE` is preferred wherever the dialect supports it, then `ON CONFLICT`, then `ON DUPLICATE KEY`):
-- SQL Server/Oracle/PostgreSQL 15+/Firebird/Snowflake/Db2/Informix/Sybase ASE/SAP HANA/FlatFile (and DuckDB 1.4+): `MERGE`
-- PostgreSQL < 15/CockroachDB/YugabyteDB/Spanner/SQLite (and DuckDB < 1.4): `INSERT ... ON CONFLICT`
+**SQL generated depends on database** (`MERGE` is used where the dialect supports it and does not prefer `ON CONFLICT`; then `ON CONFLICT`; then `ON DUPLICATE KEY`):
+- SQL Server/Oracle/Snowflake/Db2/Informix/Sybase ASE/SAP HANA/FlatFile (and DuckDB 1.4+): `MERGE`
+- Firebird: `UPDATE OR INSERT ... MATCHING` (its MERGE path; carries no `[Version]` guard)
+- PostgreSQL (all versions, including 15+ where MERGE exists; its dialect prefers ON CONFLICT)/CockroachDB/YugabyteDB/Spanner/SQLite (and DuckDB < 1.4): `INSERT ... ON CONFLICT`
 - MySQL/MariaDB/TiDB (and Aurora MySQL/SingleStore): `INSERT ... ON DUPLICATE KEY UPDATE`
 - InterBase/Access: no upsert form; `UpsertAsync`/`BuildUpsert` throw `NotSupportedException`
 
@@ -327,7 +328,7 @@ This is intentional design — it allows "last modified" queries without checkin
 
 | Mode | Value | Use Case |
 |------|-------|----------|
-| `Standard` | 0 | **Production default** — pool per operation |
+| `Standard` | 0 | **Production default** on client-server databases (what `Best` resolves to there, except Firebird and Db2 LUW) — pool per operation |
 | `PreventDatabaseUnload` | 1 | Sentinel connection keeps an idle-unloading database loaded (SQL Server LocalDB, Firebird, Db2 LUW); `KeepAlive` is an `[Obsolete]` alias |
 | `SingleWriter` | 2 | File-based SQLite/DuckDB/Access/pengdows.flatfile — serializes writes via turnstile governor |
 | `SingleConnection` | 4 | In-memory `:memory:` databases |
@@ -343,8 +344,7 @@ Transactions are **operation-scoped** — create inside methods, never store as 
 ```csharp
 using var txn = ctx.BeginTransaction();
 // or with portable isolation profile (throws TransactionModeNotSupportedException if the
-// database can't guarantee it, e.g. SafeNonBlockingReads on SQL Server
-// with neither snapshot isolation nor READ_COMMITTED_SNAPSHOT):
+// database can't guarantee it, e.g. StrictConsistency on TiDB/Snowflake/SingleStore):
 using var txn = ctx.BeginTransaction(IsolationProfile.StrictConsistency);
 
 await txn.SavepointAsync("checkpoint1");
@@ -355,7 +355,7 @@ txn.Commit();
 **Isolation never silently weakens ("fails up"):**
 - Explicit `IsolationLevel`: used as-is if supported; otherwise the weakest supported level that is at least as strong (e.g. `ReadCommitted` on CockroachDB/DuckDB → `Serializable`). Throws `InvalidOperationException` if nothing at or above it exists (e.g. `Serializable` on TiDB/Snowflake/SingleStore).
 - `IsolationProfile`: throws `TransactionModeNotSupportedException` rather than run below the profile's guarantee — `StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile; `SafeNonBlockingReads` on SQL Server with neither snapshot isolation nor READ_COMMITTED_SNAPSHOT.
-- `BeginTransaction` with no level/profile asked for nothing, so it gets the database default silently: a read uses the `SafeNonBlockingReads` mapping when the engine honors it, otherwise ReadCommitted, else Serializable.
+- `BeginTransaction` with no level/profile asked for nothing, so it never throws and never logs. A concrete level is always resolved (no unset level is sent to the provider): a read uses the `SafeNonBlockingReads` mapping when the engine honors it, otherwise a read or a write takes ReadCommitted, else Serializable, else the first level the product supports.
 - Savepoints on a dialect without savepoint support throw `NotSupportedException`.
 
 **CRITICAL: Do NOT use `TransactionScope`**
@@ -424,7 +424,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 ### Testing Infrastructure
 - Framework: xUnit; mocks: Moq for anything that is not ADO.NET provider behaviour. **Never mock ADO.NET provider behaviour**: connections, commands, readers, transactions, parameters, factories, data sources and their failures are `pengdows.crud.fakeDb`'s job (it should produce anything a real provider can, and every failure), and anything it cannot do is added to fakeDb, with its own tests. `NoMockedProviderTypesTests` fails the build when a mocking framework or `DispatchProxy` creates one of those types. Name files `*Tests.cs` and mirror source namespaces.
 - Prefer `pengdows.crud.fakeDb` for unit tests; avoid real DBs. Use `testbed/` for integration via Testcontainers.
-- Coverage artifacts live in `TestResults/`; CI publishes Cobertura from `TestResults/**/coverage.cobertura.xml`.
+- Coverage artifacts live in `TestResults/`; CI publishes Cobertura from `TestResults/**/coverage*.cobertura.xml`.
 - The entire unit-test suite currently finishes in under 30 seconds; if a run approaches three minutes, terminate it and investigate for locking/hanging issues immediately.
 - CI enforces minimum **83% coverage**; target **95%** for new work.
 - Expand `fakeDb` when tests need behaviors it lacks — don't bypass its limitations.
@@ -455,7 +455,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 - Never commit secrets or real connection strings; use environment variables and user-secrets. Strong-name via `SNK_PATH` (do not commit keys).
 - Do not hardcode identifier quoting. Use `WrapObjectName(...)` and `CompositeIdentifierSeparator` (e.g., `var full = ctx.WrapObjectName("schema") + ctx.CompositeIdentifierSeparator + ctx.WrapObjectName("table");`).
 - Always parameterize values (`AddParameterWithValue`, `CreateDbParameter`); avoid string interpolation for SQL.
-- `pengdows.crud.analyzers` enforces raw predicate/join value injection as `PGC008` (`IS NULL` / `IS NOT NULL` are the normal exceptions); it also ships `PGC001` (pengdows.crud components must be registered as singletons), `PGC025` (gateway methods that execute DB work must accept a context and use `ctx = context ?? Context`), `PGC026` (use `WrapObjectName("alias.column")` instead of splitting the call), `PGC028` (error: do not use the 2.x binary-compatibility-only API or assign `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle` after construction), and `PGC029` (error, opt-in via the `PengdowsMultiTenancy` MSBuild property: gateway calls must pass an explicit context).
+- `pengdows.crud.analyzers` enforces raw predicate/join value injection as `PGC008` (`IS NULL` / `IS NOT NULL` are the normal exceptions); it also ships `PGC001` (pengdows.crud components must be registered as singletons), `PGC025` (gateway methods that execute DB work must accept a context and use `ctx = context ?? Context`), `PGC026` (use `WrapObjectName("alias.column")` instead of splitting the call), `PGC028` (error: do not use the 2.x binary-compatibility-only API or assign `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle` after construction), `PGC029` (error, opt-in via the `PengdowsMultiTenancy` MSBuild property: gateway calls must pass an explicit context), and `PGC030` (error: do not call `WrapForStoredProc` directly; execute the container with `CommandType.StoredProcedure`).
 
 ## Additional Requirements
 

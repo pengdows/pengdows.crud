@@ -52,4 +52,4 @@ Percentile tracking is enabled with `MetricsOptions.EnableApproxPercentiles`
 the collector does not allocate percentile ring buffers. `MetricsOptions.PercentileWindowSize`
 (default 2048, must be a power of two) controls the sliding window size once enabled. All
 "average" fields (unaffected by this flag) use an EWMA (exponentially weighted moving average)
-with per-metric window sizes rather than a true running mean.
+with a per-metric half-life (64 samples for most metrics, 32 for transaction duration; the smoothing factor is `1 - 0.5^(1/halfLife)`) rather than a true running mean.

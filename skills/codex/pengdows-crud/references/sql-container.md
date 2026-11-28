@@ -77,7 +77,7 @@ All execution methods return `ValueTask` (not `Task`) for reduced allocations. A
 | Method | Returns | Purpose |
 |--------|---------|---------|
 | `ExecuteNonQueryAsync(ExecutionType?, CommandType?, ct?)` | `ValueTask<int>` | Returns affected row count |
-| `ExecuteScalarRequiredAsync<T>(ExecutionType?, CommandType?, ct?)` | `ValueTask<T>` | Returns value — throws if no rows or null |
+| `ExecuteScalarRequiredAsync<T>(ExecutionType?, CommandType?, ct?)` | `ValueTask<T>` | Returns value — throws if no rows; a null value throws for non-nullable T and returns default for nullable T |
 | `ExecuteScalarOrNullAsync<T>(ExecutionType?, CommandType?, ct?)` | `ValueTask<T?>` | Returns value or null if no rows / DBNull |
 | `TryExecuteScalarAsync<T>(ExecutionType?, CommandType?, ct?)` | `ValueTask<ScalarResult<T>>` | Unambiguous: distinguishes None / Null / Value |
 | `ExecuteReaderAsync(ExecutionType?, CommandType?, ct?)` | `ValueTask<ITrackedReader>` | Runs query, returns reader (extends IDataReader) |
@@ -176,13 +176,13 @@ Six call styles (`ProcWrappingStyle`); `None` means unsupported (`WrapForStoredP
 
 ## Reader Behavior
 
-- If in `TransactionContext` or `SingleConnection` mode, connection stays open
-- Otherwise, `CommandBehavior.CloseConnection` is used to auto-close
+- If in `TransactionContext` or `SingleConnection` mode (or a pinned connection), connection stays open
+- Otherwise, `CommandBehavior.CloseConnection` is used to auto-close (DuckDB's provider gets a plain reader instead; the connection is still closed after the reader and command are disposed)
 - **ITrackedReader is a lease** — it pins the connection for its lifetime. Always use `await using` and dispose promptly.
 
 ## Logging
 
-- SQL is logged through `ILogger` at Information level
+- SQL is logged through `ILogger` at Debug level
 - Parameter values are NOT logged unless the consumer does so explicitly
 
 ## Disposal and Cleanup

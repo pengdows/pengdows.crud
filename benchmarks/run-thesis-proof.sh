@@ -1,9 +1,8 @@
 #!/bin/bash
 # THESIS EVIDENCE BENCHMARK SUITE
 # Runs the benchmarks that back the product thesis. Each reports what it measured; none is a proof:
-# 1. Connection pool protection under a request storm
-# 2. Broken mapping (a wrong read fails loudly or silently)
-# 3. Equal-footing CRUD against Dapper and EF Core (SQLite in-memory)
+# 1. Broken mapping (a wrong read fails loudly or silently)
+# 2. Equal-footing CRUD against Dapper and EF Core (SQLite in-memory)
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -13,8 +12,8 @@ echo "========================================================================="
 echo ""
 echo "This suite runs:"
 echo ""
-echo "  2. BrokenMappingBenchmarks - what each library does with a wrong mapping"
-echo "  3. EqualFootingCrudBenchmarks - CRUD time against Dapper and EF Core"
+echo "  1. BrokenMappingBenchmarks - what each library does with a wrong mapping"
+echo "  2. EqualFootingCrudBenchmarks - CRUD time against Dapper and EF Core"
 echo ""
 echo "See benchmarks/README.md for the dated results and what each one does and does not show."
 echo ""

@@ -85,8 +85,8 @@ A few useful, easy-to-miss members outside the three-tier Build/Load/convenience
 - **`BuildWhereByPrimaryKey(...)`** (on `ITableGateway`/`IPrimaryKeyTableGateway`) adds a parameterized natural-key
   predicate to an existing container — useful when composing custom SQL that still needs to filter
   by an entity's `[PrimaryKey]` columns.
-- **`ClearCaches()`** clears a gateway's compiled reader plans, column lists, query templates, and
-  cached WHERE parameter names. This is gateway-lifetime state, intentionally not tied to any one
+- **`ClearCaches()`** clears a gateway's compiled reader plans, column lists, cached query text, and
+  cached WHERE parameter names. It does not clear the per-dialect SQL templates, pre-built containers or compiled binders: those are `ConditionalWeakTable`s keyed by dialect instance and are reclaimed with it. This is gateway-lifetime state, intentionally not tied to any one
   operation context (see `docs/entity-mapping.md`) — call this only after a schema or mapping
   change you know invalidates the cached shapes, not as routine housekeeping.
 - **`IDatabaseContext.GetSupportedIsolationLevels()`**, **`GetBaseSessionSettings()`**, and

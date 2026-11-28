@@ -188,7 +188,7 @@ wrapped in StormGate's own generic `DbConnection`/`DbCommand` types, not the pro
 ones. Some providers' EF Core implementations cast the `DbCommand`/`DbDataReader`/`DbParameter`
 they're handed back to their own concrete type somewhere in their real pipeline — that cast fails
 against StormGate's wrapper the same way it would against any other non-native `DbConnection`
-wrapper, in production against a real server, not just in tests. Confirmed for:
+wrapper. The failure is reproduced through `pengdows.crud.fakeDb` (not against a live server) for:
 
 | Provider | Fails on |
 | :--- | :--- |

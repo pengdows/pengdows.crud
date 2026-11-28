@@ -42,7 +42,7 @@ pengdows.crud supports 23 directly supported database products via the `Supporte
 >
 > **SingleStore concurrency (live, 2026-10-17, 9.1.1):** two concurrent multi-row `INSERT ... ON DUPLICATE KEY UPDATE` statements on overlapping keys deadlock; the engine kills both at its lock-wait timeout (about 30 s), the kill lands in the commit phase, and the provider raises error 1997 ("the outcome is unknown ... Please check if it succeeded"). One caller works (264 ms); two fail. pengdows.crud reports it as `AmbiguousResultException` (the write may have been applied). Single-row upserts under 16-way contention on one key pass. Keep overlapping batch upserts to one caller at a time on SingleStore.
 
-> **FlatFile:** [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) is a file-backed ADO.NET provider over CSV/TSV/pipe/delimited/fixed-width/NDJSON files. The dialect is verified against the provider source (0.2.1-preview.1) and runs in the testbed (which references 0.2.1-preview.2). Parameters are named `:name` (positional `?` also works, but not mixed in one statement). `DbMode.Best`, `Standard` and `PreventDatabaseUnload` resolve to `SingleWriter`: the provider allows one non-readonly connection per database, and a second in-process writer waits `connectionTimeout` then throws `TimeoutException`; reads use `readonly=true` connections. Isolation: `ReadUncommitted`, `ReadCommitted` and `RepeatableRead` (a per-table snapshot on first read); `Serializable`/`Snapshot` requests and `StrictConsistency` throw; `SafeNonBlockingReads` runs as `RepeatableRead`, `FastWithRisks` as `ReadUncommitted`. Savepoints (create/rollback/release), `SET TRANSACTION READ ONLY`, `MERGE` upserts, schema-qualified tables and `OFFSET ... FETCH` paging are supported; there is no `LIMIT`, `RETURNING`, identity column or stored procedure, so `[Id(false)]` keys need a correlation-token column. Text columns cannot tell `NULL` from `''` unless the table declares `CREATE TABLE ... WITH (NULLTOKEN = '...')`. Server version comes from `FlatFileConnection.ServerVersion`. `pengdows.crud` takes no dependency on the `pengdows.flatfile` package.
+> **FlatFile:** [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) is a file-backed ADO.NET provider over CSV/TSV/pipe/delimited/fixed-width/NDJSON files. The dialect is verified against the provider source (0.2.1-preview.1) and runs in the testbed (which references 0.2.1-preview.28, `testbed/testbed.csproj`). Parameters are named `:name` (positional `?` also works, but not mixed in one statement). `DbMode.Best`, `Standard` and `PreventDatabaseUnload` resolve to `SingleWriter`: the provider allows one non-readonly connection per database, and a second in-process writer waits `connectionTimeout` then throws `TimeoutException`; reads use `readonly=true` connections. Isolation: `ReadUncommitted`, `ReadCommitted` and `RepeatableRead` (a per-table snapshot on first read); `Serializable`/`Snapshot` requests and `StrictConsistency` throw; `SafeNonBlockingReads` runs as `RepeatableRead`, `FastWithRisks` as `ReadUncommitted`. Savepoints (create/rollback/release), `SET TRANSACTION READ ONLY`, `MERGE` upserts, schema-qualified tables and `OFFSET ... FETCH` paging are supported; there is no `LIMIT`, `RETURNING`, identity column or stored procedure, so `[Id(false)]` keys need a correlation-token column. Text columns cannot tell `NULL` from `''` unless the table declares `CREATE TABLE ... WITH (NULLTOKEN = '...')`. Server version comes from `FlatFileConnection.ServerVersion`. `pengdows.crud` takes no dependency on the `pengdows.flatfile` package.
 
 > **Sybase (SAP ASE):** has its own dedicated `SybaseAseDialect` (not a fork delegating to another dialect) and a real testbed container (`nguoianphu/docker-sybase`), verified live against ASE 16. Notable genuine differences from every other T-SQL/SQL-92-family dialect here, all confirmed live rather than assumed from SQL Server parity: MERGE works but rejects a trailing statement-terminator semicolon (`RequiresMergeStatementTerminator => false`, same mechanism Oracle uses); `;` is rejected as a multi-statement batch separator entirely, not just as a trailing terminator (`SupportsSemicolonStatementSeparator => false`); no multi-row `INSERT ... VALUES`, no `VALUES`-derived-table-as-MERGE-source, and no `LIMIT`/`OFFSET` paging (uses `SELECT TOP N` like SQL Server instead); NOT NULL-by-default columns and a non-Unicode default charset. `AdoNetCore.AseClient`'s `AseException` does not derive from `DbException` and `GetSchema()` is unimplemented — both are handled generically via a duck-typed "Errors collection" fallback in `DbExceptionTranslationSupport` rather than Sybase-specific special-casing.
 
@@ -126,11 +126,11 @@ Each database's last full `run-integration-tests.sh` result on net8.0 and net10.
 | Spanner | 157 pass, 0 fail, 0 skip · 2026-11-26 14:16Z · 3ec89de4 | 157 pass, 0 fail, 0 skip · 2026-11-26 14:39Z · 3ec89de4 |
 | SingleStore | 169 pass, 0 fail, 0 skip · 2026-11-26 14:09Z · 3ec89de4 | 169 pass, 0 fail, 0 skip · 2026-11-26 14:31Z · 3ec89de4 |
 | Snowflake | 157 pass, 0 fail, 0 skip · 2026-11-26 16:20Z · 3ec89de4+ | 157 pass, 0 fail, 0 skip · 2026-11-26 16:23Z · 3ec89de4+ |
-| SapHana | 157 pass, 0 fail, 0 skip · 2026-11-26 13:56Z · 3ec89de4 | 157 pass, 0 fail, 0 skip · 2026-11-26 14:19Z · 3ec89de4 |
-| InterBase | 157 pass, 0 fail, 0 skip · 2026-11-26 14:59Z · 3ec89de4+ | 157 pass, 0 fail, 0 skip · 2026-11-26 15:02Z · 3ec89de4+ |
+| SapHana | 157 pass, 0 fail, 0 skip · 2026-11-27 15:52Z · 28d5903a+ | 157 pass, 0 fail, 0 skip · 2026-11-27 15:55Z · 28d5903a+ |
+| InterBase | 157 pass, 0 fail, 0 skip · 2026-11-27 15:27Z · 28d5903a+ | 157 pass, 0 fail, 0 skip · 2026-11-27 15:30Z · 28d5903a+ |
 | Access | 157 pass, 0 fail, 0 skip · 2026-11-26 13:00Z · 72dfc910+ | 157 pass, 0 fail, 0 skip · 2026-11-26 13:02Z · 72dfc910+ |
-| AuroraPostgreSql | 192 pass, 0 fail, 0 skip · 2026-11-26 15:20Z · 3ec89de4+ | 192 pass, 0 fail, 0 skip · 2026-11-26 15:35Z · 3ec89de4+ |
-| AuroraMySql | 170 pass, 0 fail, 0 skip · 2026-11-26 15:24Z · 3ec89de4+ | 170 pass, 0 fail, 0 skip · 2026-11-26 15:38Z · 3ec89de4+ |
+| AuroraPostgreSql | 192 pass, 0 fail, 0 skip · 2026-11-27 16:35Z · 28d5903a+ | 192 pass, 0 fail, 0 skip · 2026-11-27 16:51Z · 28d5903a+ |
+| AuroraMySql | 170 pass, 0 fail, 0 skip · 2026-11-27 16:40Z · 28d5903a+ | 170 pass, 0 fail, 0 skip · 2026-11-27 16:55Z · 28d5903a+ |
 
 ## Minimum Server Versions
 
@@ -160,7 +160,7 @@ Two thresholds matter for each database:
 | Sybase ASE | not recorded | not recorded | No version gate in `SybaseAseDialect`; verified live against ASE 16 (SP02) |
 | Spanner | not recorded | not recorded | PostgreSQL interface through PGAdapter; the suite runs Spanner Omni `2026.r2.1-beta` with the PGAdapter image |
 | SAP HANA, InterBase, Access | not recorded | not recorded | No version gates in their dialects; opt-in (HANA, InterBase) or Windows-only (Access) integration coverage, no server version recorded in the repo |
-| FlatFile | n/a | n/a | Embedded provider; dialect verified against `pengdows.flatfile` 0.2.1-preview.1 source, testbed runs 0.2.1-preview.27 (the version pinned in `testbed/testbed.csproj`) |
+| FlatFile | n/a | n/a | Embedded provider; dialect verified against `pengdows.flatfile` 0.2.1-preview.1 source, testbed runs 0.2.1-preview.28 (the version pinned in `testbed/testbed.csproj`) |
 
 > **MySQL / MariaDB read-only note:** The `SET SESSION transaction_read_only = 1` syntax requires
 > MySQL 5.7.20+. MariaDB uses `SET SESSION tx_read_only = 1` which is available in 10.1+.
@@ -176,7 +176,7 @@ What version of each database first enables each major feature:
 | **MERGE / Upsert** | 2008 (v10) | 15 | — (uses `ON DUPLICATE KEY`) | — (uses `ON DUPLICATE KEY`) | 9i (always on) | — (uses `ON CONFLICT`) | 1.4 | 2.0 |
 | **INSERT ON CONFLICT** | — | 9.5 (always on) | — | — | — | 3.24 (always on) | 1.0 (always on) | — |
 | **ON DUPLICATE KEY UPDATE** | — | — | always on | always on | — | — | — | — |
-| **INSERT RETURNING** | always on | always on | — | 10.5 | always on | 3.35 | always on | always on (2.1+) |
+| **INSERT RETURNING** | always on | always on | — | 10.5 | always on | 3.35 | always on | always on |
 | **JSON types** | 2016 (v13) | 9.x | 5.7.8 | — (no native JSON) | 12c | 3.45 | always on | — |
 | **CTEs** | always on | always on | 8.0 | 10.2 | always on | 3.8.3 | always on | 2.0 |
 | **Window functions** | always on | always on | 8.0 | 10.2 | always on | 3.25 | always on | 3.0 |

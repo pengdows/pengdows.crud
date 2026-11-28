@@ -13,10 +13,10 @@ optimizer uses the expected objects, and the session settings are correct.
 
 ## What is validated
 
-A benchmark variant that uses `BenchmarkValidation.SqlServer` gets, automatically:
+A benchmark variant that calls `SqlServerBenchmarkValidation.ValidateAsync` (`benchmarks/CrudBenchmarks/BenchmarkValidation.SqlServer.cs`) gets, automatically:
 
 - Confirm `dbo.vw_CustomerOrderSummary` has a **unique clustered index**.
-- Capture `SET` options via `DBCC USEROPTIONS` and assert the required SQL Server session flags (e.g., `ARITHABORT ON`, `ANSI_WARNINGS ON`, etc.).
+- Capture `SET` options via `DBCC USEROPTIONS` and assert the session flags the variant supplies in `RequiredSessionOptions`/`ForbiddenSessionOptions` (the benchmark session setup in `BenchmarkSessionSettings.cs` uses `ANSI_WARNINGS ON`, `ARITHABORT ON`, etc.).
 - Capture `SET STATISTICS XML ON` output and write the SHOWPLAN XML to `BenchmarkDotNet.Artifacts/validation/<family>/<variant>/plan.xml`.
 - Fail fast if the plan does not reference the indexed view (or, in the `NoSetup` variant, if it unexpectedly does).
 

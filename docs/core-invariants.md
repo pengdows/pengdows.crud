@@ -20,15 +20,16 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
    - Shared connections (SingleConnection) must serialize through the connection lock.
    - SingleWriter serializes writes via the governor (WriteSlots=1), not a connection lock — connections are ephemeral.
    - Ephemeral connections (Standard/PreventDatabaseUnload) use a NoOp lock for zero overhead.
+   - Exception: DuckDB serializes connection *opens* in every mode with a context-level `SemaphoreSlim(1, 1)` (`DuckDbDialect.RequiresSerializedConnectionOpen`; `DatabaseContext.Initialization.cs`, `_connectionOpenGate`). That gate covers opening, not use: the connection lock stays NoOp for ephemeral connections.
 
 5. **ITrackedReader is a lease, not just a wrapper.**
    - It pins the connection and holds the connection lock until disposal.
    - Long-lived readers = blocked writers in SingleConnection mode.
    - In SingleWriter mode, long-lived readers may delay writers waiting on the turnstile, but do not hold a connection lock.
 
-6. **MetricsUpdated events must never re-enter DatabaseContext.**
-   - Events are fired without locks by design.
-   - Re-entrancy can deadlock or corrupt expectations.
+6. **MetricsUpdated subscribers must not call back into DatabaseContext.**
+   - Events are fired without holding a lock: each subscriber is invoked from the snapshot of the handler list (`DatabaseContext.Metrics.cs`), and a throwing subscriber is logged and ignored.
+   - This is a documented rule, not an enforced one. Whether a callback back into the context would deadlock was not traced; treat re-entry as unsupported.
 
 7. **DbMode.Best can coerce unsafe choices.** The policy lives on each dialect (`CoerceConnectionMode`); see `connection/connection-modes.md`.
    - SQLite/DuckDB isolated `:memory:` must be SingleConnection.

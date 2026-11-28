@@ -72,9 +72,7 @@ case of a release racing an attach already in progress.
 
 ## SingleWriter write serialization
 
-The property benchmarked in the product thesis's opening claim — a pengdows.crud writer never
-contends for SQLite's lock with another pengdows.crud writer, because admission happens before
-either reaches the database — rests on two further guarantees, both regression-tested:
+The property benchmarked in the product thesis's opening claim — within one `DatabaseContext` (one governor, one process), a pengdows.crud writer never contends for SQLite's lock with another writer from that context, because admission happens before either reaches the database. Each context has its own governor, so writers in other contexts, other processes or other tools can still produce `SQLITE_BUSY` — rests on two further guarantees, both regression-tested:
 
 - **At most one write-intent checkout is admitted at a time under `SingleWriter`.**
 - **The writer-preference turnstile (principle 5) genuinely blocks new read admission while a

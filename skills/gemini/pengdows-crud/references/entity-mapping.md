@@ -175,7 +175,7 @@ public DateTime? UpdatedAt { get; set; }
 
 **Behavior:**
 - Set during both INSERT and UPDATE with current UTC time
-- Nullable to distinguish never-updated records (NULL) from updated ones
+- Set on INSERT as well as UPDATE, so it does not mark never-updated rows: a row never updated carries its creation-time value
 - Automatically maintained by the framework
 
 ## Behavior Modifier Attributes
@@ -231,7 +231,7 @@ public object Status { get; set; }
 - `enumType` (Type) — The enum type; must actually be an enum (validated at construction)
 
 **Notes:**
-- Enum parsing behavior is configured at the TableGateway level via `EnumParseBehavior` property
+- Enum parsing behavior is set through the gateway constructor's `enumParseBehavior` parameter; `EnumParseBehavior` is init-only afterwards
 - Invalid enum values throw by default, or can be configured to return default/null
 - Supports both string and integer storage in the database (controlled by `DbType` on `[Column]`)
 

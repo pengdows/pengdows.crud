@@ -4,9 +4,9 @@ This records what was checked against vendor documentation and against live serv
 (`docs/datatype-unified-crossref.md`). The cross-reference is a classification, not a test result. This record says, for every
 cell it claims exists that we did not support, what the evidence shows now.
 
-**Scope:** 709 cross-reference cells claim a type exists (`N`, `A`, `V`, `E` or `R`) on one of our 22 databases. At the start of
-this round, 94 of those had no declaration and a refusal. After this round, 90 remain refused, and each has a stated reason
-below. Every other claimed cell is declared and passing in the fidelity matrix.
+**Scope:** 709 cross-reference cells claim a type exists (`N`, `A`, `V`, `E` or `R`) on one of our 23 databases. At the start of
+this round, 94 of those had no declaration and a refusal. After this round, 87 remain refused, and each has a stated reason
+below. The fidelity matrix (tools/datatype-probe/fidelity-matrix, 18 files, 1,350 cells) records 760 PASS, 590 UNSUPPORTED and no FAIL; this document's claimed cells were not re-verified cell by cell against those files.
 
 ## What changed in this round
 
@@ -79,12 +79,15 @@ security labels need an access-control policy first (`IDSSECURITYLABEL` and `DB2
 
 - Oracle `VARRAY` (`SQL array`): the library builds the declared collection in SQL from the elements' JSON text
   (`JSON_TABLE`, `COLLECT`, `CAST`) and reads it back with `JSON_ARRAYAGG`. ODP.NET refuses an array parameter for a VARRAY
-  (ORA-50071), so the typed bind is not used. The Oracle fidelity suite passes.
+  (ORA-50071), so the typed bind is not used. The Oracle collection tests (`OracleCollectionTests`, `OracleLargeVarrayRoundTripTests`) cover it. The fidelity TSV's
+  `int_array` cell still records ORA-03099 for Oracle, because the probe declares an inline `ARRAY` and does not create
+  the VARRAY type first.
 - MySQL 9 `VECTOR`: written with `STRING_TO_VECTOR`, read with `VECTOR_TO_STRING`. A plain text literal is refused by the server
   (ERROR 6136). Round-trip verified live on `mysql:9.4` through the library: `[1, 2.5, -3]` reads back exactly.
 - MariaDB `VECTOR`: written with `VEC_FromText`, read with `VEC_ToText`. Round-trip verified live on `mariadb:11.8`.
-- The default testbed images (MySQL 8.4, MariaDB 11.4) predate `VECTOR`, so the fidelity matrix still refuses these cells, with
-  that reason. Declaring them needs a newer default image: a decision for you.
+- The testbed's default images are now MySQL 9.7 and MariaDB 11.8 (`testbed/ParallelTestOrchestrator.cs`), so the old image
+  is no longer the blocker. The fidelity TSVs (`MySql.tsv`, `MariaDb.tsv`, the `vector embedding` row) still record a refusal, so
+  those cells stay refused in the matrix until the probe is re-run on the new images.
 
 **Unverified (no evidence either way):**
 
@@ -105,7 +108,7 @@ security labels need an access-control policy first (`IDSSECURITYLABEL` and `DB2
 - PostgreSQL and CockroachDB local-zone `TIMESTAMP WITH LOCAL TIME ZONE`: `N` should be `X` (`timestamptz` covers it).
 - DuckDB time with zone: `N`, supported through `TIMETZ` (declared).
 
-## Appendix: the 90 refused claims
+## Appendix: the 87 refused claims
 
 | ID | Concept | Database | Cross-reference | Now | Evidence or reason |
 |---|---|---|---|---|---|
@@ -117,7 +120,6 @@ security labels need an access-control policy first (`IDSSECURITYLABEL` and `DB2
 | B45 | day-time interval | MariaDb | A | refused | refused: Unknown data type: 'INTERVAL' |
 | B45 | day-time interval | MySql | A | refused | refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL DAY TO SECOND(6))' at line 1 |
 | B49 | row identifier / ROWID | Oracle | N | refused | refused: by design: ROWID is a pseudo-column that identifies a row: a ROWID column keeps no value the library writes (it reads back NULL) |
-| B58 | SQL array | Oracle | R | refused | refused: gap: the server accepts a VARRAY (probe_varray); the library binds no Oracle collection parameter, and ODP.NET refuses an int[] (ORA-50028). Binding needs OracleDbType.Array with the column's UDT name (open: FUTURE_WORK) |
 | B58 | SQL array | Firebird | N | refused | refused: by design: Firebird arrays have fixed dimensions (fblangref 4.0, array_dim); INTEGER[10] reads back as ten elements, so there is no variable-length array to map |
 | B63 | list / multiset / set collection | MariaDb | N | refused | refused: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near ')' at line 1 |
 | B63 | list / multiset / set collection | MySql | N | refused | refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1 |
@@ -126,8 +128,8 @@ security labels need an access-control policy first (`IDSSECURITYLABEL` and `DB2
 | B69 | geography / geodetic | MySql | A | refused | refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'GEOGRAPHY)' at line 1 |
 | B70 | point geometry | PostgreSql | N | refused | refused: by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPoint (the native point row) |
 | B71 | vector embedding | PostgreSql | E | refused | refused: extension gap: pgvector is not in the default testbed image (extension \"vector\" is not available); the pgvector image accepts vector(3) as float[] (results/versions/PostgreSql-pgvector.jsonl) |
-| B71 | vector embedding | MariaDb | V | refused | refused: version gate: VECTOR is accepted on mariadb:11.7 and refused on 11.6 (results/versions/MariaDb-11.*.jsonl); it is stored and read as BLOB (byte[]), which the library does not map to a vector yet |
-| B71 | vector embedding | MySql | V | refused | refused: version gate: VECTOR is accepted on mysql:9.4 and refused on the testbed's 8.4 (results/versions/MySql-9.4.jsonl); it reads as ReadOnlyMemory<float>, which the library does not map yet |
+| B71 | vector embedding | MariaDb | V | refused | refused: version gate: VECTOR is accepted on mariadb:11.7 and refused on 11.6 (results/versions/MariaDb-11.*.jsonl); the library now writes and reads it (see the library-gap bullets above), but the fidelity TSV still refuses the cell |
+| B71 | vector embedding | MySql | V | refused | refused: version gate: VECTOR is accepted on mysql:9.4 and refused on the older testbed default 8.4 (results/versions/MySql-9.4.jsonl); the library now writes and reads it as `float[]` (see the library-gap bullets above), but the fidelity TSV still refuses the cell |
 | A56 | point geometry | PostgreSql | N | refused | refused: by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPoint (the native point row) |
 | A57 | line / linestring geometry | PostgreSql | N | refused | refused: 42704: type \"linestring\" does not exist POSITION: 56 |
 | A58 | polygon geometry | PostgreSql | N | refused | refused: by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPolygon (the native polygon row) |
@@ -157,12 +159,10 @@ security labels need an access-control policy first (`IDSSECURITYLABEL` and `DB2
 | B68 | general geometry | Db2 | E | refused | refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N \"GEOMETRY\" is an undefined name. |
 | B69 | geography / geodetic | YugabyteDb | E | refused | refused: 42704: type \"geography\" does not exist POSITION: 56 |
 | B69 | geography / geodetic | AuroraMySql | A | refused | refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'GEOGRAPHY)' at line 1 |
-| B69 | geography / geodetic | AuroraPostgreSql | E | refused | refused: extension gap: PostGIS is not in the default testbed image (extension \"postgis\" is not available); the PostGIS image accepts geography(POINT,4326) (results/versions/PostgreSql-postgis.jsonl) |
 | B70 | point geometry | YugabyteDb | N | refused | refused: by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPoint (the native point row) |
 | B70 | point geometry | AuroraPostgreSql | N | refused | refused: by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPoint (the native point row) |
 | B71 | vector embedding | DuckDB | R | refused | refused: Catalog Error: Type with name VECTOR does not exist! Did you mean \"JSON\"? LINE 1: CREATE TABLE pr349 (id INTEGER NOT NULL PRIMARY KEY, c VECTOR(3)) |
 | B71 | vector embedding | YugabyteDb | E | refused | refused: 42704: type \"vector\" does not exist POSITION: 56 |
-| B71 | vector embedding | AuroraPostgreSql | E | refused | refused: extension gap: pgvector is not in the default testbed image (extension \"vector\" is not available); the pgvector image accepts vector(3) as float[] (results/versions/PostgreSql-pgvector.jsonl) |
 | B73 | hierarchical path | AuroraPostgreSql | E | refused | refused: 42704: type \"hierarchyid\" does not exist POSITION: 56 |
 | A56 | point geometry | DuckDB | E | refused | refused: Catalog Error: Type with name POINT does not exist! Did you mean \"JSON\"? LINE 1: CREATE TABLE pr276 (id INTEGER NOT NULL PRIMARY KEY, c POINT) |
 | A56 | point geometry | AuroraPostgreSql | V | refused | refused: by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPoint (the native point row) |

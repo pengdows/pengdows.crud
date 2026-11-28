@@ -42,7 +42,7 @@ public enum DbMode
 
 - Keeps a single sentinel connection open (never used for work) so an embedded/local database does not unload when idle
 - Otherwise behaves like `Standard`
-- `Best` selects it for SQL Server LocalDB, Firebird (embedded and client-server) and Db2 LUW; an explicit `Standard` is always honored. It is a knob for other engines (e.g. SQL Server with `AUTO_CLOSE`, proxy/serverless idle disconnection)
+- `Best` selects it for SQL Server LocalDB, Firebird (embedded and client-server) and Db2 LUW; an explicit `Standard` is honored except on SQLite and FlatFile, which coerce it to `SingleWriter`. It is a knob for other engines (e.g. SQL Server with `AUTO_CLOSE`, proxy/serverless idle disconnection)
 - `KeepAlive` is only an `[Obsolete]` alias for the same value (`1`); new code uses `PreventDatabaseUnload`
 - The sentinel needs a second pooled connection: a pool below 2 is raised to 2, and a `Best` that would pick it falls back to `Standard` when the configured maximum is below 2
 
@@ -107,8 +107,11 @@ new DatabaseContext(new DatabaseContextConfiguration
     ReadWriteMode = ReadWriteMode.ReadWrite
 }, SqlClientFactory.Instance, loggerFactory);
 
-// (4) Native DbDataSource (e.g. NpgsqlDataSource) — best performance for PostgreSQL
-new DatabaseContext(configuration, npgsqlDataSource, NpgsqlFactory.Instance, loggerFactory);
+// (4) Provider factory with a full configuration — the supported form for PostgreSQL
+new DatabaseContext(configuration, NpgsqlFactory.Instance, loggerFactory);
+
+// [Obsolete] DbDataSource overload (new DatabaseContext(configuration, npgsqlDataSource, NpgsqlFactory.Instance, loggerFactory)):
+// passing a DbDataSource is deprecated and removed in 3.0; do not use it for new code
 ```
 
 Every constructor has an asynchronous counterpart that returns the same initialized context
@@ -123,7 +126,7 @@ var context2 = await DatabaseContext.CreateAsync(connectionString, SqlClientFact
 ## DI Registration
 
 ```csharp
-// Standard mode (default, recommended for production)
+// Best mode (the default; each database resolves Best to its own mode, see the Best table)
 services.AddSingleton<IDatabaseContext>(sp =>
     new DatabaseContext(connectionString, SqlClientFactory.Instance));
 
@@ -165,7 +168,7 @@ public enum IsolationProfile
 
 A profile never runs below its guarantee: `BeginTransaction(profile)` throws `TransactionModeNotSupportedException` when the database can't meet it
 (`StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile; `SafeNonBlockingReads` on SQL Server with neither snapshot isolation nor READ_COMMITTED_SNAPSHOT).
-A write transaction with neither a level nor a profile defaults to `ReadCommitted`; only a read-only transaction uses the `SafeNonBlockingReads` mapping.
+A write transaction with neither a level nor a profile defaults to `ReadCommitted` (or `Serializable`, then the first supported level, where `ReadCommitted` is unsupported); only a read-only transaction uses the `SafeNonBlockingReads` mapping where the product honors it.
 
 Usage:
 ```csharp

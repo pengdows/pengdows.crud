@@ -67,8 +67,8 @@ the script that produced it was never committed to the repo — it was ad hoc, r
 session, and is now unrecoverable (confirmed by a full-repo/git-history search: nothing under
 `testbed/Access/`, `pengdows.crud.IntegrationTests/`, or anywhere else in the tree exercises real
 concurrency against Access; `AccessTestProvider.cs`'s `RunAdditionalTestsAsync()` only covers CRUD
-round-trip, unique-constraint classification, and upsert-not-supported — no locking/concurrency
-check at all).
+round-trip, unique-constraint classification, upsert-not-supported, and an OleDb-factory check — no
+locking/concurrency check at all).
 
 Access is Windows-only (the ACE OLE DB provider and the ADOX COM interop used to create the
 `.accdb` file both require it — see `AccessTestContainer.cs`), so this can't be re-verified or

@@ -97,8 +97,10 @@ independently).
 | WHERE id | `k0` | `NextKey()` |
 | WHERE version | `v0` | `NextVer()` (only if `[Version]` column exists) |
 
-> **Important**: NULL column values are skipped in the SET clause. The index of `k0` is always 0
-> in the key counter, regardless of how many SET parameters exist.
+> **Important**: NULL column values are not parameterized. They are written inline as `column = NULL`
+> and do not consume an `s` index, so the `s` numbering stays contiguous over the parameterized
+> columns. The index of `k0` is always 0 in the key counter, regardless of how many SET parameters
+> exist.
 
 ```csharp
 // Seed the container in GlobalSetup with a representative entity

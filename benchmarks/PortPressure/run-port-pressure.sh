@@ -52,7 +52,7 @@ probe="$here/bin/Release/net10.0/PortPressure"
 
 echo "server max_connections=$(docker exec "$name" psql -U postgres -d probe -tAc 'SHOW max_connections')"
 for rep in $(seq 1 "$reps"); do
-  for arm in uncontrolled governed-default governed-capped; do
+  for arm in uncontrolled governed-default governed-capped governed-clamped; do
     quiet
     samples="$out_dir/$arm-$rep.csv"
     echo "second,time_wait" > "$samples"

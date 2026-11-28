@@ -13,14 +13,28 @@ The **open** cells are the work that remains; a `—` cell becomes work if a spe
 
 ## Status
 
+Recounted 2026-11-27 from the 18 fidelity TSVs in `tools/datatype-probe/fidelity-matrix/` (75 rows each, 1350 cells),
+using the generator's verdict logic (`DB_REFUSED` in `gen_fidelity.py`). The generator
+(`gen_representation_doc.py`) does not run at HEAD: its row-count assertion fails (the fidelity spec has 76 entries, the
+TSVs 75 rows), so this block was updated by hand to the counts below. The per-type table further down was not
+regenerated and still shows the earlier snapshot.
+
 - 75 types, 18 databases, 1350 cells.
-- 755 cells store and read the value back.
-- 0 open: the database has a type and the library does not handle it yet.
+- 760 cells store and read the value back (PASS in the TSVs).
+- 37 open: the database has a type and the library does not handle it yet. 30 are native point and polygon cells
+  (the PostgreSQL CLR types have no native equivalent on the other engines, so the refusal is open work), 3 are SAP ASE
+  geometry refusals, and the rest are the PostgreSQL PostGIS and pgvector extension gaps, a FlatFile generic interval
+  and an Informix geodetic type.
 - 11 unsupported by design: a stated decision (reason in the table below).
-- 3 unsupported by server: the database lacks a working feature for the value.
+- 7 unsupported by server: the database lacks a working feature for the value.
 - 1 upstream defect: the database's own bug, reproduced live.
-- 580 with no column type on that database (`—`): no candidate spelling was accepted.
+- 534 with no column type on that database (`—`): no candidate spelling was accepted.
 - 0 cells fail.
+
+Scope: the 18 databases are PostgreSQL, SQL Server, Oracle, Firebird, CockroachDB, MariaDB, MySQL, SQLite, DuckDB,
+YugabyteDB, TiDB, SingleStore, Sybase ASE, Spanner, FlatFile, Access, Db2 LUW and Informix. **Omitted:** Snowflake,
+Aurora MySQL, Aurora PostgreSQL, SAP HANA and InterBase. They have no fidelity TSV (cloud-only, opt-in or
+credentials-bound), so they appear in neither the counts above nor the table below.
 
 ## Types by database
 

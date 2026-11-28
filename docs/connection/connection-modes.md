@@ -66,7 +66,7 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 
 ### SingleWriter
 
-- Semantics: Identical to Standard, plus a governor profile: writable connections capped at 1 concurrent writer, read-only connections allow 0 writers; writer-starvation-prevention turnstile enabled.
+- Semantics: Identical to Standard, plus a governor profile: writable connections capped at 1 concurrent writer; the read-only pool is not capped by this mode (read-only connections cannot write); writer-starvation-prevention turnstile enabled.
 - Reads:
   - Non-transactional → ephemeral read-only connections that use the read-only session settings.
   - Read-only transactions → ephemeral read-only connections (reader concurrency pauses while writers wait).
@@ -183,13 +183,18 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
     lifetime, so the session settings genuinely run exactly once. (The `PreventDatabaseUnload`
     sentinel is also long-lived, but it never runs work, so no session settings are applied to it.)
   - **Ephemeral modes** (Standard, SingleWriter): a fresh `TrackedConnection` wrapper is created
-    per operation/checkout, so the session settings **are reapplied on every single checkout** — even when
-    the underlying ADO.NET provider pool hands back an already-open physical connection. This is
+    per operation/checkout, so the session settings **are built and sent on every single checkout** — even when
+    the underlying ADO.NET provider pool hands back an already-open physical connection. In the default
+    `Normal` mode the statements sent are only the managed settings whose value differs from the snapshot
+    captured when the context was created, so the checkout may send nothing; `Paranoid` sends every managed
+    setting. (`docs/session-settings.md` describes the two modes.) Sending on every checkout is
     deliberate, not a missed optimization: a connection previously used for an unrelated operation
     could have drifted session state (e.g. a stale isolation override, or — for SQL Server —
     `QUOTED_IDENTIFIER`, which this framework's own ANSI double-quote identifier quoting depends on
     to parse at all), so trusting "the pool gave me a connection, it must still be clean" is a
-    correctness risk, not just a consistency one. For the SQL Server specifics (SQL Server pays this
+    correctness risk, not just a consistency one. Because `Normal` compares against the snapshot, a drift
+    the snapshot did not record is corrected only in `Paranoid` mode (SQLite `query_only` is the exception:
+    always sent). For the SQL Server specifics (SQL Server pays this
     every operation under `DbMode.Standard`), see `docs/sql-server-session-settings.md` and
     `docs/session-settings.md`.
 - Session settings are enforced at logical connection open (per the wrapper-lifetime rules above).
@@ -225,7 +230,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - Persistent modes (PreventDatabaseUnload/SingleConnection): if a required connection fails to open at ctor, error bubbles immediately.
 - No silent deferrals beyond SQL-92 fallback when dialect is unknown.
 - **`PreventDatabaseUnload` repairs a lost sentinel lazily.** At the top of every `GetConnection`/`GetConnectionAsync`, any sentinel whose state is `Broken` or `Closed` is disposed (releasing its governor permit) and replaced by a freshly opened connection that takes a new permit from the same pool, with a warning logged. There is no background monitor, so the guarantee is "repaired before the next operation", not continuous; a dropped sentinel never breaks reads or writes, which use their own ephemeral connections. A repair that races context disposal disposes its replacement instead of installing it.
-- **DDL on Firebird closes the sentinels first.** Firebird fails `DROP`/`ALTER` of a table the application has used with "object ... is in use" while any other attachment exists, so a dialect that sets `RequiresConnectionPoolResetForDdl` (only Firebird) has the context close every `PreventDatabaseUnload` sentinel (releasing its permit) and clear the provider pool before such a DDL statement, then reopen the sentinels after it; a failed reopen is logged and left to the lazy repair above.
+- **DDL on Firebird closes the sentinels first.** Firebird fails `DROP`/`ALTER` of a table the application has used with "object ... is in use" while any other attachment exists, so a dialect that sets `RequiresConnectionPoolResetForDdl` (Firebird and InterBase; `InterBaseDialect.cs:190`, `FirebirdDialect.cs:256`) has the context close every `PreventDatabaseUnload` sentinel (releasing its permit) and clear the provider pool before such a DDL statement, then reopen the sentinels after it; a failed reopen is logged and left to the lazy repair above.
 - **`SingleConnection` never recreates its pinned connection.** It cannot safely recreate a connection for disposable `:memory:` databases; a replacement would be a different empty database.
 
   **For `:memory:` SQLite/DuckDB, this isn't a missing feature — it's unrepairable in principle, not just in the current implementation.** The entire database lives only inside that one connection; there is no separate file or server for a replacement connection to reconnect to. Opening a *new* connection to the same `:memory:` connection string doesn't recover the old data, it silently creates a brand-new, empty database — which would be a much worse failure mode than the current loud "every operation now fails" behavior. So for `:memory:` specifically, treat `SingleConnection` mode as "the data does not survive a connection break," full stop, not as a gap to fix.
@@ -276,7 +281,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 **Timeouts:**
 - Set connection timeouts as low as reasonable to avoid hanging on transient failures.
-- Because ephemeral modes reconnect for every call, long timeouts are unnecessary.
+- Ephemeral modes check a connection out of the provider pool for every operation, so long timeouts are rarely needed. SingleConnection does not reconnect its persistent connection (see above).
 
 **Observability:**
 - The context tracks current and peak open leases (`NumberOfOpenConnections`, `PeakOpenConnections`) with thread-safe `Interlocked` counters — useful for tuning pool sizes and spotting load issues.

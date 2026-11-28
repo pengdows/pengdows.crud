@@ -1,5 +1,9 @@
 # pengdows.crud 2.0: Pool Governor, SingleWriter Re-Architecture, and 13-Database Coverage
 
+> **Historical note (2026-11-27):** The provider counts in this announcement (13 and 14 in the body) are as of the
+> 2.0.0 announcement. The current count is 23 non-Unknown products in the `SupportedDatabase` enum, per
+> [docs/supported-databases.md](docs/supported-databases.md). This document is not updated.
+
 `pengdows.crud` is **not an ORM**.
 
 It is a SQL-first, high-performance data access framework for .NET 8. 2.0 makes a significant
@@ -53,7 +57,7 @@ the key signal that you are under-provisioned or leaking connections.
 
 `pengdows.stormgate` is available as a separate NuGet package (MIT, .NET 8+). It is the
 on-ramp: when you need read/write lane separation, writer-starvation prevention, per-pool
-metrics, and first-class support for 13 databases, that's where `pengdows.crud`'s pool
+metrics, and first-class support for 23 database products, that's where `pengdows.crud`'s pool
 governor picks up.
 
 ### 2) SingleWriter was fundamentally redesigned
@@ -99,7 +103,7 @@ Why it matters:
 - **Universal fallback**: providers that don't implement `CreateDataSource` get a `GenericDbDataSource`
   wrapper — the rest of the framework always uses the data-source code path uniformly, with no
   special-casing per provider
-- `IDatabaseContext.DataSource` exposes the resolved data source for diagnostics or advanced use
+- `IDatabaseContext.DataSource` exposes the resolved data source for diagnostics or advanced use. It is `[Obsolete]` in 2.0 (it bypasses pengdows.crud connection governance) and is removed in 3.0; use the context execution APIs instead
 - Separate read and write data sources are created when read/write connection strings differ
 
 ### 6) PrimaryKeyTableGateway — first-class natural-key entities
@@ -131,7 +135,7 @@ Why it matters:
 - Streaming (`LoadStreamAsync` → `IAsyncEnumerable<TEntity>`) for large result sets
 - Audit field support via `IAuditValueResolver` — called once per batch, not per row
 - Dialect-specific upsert (MERGE, ON CONFLICT, ON DUPLICATE KEY) keyed on `[PrimaryKey]` columns
-- Constructor guard: throws `SqlGenerationException` at startup if entity has no `[PrimaryKey]`
+- Constructor guard: throws `InvalidOperationException` at construction if the entity has no `[PrimaryKey]`
 
 See `docs/primary-keys-pseudokeys.md` for the gateway selection decision guide.
 
@@ -200,8 +204,11 @@ Supported on PostgreSQL, SQL Server, Oracle, MySQL, MariaDB, Firebird, and Cockr
 Pass `DbMode.Best` and the context selects the optimal mode automatically:
 - `:memory:` SQLite/DuckDB → `SingleConnection`
 - File-based SQLite/DuckDB → `SingleWriter`
-- SQL Server LocalDB → `KeepAlive`
-- Everything else → `Standard`
+- SQL Server LocalDB → `PreventDatabaseUnload` (forced for LocalDB whatever mode is requested)
+- Firebird and Db2 LUW → `PreventDatabaseUnload` (idle-unload reconnect cost)
+- Everything else → `Standard` (SQLite and DuckDB files → `SingleWriter`, and `:memory:` → `SingleConnection`, as above)
+
+`KeepAlive` is the `[Obsolete]` alias for `PreventDatabaseUnload` (same value); new code should use `PreventDatabaseUnload`.
 
 Removes guesswork for new projects and avoids file-locking errors in embedded databases.
 
@@ -236,12 +243,14 @@ Why it matters:
 - Role-based split: separate `DatabaseRoleMetrics` for read vs write paths
 - `MetricsUpdated` event fires without holding locks — safe to subscribe from any thread
 
-### 16) Expanded database support — 13 databases
+### 16) Expanded database support — 23 database products
 
-2.0 ships with first-class, integration-tested support for 13 databases:
+2.0 has a dialect for each of the 23 non-`Unknown` values of the `SupportedDatabase` enum (the count of product values; Aurora MySQL and Aurora PostgreSQL are two of them and are auto-detected, with no extra setup). The headline products, the ones this announcement names:
 
 SQL Server, PostgreSQL, MySQL, **MariaDB**, Oracle, SQLite, DuckDB, Firebird,
-CockroachDB, **YugabyteDB**, **TiDB**, Snowflake, and Aurora variants (auto-detected, no extra setup).
+CockroachDB, **YugabyteDB**, **TiDB**, Snowflake, and Aurora variants.
+
+The other values are Db2, FlatFile, SingleStore, SybaseASE, Spanner, Informix, SapHana, InterBase and Access. See `docs/supported-databases.md` for the full list and each product's integration status.
 
 - MariaDB, YugabyteDB, and TiDB all have dedicated dialects and always-on integration tests
 - YugabyteDB auto-prepare is disabled to match YSQL semantics (prevents broken connection errors after pool reuse)
@@ -264,7 +273,7 @@ Why it matters:
 - `String` — SQLite, Oracle, DuckDB, Snowflake: VARCHAR/NVARCHAR(36), `"D"` format
 - `Binary` — Firebird: `CHAR(16) CHARACTER SET OCTETS`, RFC 4122 big-endian byte order
 - PostgreSQL: native UUID type via `AdvancedTypeRegistry` — no format conversion needed
-- Round-trips correctly across all 13 databases without any manual handling
+- Round-trips correctly across the integration-tested databases without any manual handling
 
 ### 19) Uniform exception hierarchy
 
@@ -311,10 +320,11 @@ are the public surface.
 
 **Throw sites for `ConnectionException`, `TransactionException`, `SqlGenerationException`, `DataMappingException`:**
 
-- `ConnectionException` — thrown by provider translators when connection-level errors are detected (SQL Server error codes 10053/10054/10060/233/10061; Postgres SQLSTATE class `08xx`; MySQL error codes 1040/1042/1043/1044; SQLite error codes 14 `SQLITE_CANTOPEN` / 26 `SQLITE_NOTADB`).
+- `ConnectionException` — thrown by provider translators when connection-level errors are detected (SQL Server error codes 10053/10054/10060/233/10061; Postgres SQLSTATE class `08xx`; MySQL error codes 1042/1043/1044; SQLite error codes 14 `SQLITE_CANTOPEN` / 26 `SQLITE_NOTADB`).
 - `TransactionException` — thrown by `TransactionContext` when `BeginTransaction`, `Commit`, or `Rollback` fails at the driver level. After a failure, `IsCompleted` is `true` (the connection has already been released); `Dispose` will not attempt a second rollback.
 - `SqlGenerationException` — thrown by `TypeMapRegistry` for entity metadata programmer errors (missing `[Table]` attribute, empty column name, enum `DbType` not string/numeric, duplicate column names, no `[Id]`/`[PrimaryKey]`, `[PrimaryKey]` order errors, invalid `[Version]` or audit field types). Always uses `SupportedDatabase.Unknown`. Fires at entity registration or gateway construction, never during query execution.
-- `DataMappingException` — thrown by `DataReaderMapper` in strict mode (`MapperOptions.Strict = true`) when a column value cannot be coerced to the target property type. Always uses `SupportedDatabase.Unknown`. `InnerException` contains the original coercion error.
+- `DataMappingException` — thrown by `DataReaderMapper` in either mode (strict or lenient) when a column fails to read or convert to its property, and by a NULL into a non-nullable value-type property; the lenient default no longer leaves the property at its default. Always uses `SupportedDatabase.Unknown`. `InnerException` contains the original coercion error.
+- `TooManyConnectionsException` (a `ConnectionException`) — MySQL/MariaDB error 1040 (server-wide), 1203 (`max_user_connections`) and 1226 when it names `max_user_connections`.
 
 `OperationCanceledException` is never wrapped — it propagates as-is.
 

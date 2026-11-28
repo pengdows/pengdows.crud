@@ -88,8 +88,8 @@ this order:
    `NpgsqlFactory.Instance`) or a static `Instance` *field* (e.g.
    `System.Data.SqlClient.SqlClientFactory.Instance`, MySql.Data's
    `MySqlClientFactory.Instance`). The property is checked first if a type happens to expose
-   both. Neither existing throws `InvalidOperationException` naming both conventions in the
-   message. A `FactoryType` that can't be found in the loaded assembly also throws.
+   both. If neither exists, the loader throws `InvalidOperationException` ("does not have a static
+   Instance property or field"). A `FactoryType` that can't be found in the loaded assembly also throws.
 3. **Fallback**: if no `FactoryType`/assembly step applies, resolves via
    `DbProviderFactories.GetFactory(ProviderName)` — the legacy machine/app-config provider
    registration path, for providers already registered that way.

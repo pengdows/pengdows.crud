@@ -186,7 +186,7 @@ stale version must be refused.
   version (`current + 1`) back into the entity, so reusing the same instance for another update
   works; a failed or conflicting update leaves the entity's version untouched. The write-back happens when the UPDATE succeeds, not at commit: if an enclosing transaction then rolls back, the entity keeps the incremented version while the row keeps the old one, so re-read the row (or restore the version) before retrying. Opaque
   `byte[]`/`RowVersion` versions are DB-generated and are not written back — re-read the row to
-  get the new token. **Cost:** a versioned `TableGateway` `UpdateAsync` first reads the row by its `[Id]` to compute the changed columns (one extra SELECT per update); an unversioned one sends every updatable column without that read. `PrimaryKeyTableGateway` never pre-reads. get the new token. `UpsertAsync`/`BatchUpsertAsync` don't write back (rows affected can't tell
+  get the new token. **Cost:** a versioned `TableGateway` `UpdateAsync` first reads the row by its `[Id]` to compute the changed columns (one extra SELECT per update); an unversioned one sends every updatable column without that read. `PrimaryKeyTableGateway` never pre-reads. `UpsertAsync`/`BatchUpsertAsync` don't write back (rows affected can't tell
   an insert from an update). (`UpsertAsync` and `BatchUpsertAsync` on both gateways throw `ConcurrencyConflictException` on a version
   mismatch wherever the upsert syntax can carry the check: MERGE, and ON CONFLICT ... DO UPDATE
   ... WHERE — the PostgreSQL family, SQLite and DuckDB. MySQL/MariaDB/TiDB `ON DUPLICATE KEY

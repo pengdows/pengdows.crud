@@ -113,7 +113,7 @@ ValueTask<long> CountWhereEqualsAsync(string column, string value, string? andWh
 string WrappedTableName { get; }                    // Fully qualified, quoted table name
 EnumParseFailureMode EnumParseBehavior { get; }      // Enum parse failure handling (set via constructor)
 string ColumnName(string propertyName);              // Mapped column name for custom SQL: ColumnName(nameof(Order.CustomerId))
-// Any entity, from a context: ctx.ColumnName<TEntity>(nameof(TEntity.Prop))  (DatabaseContextColumnNameExtensions)
+// Any entity, from a context: ctx.ColumnName<Customer>(nameof(Customer.Name))  (DatabaseContextColumnNameExtensions)
 
 // Public on the concrete gateway classes, NOT on the interfaces:
 Action<object, object?> GetOrCreateSetter(PropertyInfo prop); // Compiled setter
@@ -262,7 +262,7 @@ ValueTask<int> ExecuteNonQueryAsync(CommandType type, CancellationToken ct);
 ValueTask<int> ExecuteNonQueryAsync(ExecutionType execType, CommandType type = CommandType.Text);
 
 // Scalar — unambiguous distinguishing between None/Null/Value:
-ValueTask<T>               ExecuteScalarRequiredAsync<T>(CommandType type = CommandType.Text); // throws if no rows or null
+ValueTask<T>               ExecuteScalarRequiredAsync<T>(CommandType type = CommandType.Text); // throws if no rows; null throws for non-nullable T, returns default for nullable T
 ValueTask<T?>              ExecuteScalarOrNullAsync<T>(CommandType type = CommandType.Text);   // null if no rows or DBNull
 ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType type = CommandType.Text);      // status: None, Null, or Value
 
@@ -311,7 +311,7 @@ ISqlContainer CreateSqlContainer(string? query = null);
 ISqlDialect Dialect { get; }                   // SQL dialect in use for this context
 SupportedDatabase Product { get; }             // Detected database product
 DbMode ConnectionMode { get; }                 // Connection strategy
-DbDataSource? DataSource { get; }              // Native data source (e.g. NpgsqlDataSource), or null if not available
+DbDataSource? DataSource { get; }              // [Obsolete], removed in 3.0: bypasses connection governance; use the context execution APIs
 TimeSpan? ModeLockTimeout { get; }             // Lock timeout; null = wait indefinitely
 long NumberOfOpenConnections { get; }
 long PeakOpenConnections { get; }
@@ -348,9 +348,9 @@ void Commit();
 ValueTask CommitAsync(CancellationToken ct = default);
 void Rollback();
 ValueTask RollbackAsync(CancellationToken ct = default);
-ValueTask SavepointAsync(string name, CancellationToken ct = default);
-ValueTask RollbackToSavepointAsync(string name, CancellationToken ct = default);
-ValueTask ReleaseSavepointAsync(string name, CancellationToken ct = default);
+ValueTask SavepointAsync(string name, CancellationToken ct);
+ValueTask RollbackToSavepointAsync(string name, CancellationToken ct);
+ValueTask ReleaseSavepointAsync(string name, CancellationToken ct);
 // Each savepoint call throws NotSupportedException when the dialect's SavepointCapabilities lacks Create/Rollback/Release.
 ```
 

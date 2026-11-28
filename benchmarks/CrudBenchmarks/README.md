@@ -201,8 +201,8 @@ The EF results are intentionally isolated because Skirrels' provider requires EF
 
 ## Notable Benchmarks
 
-- **HydrationHotPathBenchmarks**: Pure row hydration throughput on SQLite, excluding connection acquisition (~35–36% faster than Dapper, ~50% lower allocations — see [results/hydration-hotpath-run-2026-08-13.md](./results/hydration-hotpath-run-2026-08-13.md); does not generalize to SQL Server, see [results/sqlserver-hydration-hotpath-run-2026-08-13.md](./results/sqlserver-hydration-hotpath-run-2026-08-13.md))
-- **SQLiteWriteContentionBenchmarks**: 100-writer lock contention resilience (0 lock exceptions under SingleWriter turnstile vs 268 in Dapper and 348 in EF Core, measured on a shared-cache in-memory database; the Dapper arm there is uncoordinated, a Dapper app with its own writer lock would not race either, and against a WAL file on disk the same storm lost no writes and ran 5 to 6 times slower: see "What the cost buys")
+- **HydrationHotPathBenchmarks**: Pure row hydration throughput on SQLite, excluding connection acquisition. **The 2026-08-13 run is superseded and invalid for connection-cost claims.** It held one persistent `SingleConnection` for pengdows and one open `SqliteConnection` for Dapper, so connection lifecycle is excluded on both sides; its figures (P÷D 0.642 to 0.664, Dapper allocating 1.92 to 1.99 times pengdows) are kept only as history, see [results/hydration-hotpath-run-2026-08-13.md](./results/hydration-hotpath-run-2026-08-13.md). The current hydration evidence is [results/row-scaling-2026-10-19.md](./results/row-scaling-2026-10-19.md) (pooled connection per call, PostgreSQL and SQL Server): level with Dapper up to 1,000 rows, 0.77 to 0.86 of Dapper's time at 10,000 rows, and about 213 bytes per row against Dapper's 284 to 309. The SQL Server gap in the 2026-08-13 run ([results/sqlserver-hydration-hotpath-run-2026-08-13.md](./results/sqlserver-hydration-hotpath-run-2026-08-13.md)) was closed by DEC-013 in the 2026-10-04 rerun ([results/sqlserver-hydration-hotpath-run-2026-10-04.md](./results/sqlserver-hydration-hotpath-run-2026-10-04.md)), where `LoadListAsync` takes 0.91 to 0.97 of Dapper's async time
+- **SQLiteWriteContentionBenchmarks**: 100-writer lock contention resilience (**STALE: 2026-08-13 counts, not re-measured since the benchmark changed**: 0 lock exceptions under SingleWriter turnstile vs 268 in Dapper and 348 in EF Core, measured on a shared-cache in-memory database; see `results/sqlite-write-contention-run-2026-08-13.md`, where the counts were scraped from a console log after the correctness artifact was lost; the Dapper arm there is uncoordinated, a Dapper app with its own writer lock would not race either, and against a WAL file on disk the same storm lost no writes and ran 5 to 6 times slower: see "What the cost buys")
 - **PostgreSqlEqualFootingBenchmarks** / **SqlServerEqualFootingBenchmarks**: CRUD against Dapper and EF Core on a real server
 - **IsolationBenchmarks**: Transaction isolation level performance (opt-in)
 - **DatabaseFeatureBenchmarks**: Advanced PostgreSQL features (opt-in)
@@ -245,7 +245,7 @@ Retry-on-exception is not benchmarked: it recovers from contention and does not 
 arms are `*_Pengdows` (SQLite: `SingleWriter`; DuckDB: `Standard`) and, on DuckDB, `*_PengdowsSingleWriter`.
 
 All results below: net10.0, mean per operation, library at `5887f286` plus the uncommitted 2026-10-13 SQLite
-session-settings change, sources frozen for the whole run (net8.0 is within about 10% unless noted). Raw output is in
+session-settings change, sources frozen for the whole run (net8.0 is within about 10% of net10.0 on the cost rows and 10 to 25% on the storm and mixed rows). Raw output is in
 the git-ignored `BenchmarkDotNet.Artifacts/`; the numbers are recorded in
 `results/sqlite-file-writer-patterns-run-2026-10-13.md`.
 
@@ -271,7 +271,8 @@ Shared-cache memory database (no WAL), `RecordCount=1`, microseconds; the Dapper
 | FilteredQuery | 35.0 | 13.9 | 39.0 | 1.11 | 2.8 |
 | Aggregate | 61.2 | 41.0 | 64.3 | 1.05 | 1.6 |
 
-DuckDB file (run 2026-10-13 before the SQLite change, which does not touch DuckDB), microseconds:
+DuckDB file, microseconds. **UNVERIFIED**: no committed result file contains this table (`grep -rn DuckDB results/` finds
+no DuckDB cost figures in `sqlite-file-writer-patterns-run-2026-10-13.md` or any other result file), so its run and date are unknown:
 
 | DuckDB, file | Dapper per-op | Dapper pinned | pengdows Standard | pengdows SingleWriter |
 |---|---:|---:|---:|---:|
@@ -286,11 +287,10 @@ What the cost numbers say:
 - **Against a per-operation Dapper doing the same work, pengdows.crud is 1.04x to 1.26x** (the delete is the highest, from its
   transaction) on SQLite, and within about 5% on DuckDB. Before the Dapper arms did the same session work, the SQLite
   gap read 1.13x to 1.42x: most of it was the per-checkout pragma, not the library.
-- **A pinned connection is faster than any per-operation arm**: about 1.7x on a file in WAL, 3 to 4 times on a memory
-  database (no commit to dilute the open), 18 to 25% on DuckDB. That is the price of the ephemeral lease; what it buys is below.
+- **A pinned connection is faster than any per-operation arm**: on a file in WAL, Dapper per-operation is 1.7x the pinned time for writes (10.8 / 6.4 µs) and 1.9x for reads (9.7 / 5.0 µs); pengdows is 1.8x (write, 11.6 / 6.4 µs) and 2.2x (read, 10.9 / 5.0 µs) its pinned equivalent (net10.0). On a shared-cache memory database pengdows is 4.0 to 5.0 times the pinned time for Create, Update, DeleteOnly, DeleteInsertCycle and ReadSingle, 3.1 for ReadList, 2.8 for FilteredQuery and 1.6 for Aggregate (no commit to dilute the open). **DuckDB 18 to 25%: UNVERIFIED**, no committed result file contains that figure; the DuckDB table above implies 1.23 to 1.34 per-operation over pinned. That is the price of the ephemeral lease; what it buys is below.
 - **A commit is not what slows a write here.** With `synchronous = NORMAL` in WAL a commit is a write to the OS, not a sync
   (a write was 11 µs on ZFS). A `FULL` run would show real disk cost; pengdows.crud has no setting for it yet (SQLITE-006).
-- **Multi-row reads favor pengdows.crud**: 0.89 to 0.93 times the per-operation Dapper time at 100 rows, with less allocation.
+- **Multi-row reads favor pengdows.crud**: at 100 rows on the in-memory SQLite database, `ReadList` is 0.938 and `FilteredQuery` 0.954 of the per-operation Dapper time (2026-10-03, `results/sqlite-equal-footing-run-2026-10-03.md`). The earlier "0.89 to 0.93" and "less allocation" claims have no committed source and are removed. Single-row reads repeated 100 times are slower: 1.13 to 1.22 times on the file database (`results/sqlite-file-writer-patterns-run-2026-10-13.md`).
 
 ### What the cost buys
 
@@ -307,7 +307,7 @@ What the cost numbers say:
 
 **No arm lost a write against a WAL file at these settings.** The uncoordinated Dapper arm finished, but 5 to 6 times slower,
 because its writers queue inside SQLite and the provider's retry loop instead of in front of it. The earlier headline
-("Dapper loses ~400 of 5,000, pengdows 0", `results/sqlite-write-contention-run-2026-08-13.md`) was measured on a
+("Dapper 268 and EF 348 exceptions, pengdows 0", `results/sqlite-write-contention-run-2026-08-13.md`; the 2026-08-27 rerun lost 496 and 409 of 800 attempted transactions, so the count varies) was measured on a
 **shared-cache in-memory database**, where a lock conflict is `SQLITE_LOCKED`, which, as SQLite documents it, the busy handler does
 not retry; Microsoft's docs also discourage shared cache with WAL. Read that result as "fault injection that makes coordination
 visible", and this one as what a WAL file does. Failures appear when the queue takes longer to drain than the command timeout.

@@ -1,7 +1,7 @@
 # Proposed CLR mapping for the semantic types
 
-Status: **decided 2026-11-03, not implemented.** The choices below are made. Nothing in the code
-changes until the characterization tests are written and red. The mapping is the shared default for every database; a database gets its own entry
+Status: **decided 2026-11-03; most of the decisions are now implemented.** The choices below are made. The
+implementation status of each decision, checked against the code on 2026-11-27, is in the last section. The mapping is the shared default for every database; a database gets its own entry
 only where it genuinely differs (see the last column and `docs/datatype-live-crossref.md`).
 
 Inputs:
@@ -64,7 +64,7 @@ answers exist.
 | object identifier / OID | `uint` | `UInt32` | PostgreSQL `oid`. | |
 | transaction ID | `ulong` | `UInt64` | PostgreSQL `xid8`; `xid` is 32-bit and reads as `uint`. | |
 | WAL / log position | `string` | `String` | Provider-specific type (`NpgsqlLogSequenceNumber`) on PostgreSQL-compatible databases. | |
-| JSON text / JSON value | `string` | `String` | `JsonDocument` is an opt-in converter (`JsonDocumentConverter`). | |
+| JSON text / JSON value | `string` | `String` | `JsonDocument` is registered by default: `JsonDocumentConverter` is in the built-in converter set (`types/AdvancedTypeRegistry.cs`), and the PostgreSQL-family, MySQL-family and SQL Server dialects map it to their JSON column types (`PostgreSqlDialect.cs`, `MySqlDialect.cs`, `SqlServerDialect.cs`). | |
 | native binary JSON | `string` | `String` | Same as JSON text. The binary form is not exposed separately. | |
 | XML | `string` | `String` | `SqlXml` and `XmlReader` are provider-specific. | |
 | BSON | `byte[]` | `Binary` | | |
@@ -129,3 +129,24 @@ it will be a public API addition needing its own review.
 **Compatibility:** the defaults change what the library writes and what a new entity declares. They
 don't change what an existing read returns, because the coercions for `DateTime`, `TimeSpan` and the
 other current reads stay in place.
+
+## Implementation status (checked 2026-11-27)
+
+Checked against `pengdows.crud/` at HEAD. "Implemented" means the type is in the code and used by the read or write path.
+It does not mean every database's cell passes the fidelity matrix.
+
+| Decision | Status | Evidence |
+|---|---|---|
+| 1. Signed 128-bit `Int128` | Implemented. It is a BCL type, not a value object. | `internal/WideIntegerFieldReader.cs`, `pengdows.crud/DecimalHelpers.cs` |
+| 2. Bit strings `BitArray` | Implemented. | `internal/BitFieldReader.cs`, `pengdows.crud/TypeCoercionHelper.cs` |
+| 3. `DateOnly` and `TimeOnly` | Implemented. Reads that return `DateTime` or `TimeSpan` still go through coercion. | `dialects/SqlDialect.cs` (`BindsDateOnlyAndTimeOnlyNatively` declared at 381 and used at 2543-2549; the DateTime/TimeSpan coercion check is at 575-578) |
+| 4. Year-month interval `IntervalYearMonth` | Implemented. | `types/valueobjects/IntervalYearMonth.cs`, `IntervalYearMonthConverter` (registered in `AdvancedTypeRegistry.cs`) |
+| 5. IP address `IPAddress` | Implemented for the read paths listed. It is the BCL type, with the `Inet` value object and `InetConverter` beside it. The Spanner string-parsing path was not checked. | `internal/DuckDbInetReader.cs`, `internal/NpgsqlTypedFieldReader.cs`, `types/valueobjects/Inet.cs` |
+| 6. MAC address `MacAddress` | Implemented. | `types/valueobjects/MacAddress.cs`, `MacAddressConverter` |
+| 7. Struct and composite `object` | No code change needed; the decision is the default. | n/a |
+| Firebird zoned time and timestamp (no new CLR type) | Implemented through a converter. | `internal/FirebirdZonedDateTimeInterop.cs`, `dialects/FirebirdDialect.cs` |
+| `JsonDocument` (not a numbered decision) | Registered by default. | See the JSON row above |
+
+The value objects the table names as existing are present: `IntervalYearMonth`, `MacAddress`, `Inet`, `Cidr`, `HStore`,
+`HierarchyId`, `Range`, `Geometry`, `Geography`, `PostgreSqlInterval`, `IntervalDaySecond`. Int128 and IPAddress are BCL
+types, not files under `types/valueobjects/`.

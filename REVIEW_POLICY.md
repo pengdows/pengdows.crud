@@ -1,7 +1,7 @@
 # REVIEW_POLICY.md (canonical)
 
 The single review policy for human and automated reviews in this repository. It is the
-five-ring policy used across `/home/alaricd/prj`, with this repository's rules added as a
+five-ring policy used across the sibling repositories, with this repository's rules added as a
 project overlay (§9). Every finding maps to one ring. The overlay may add rules; it may never
 weaken a P0 in the base.
 

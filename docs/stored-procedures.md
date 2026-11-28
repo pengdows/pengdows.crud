@@ -108,13 +108,13 @@ await sc.ExecuteNonQueryAsync(CommandType.StoredProcedure);
 using var readSc = pgContext.CreateSqlContainer("get_inventory_level");
 readSc.AddParameterWithValue("sku", DbType.String, "WIDGET-1");
 var level = await readSc.ExecuteScalarOrNullAsync<int>(ExecutionType.Read, CommandType.StoredProcedure);
-// Generated: SELECT * FROM get_inventory_level($1)
+// Generated: SELECT * FROM get_inventory_level(@sku)
 
 using var writeSc = pgContext.CreateSqlContainer("update_inventory");
 writeSc.AddParameterWithValue("sku", DbType.String, "WIDGET-1");
 writeSc.AddParameterWithValue("delta", DbType.Int32, -5);
 await writeSc.ExecuteNonQueryAsync(ExecutionType.Write, CommandType.StoredProcedure);
-// Generated: CALL update_inventory($1, $2)
+// Generated: CALL update_inventory(@sku, @delta)
 ```
 
 ## Limits worth knowing before you rely on this

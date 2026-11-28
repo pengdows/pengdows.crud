@@ -120,7 +120,7 @@ rounded to `TIME(0)` becomes 24:00:00, which isn't a valid time). MySQL 8.0.8+ s
 `TIME_TRUNCATE_FRACTIONAL` for this; MariaDB, PostgreSQL, Firebird, Db2, DuckDB and Informix
 truncate on their own. SQL Server (`DATETIME`, `SMALLDATETIME`, and `DATETIME2`/`TIME`/
 `DATETIMEOFFSET` below scale 7), Oracle (`DATE`, `TIMESTAMP(n)`, `INTERVAL DAY TO SECOND(n)`) and
-Sybase ASE (`SMALLDATETIME`) round instead, so the gateways learn each temporal column's declared
+Sybase ASE (`SMALLDATETIME`) round the digits they can't hold, so the gateways learn each temporal column's declared
 type and scale once per table (the same zero-row metadata query as other declared types, on the
 first async operation) and truncate the value to it before binding it. Checked live on every
 database with a value one tick before midnight, which must never come back as the next day.

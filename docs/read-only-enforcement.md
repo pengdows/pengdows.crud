@@ -64,7 +64,8 @@ transient. The provider codes, checked live on 2026-10-03 unless marked document
 | Sybase ASE | 3906 (documented) |
 | Oracle | ORA-01456 (read-only transaction); ORA-16000 (documented, read-only database) |
 | Informix | -878 |
-| Firebird, InterBase | 335544361 (read-only transaction); 335544765 (documented, read-only database) |
+| Firebird | 335544361 (read-only transaction); 335544765 (documented, read-only database) |
+| InterBase | Same ISC codes as Firebird per `InterBaseDialect.cs`; not live-verified (see REV-050 in `FUTURE_WORK.md`) |
 | Db2 | -817 (documented, prohibited update such as a read-only standby) |
 | Spanner | SQLSTATE P0001 with "not allowed for read-only transactions" |
 | SQLite, DuckDB, FlatFile, Access, SAP HANA | their read-only file/connection errors |

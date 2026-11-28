@@ -41,16 +41,16 @@ Cross-framework time ratios (`P÷D` = pengdows ÷ Dapper, `EF÷P` = EF ÷ pengdo
 
 | Suite | P÷D (median, range) | EF÷P (median) | Note |
 |---|---|---|---|
-| PostgreSQL equal-footing | 1.007 (0.968–1.082) | 1.36 | parity with Dapper |
-| SQL Server equal-footing | 1.016 (0.939–1.073) | 1.47 | parity |
-| DuckDB equal-footing | ~1.00–1.06 | — | no EF arm |
-| DuckDB reads | ~1.65–1.75 | — | constant ~150 µs/call overhead; unexplained |
-| EqualFootingCrud (database not identified; tens of µs/op) | 1.19 (0.90–1.44) | 3.09 | fixed per-call overhead shows when the DB is nearly free |
-| Hydration, no server | ~0.62–0.67 | — | pengdows faster at row mapping |
-| SQL Server hydration | ~1.0–1.1 | — | noisy |
-| ConnectionPoolProtection | ~1.7–2.1 | ~2.5 | see Section 3, item 1 |
+| PostgreSQL equal-footing | removed | removed | parity with Dapper (uncited) |
+| SQL Server equal-footing | removed | removed | parity (uncited) |
+| DuckDB equal-footing | removed | — | no EF arm |
+| DuckDB reads | removed | — | a constant per-call overhead; unexplained |
+| EqualFootingCrud (database not identified; tens of µs/op) | removed | removed | fixed per-call overhead shows when the DB is nearly free |
+| Hydration, no server | removed | — | pengdows faster at row mapping |
+| SQL Server hydration | removed | — | noisy |
+| <s>ConnectionPoolProtection</s> | <s>removed</s> | <s>removed</s> | **INVALID**: benchmark removed 2026-11-26; its read rows ran two leases per operation for Pengdows (see the correction at the top) |
 
-Allocation is about 1.3–1.5× Dapper's and about 10–14× lower than EF's wherever measured.
+Allocation relative to Dapper and EF is not cited here: the figures came from the uncommitted 2026-10-07 run, and the ratios above were removed on 2026-11-27 because no committed artifact holds them.
 
 The ratio tables **exclude rows with failures**. That hid the most important result (next section).
 
@@ -61,8 +61,8 @@ The ratio tables **exclude rows with failures**. That hid the most important res
 Several early statements were wrong. They are listed because the same mistakes are easy to repeat.
 
 1. **"Pool protection is a 2× slowdown with nothing offsetting it" — wrong.** The `WriteStorm` scenario in
-   `ConnectionPoolProtectionBenchmarks` (100 concurrent SQLite writers) failed for Dapper (2,417
-   `SqliteException`) and EF (1,956) and succeeded for pengdows (0). Failed rows are dropped from the ratio
+   `ConnectionPoolProtectionBenchmarks` (100 concurrent SQLite writers) failed for Dapper and EF
+   (`SqliteException`, counts removed 2026-11-27) and succeeded for pengdows. **INVALID**: the benchmark was removed on 2026-11-26 and these counts appear in no committed result file. Failed rows are dropped from the ratio
    tables, so I never saw it.
 2. **"StormGate adds nothing" — wrong, and retracted.** I said it from runs where the pools had already been
    capped below the server limit, which removes the failure StormGate exists to prevent. With default pools
@@ -95,45 +95,39 @@ Several early statements were wrong. They are listed because the same mistakes a
 100 concurrent writers × 50-update transaction, shared-cache in-memory SQLite, no retry on any arm.
 `BusyTimeoutMs` is now a `[Params]` axis (10 and 5,000) and a default-config pengdows arm was added.
 
-| | busy_timeout 10 ms | busy_timeout 5,000 ms |
-|---|---|---|
-| pengdows (benchmark config) | 0 lost, 139 ms | 0 lost, 137 ms |
-| pengdows (defaults) | 0 lost, 133 ms | 0 lost, 141 ms |
-| Dapper | 408 lost (51%), 1,063 ms | 0 lost, 3,553 ms |
-| EF Core | 393 lost (49%), 1,062 ms | 58 lost (7%), 3,462 ms |
+**UNVERIFIED**: no committed result file contains this table. The counts come from a storm run that is not checked in (the `SqliteDefaultsWriteStormBenchmarks` logs are git-ignored), so treat every row as unverified.
+
+The figures this table held were removed on 2026-11-27: no committed result file contains them, and the source was a git-ignored storm run. The qualitative mechanism below is unchanged.
 
 Mechanism (from earlier investigation recorded in `benchmarks/CrudBenchmarks/results/sqlite-write-contention-run-2026-08-13.md`):
 `Microsoft.Data.Sqlite` retries a busy statement with `Thread.Sleep(150)` bounded by `CommandTimeout`, so
-Dapper/EF converge on ~1,055 ms at a 1 s timeout. `SingleWriter` serializes admission, so pengdows never races
+Dapper/EF converge on latencies bounded by the command timeout. `SingleWriter` serializes admission, so pengdows never races
 for the file lock.
 
 Caveats a skeptic will raise (unaddressed): shared-cache in-memory is not how production SQLite runs (file +
-WAL); no retry arm for Dapper/EF; exception counts are unstable run to run (268, 0, 496, 2,417 seen) — lead
+WAL); no retry arm for Dapper/EF; exception counts are unstable run to run — lead
 with lost transactions and latency, not exception counts. A WAL-file variant and retry arms were deferred.
 
 ### 4.2 PostgreSQL connection storm (`max_connections=25`)
 
 **Setup:** 1,000-way, 5,000 ops/batch, default pools unless stated, ~130,000 attempts/arm.
 
-| Configuration | Dapper | EF | pengdows default | pengdows clamp on | StormGate arms |
-|---|---|---|---|---|---|
-| Default pools (100 > 25) | 69% fail | 65% fail | 71–72% fail | **0 (153 ms)** | **0** (Dapper 171 ms, EF 453 ms) |
-| Pool capped at 20, no gate | 0 | 0 | 0 (at pool 20) | — | — |
-| Pool capped at 25 (= server limit; 200-op/100-way run) | 78/5,200 | 2/5,200 | 34/5,200 | — | — |
+**UNVERIFIED**: no committed result file contains this table or these counts (the committed 2026-10-11 governance run reports the slot-cap arms in section 4.4 only). Every row below is unverified.
+
+The rows of this table were removed on 2026-11-27: no committed result file contains them. The committed 2026-10-11 run (section 4.4) is the only storm table cited.
 
 Findings:
 
 - **The failures come from a pool larger than the server limit.** At pool 20 nobody fails, even ungoverned.
   "Trusting the pool isn't safe" is true only when the pool is not sized below the server.
 - **pengdows is not protected by default.** The governor sizes from the connection string/config (dialect
-  default 100), not from the server, so at defaults it fails like the others.
+  default 100), not from the server, so at defaults it fails like the others. (The default-pool counts behind this are not cited: no committed artifact holds them.)
 - **A pool equal to the server limit still leaves residual failures** (anything else holding a slot).
-- **The ungoverned arms churn the host's ports:** a 1,000-way storm against `max_connections=25` peaked at about
-  1,700–1,900 client-side `TIME_WAIT` sockets in three repetitions, and the governed arm with its pool capped at 20
-  peaked at 41–42 (`benchmarks/PortPressure`). The earlier 10,700 and 31,701 figures and the Docker bind failure were
-  seen once in an unrecorded run and have not been reproduced; do not cite them.
+- **The ungoverned arms churn the host's ports:** a 1,000-way storm against `max_connections=25` left a large number of client-side `TIME_WAIT` sockets (`benchmarks/PortPressure`; those results are uncommitted and not cited), and the governed arm with its pool capped at 20
+  left far fewer (`benchmarks/PortPressure`). Earlier, larger figures and a Docker bind failure were
+  seen once in an unrecorded run and have not been reproduced (NOT REPRODUCED); they are not cited.
 - **The clamp (opt-in) fixes the default-pool case with no hand sizing:** it read the server limit,
-  sized pools to 22 (25 − 3 reserved), 0 failures.
+  sized pools to 22 (25 − 3 reserved).
 
 ### 4.3 SQL Server storm (`user connections=25`, set via `sp_configure` + container restart)
 
@@ -141,15 +135,9 @@ A stock SQL Server allows 32,767 connections and `user connections` reads 0 (unl
 and the probe correctly says "unknown". The benchmark now caps the server (fixed host port so it survives the
 restart).
 
-| Arm | Failures (of 130,000) | Mean/batch |
-|---|---|---|
-| Dapper + StormGate(20) | 0 | 196 ms |
-| EF + StormGate(20) | 0 | 823 ms |
-| Dapper, no gate | 14,247 (11%) | 162 ms |
-| pengdows default | 6,288 (4.8%) | 185 ms |
-| pengdows clamp on, headroom 0 | 3,030 (2.3%), re-run 3,196 (all `ConnectionException`) | 189 ms |
-| **pengdows clamp on, headroom 2** | **0, 0 (two runs)** | 199 ms |
-| EF, no gate | 0 (**unexplained**) | 675 ms |
+**UNVERIFIED**: no committed result file contains this table or its counts (its counts appear in no checked-in file). The SQL Server storm has not been re-measured since the 2026-10-11 run.
+
+The table for this run was removed on 2026-11-27: no committed result file holds its counts. Qualitatively, the clamp with zero headroom still produced `ConnectionException`s, and a headroom of 2 removed them (no figures cited).
 
 SQL Server has no admin reserve for the probe to subtract, so a clamp at exactly the limit has no room for
 the context's own idle connection(s) in the other role's pool (hypothesis, not directly shown); a headroom of
@@ -187,7 +175,7 @@ Two settings, not a difference between the gates, explain the table:
   calls, so the clamp is the split and nothing else. A context that declares it never writes
   (`MaxConcurrentWrites = 0`) has nothing to split and keeps the reader's full ceiling.
 
-History: an earlier measurement of the clamp with a 30 s wait took 20.8 s (22 slots). Since 1914dad0 the governors are
+History: an earlier measurement of the clamp with a 30 s wait, at 22 slots, was faster (figure not cited). Since 1914dad0 the governors are
 sized to the split provider-pool share (a provider pool's maximum hard-caps its connections), so the clamped reader
 now has 11 and the same run takes 41 s. The change is deliberate (a governor larger than its pool only queues inside
 the provider), but it shows what the static split costs a one-sided workload; see POOL-003.
@@ -195,11 +183,11 @@ the provider), but it shows what the static split costs a one-sided workload; se
 The 5 s default shedding 55% to 75% of a spike is fast-fail admission control working as designed, but it is the setting
 that decides whether a spike is survived: a trap if someone enables the clamp and changes nothing else.
 
-### 4.5 The mixed read/write physical-connection gap (red test, by design)
+### 4.5 The mixed read/write physical-connection gap (red when written, by design; passes since section 9)
 
 `ServerConnectionCeilingIntegrationTests`: server 25, `MaxConcurrentReads=20`, `MaxConcurrentWrites=20`,
-clamp on. A 20-wide read burst leaves **21 idle physical connections**; the following write burst gets
-**17/20 `TooManyConnectionsException`** (peak seen 24).
+clamp on. A 20-wide read burst leaves idle physical connections; the following write burst is refused with
+`TooManyConnectionsException` for most of its calls (figures not cited).
 
 Cause: `Standard` mode uses **separate ADO.NET pools** for reader and writer (different pool key via
 `-rw` application-name suffix). Governors count *leases in use*, not idle physical connections the provider
@@ -223,10 +211,7 @@ user from an outside source. **None of those numbers were verified.*** The stres
 *Repro* (`HangfireStartupStormFacts`, real `BackgroundJobServer`, 40 workers = default on 8 cores, Postgres
 `max_connections=30`, default pools):
 
-| | Jobs done | Peak server conns | Refused |
-|---|---|---|---|
-| stock Hangfire.PostgreSql 1.21.1 | 200/200 | 29/30 | 0 |
-| pengdows.hangfire, default `DatabaseContext` | 200/200 | 28/30 | **1** (`FetchedJobWatchdog`'s requeue update) |
+The repro's figures (jobs done, peak connections, refusals) were removed on 2026-11-27: no committed artifact holds them. The repro is `PengdowsHangfire_DefaultConfiguration_…` in `pengdows.hangfire/pengdows.hangfire.stress.tests/HangfireStartupStormFacts.cs` (sibling repo), and the refusal is in `FetchedJobWatchdog`'s requeue update.
 
 With 20 ms jobs, both finished with no errors. The effect is small at this scale; neither reproduced a crash.
 The refusal surfaced as `DatabaseOperationException` wrapping a 53300 (not `TooManyConnectionsException`) — an
@@ -237,6 +222,8 @@ see any local change until it references the project or a local pack.
 
 ### 4.7 Open-loop overload (backpressure)
 
+**UNVERIFIED**: no committed result file contains this table or the figures in the bullets below (`PostgreSqlBackpressureBenchmarks` output is not checked in).
+
 The earlier storms were **closed-loop** (fixed callers each waiting for their last call), which slows the
 offered load whenever the system is slow, so it can never overload anything. This harness offers calls at a
 fixed rate above capacity regardless of backlog.
@@ -245,20 +232,13 @@ Setup (`PostgreSqlBackpressureBenchmarks`): 20 concurrent, 300 ms calls (capacit
 20 s, 5 s wait budget where an arm has one, server limit 25, plus a `SELECT 1` probe at 5/s through the same
 path. Two valid samples per arm:
 
-| Arm | Served (run 1 / 2) | Failed | Served-call p50 | Peak waiting | Probe p50 |
-|---|---|---|---|---|---|
-| Pool alone, default `Timeout` 15 s | 2,330 / 2,332 | 336 / 334, after 15 s | 9.0 s | 1,351 / 1,348 | 8.3 / 8.7 s |
-| Pool alone, `Timeout=5` | 1,660 / 1,663 | 1,006 / 1,003, after 5 s | 5.3 s | 687 | 5.0 s |
-| StormGate (20, 5 s) | 1,660 / 1,662 | 1,006 / 1,004, after 5 s | 5.3 s | 687 | 5.0 s |
-| Governor, unbounded queue, 5 s | 1,660 / 1,663 | 1,006 / 1,003, after 5 s | 5.3 s | 688 | 5.0 s |
-| **Governor, bounded queue (40)** | 1,371 / 1,376 | 1,295 / 1,290, **at once** | **0.84 / 0.88 s** | **60 / 61** | 0.54 / 0.58 s |
+The numeric table for this experiment was removed on 2026-11-27: no committed artifact holds it. The qualitative results below are retained as the author's record and were not cross-checked against a committed file.
 
-- Goodput is the same everywhere (~66/s): bounding cannot create capacity.
-- **A tuned pool, StormGate and an unbounded governor are the same result** (within 3 calls in 1,660).
+- Goodput is the same everywhere: bounding cannot create capacity.
+- **A tuned pool, StormGate and an unbounded governor are the same result** (within a few calls).
 - **Only the bounded queue changes behavior:** refusals in milliseconds, served calls near
   service time + depth/capacity, backlog ≤ bound + in-service.
-- The probe is *not* protected by a bound — it is refused as often as the work (33%; 41–66 admitted across the
-  two runs, so that figure is noisy). Protecting an app's other traffic needs separate budgets per workload.
+- The probe is *not* protected by a bound — it is refused about as often as the work (figures not cited). Protecting an app's other traffic needs separate budgets per workload.
 - The expectations were written into the class doc **before** any result existed (class summary).
 
 ---
@@ -278,7 +258,7 @@ path. Two valid samples per arm:
 
 - That a gate (StormGate, or the governor with an unbounded queue) beats a correctly sized pool with a tuned
   `Timeout`: measured equal.
-- That pengdows protects the server *by default* on server databases: at defaults it failed 71%.
+- That pengdows protects the server *by default* on server databases: at defaults it failed a large share of calls (figure not cited).
 - Anything about multiple app instances: each process has its own pool/governor/gate; N pods × a correct pool
   still exceeds the server. Only an explicit per-instance share or an external pooler helps.
 - Crash/recovery behavior from the Hangfire reports: not reproduced.
@@ -347,13 +327,13 @@ checks were done on the safety-critical properties (restored afterwards).
 
 ### 7.2 Tests (all new unless noted)
 
-`ConnectionCeilingTests` (16), `ServerEndpointTests` (10), `PostgreSqlServerConnectionLimitProbeTests` (9),
-`ServerConnectionLimitProbeTests` (12), `ServerCeilingConfigurationTests` (4), `ServerCeilingWiringTests`
-(14, incl. replica cases), plus the live-server tests below. `TenantConnectionResolverTests` updated.
+`ConnectionCeilingTests` (13), `ServerEndpointTests` (18), `PostgreSqlServerConnectionLimitProbeTests` (13),
+`ServerConnectionLimitProbeTests` (17), `ServerCeilingConfigurationTests` (3), `ServerCeilingWiringTests`
+(20, incl. replica cases; counts are `[Fact]`/`[Theory]` methods as of 2026-11-27), plus the live-server tests below. `TenantConnectionResolverTests` updated.
 
 - **Live (integration project):** `ServerConnectionLimitLiveProbeTests` — PostgreSQL 15 and 17, both give 22
   slots at `max_connections=25`. **Passing.**
-- **Intentionally RED:** `ServerConnectionCeilingIntegrationTests` (the Section 4.5 acceptance test) and
+- **Intentionally RED when written (passes since section 9):** `ServerConnectionCeilingIntegrationTests` (the Section 4.5 acceptance test) and
   `HangfireStartupStormFacts.PengdowsHangfire_DefaultConfiguration_…` (1 refused watchdog update).
 
 ### 7.3 Benchmarks
@@ -370,7 +350,7 @@ correctness keys and sidecar names), `OpenLoopLoad.cs` + `PostgreSqlBackpressure
 `PoolGovernorAllocationTests.UncontendedAcquireAndRelease_…` (216 B vs 48 B) and
 `DataReaderMapperPlanLookupAllocationTests.CachedPlanCall_…` (792 B vs 568 B) failed **only in Debug**, where
 async state machines are heap classes. In Release they pass at the budgets the tests promise (504 B vs 408 B).
-Fix: `ReleaseBuildFactAttribute` skips with a stated reason when the library under test is not optimized; the
+Fix (as first written): `ReleaseBuildFactAttribute` skipped with a stated reason when the library under test was not optimized. That attribute no longer exists; `pengdows.crud.Tests/OptimizedBuild.cs` now gives Debug builds a stated allowance and the tests run in both builds. The
 budgets were not loosened. Run unit tests with `-c Release` when touching the governor.
 
 ### 7.5 Test status at last full run (scratch copy, identical files to the tree)
@@ -410,7 +390,7 @@ maximums: SQL Server 32,767, MySQL/MariaDB/TiDB 100,000, Db2 64,000, Oracle 65,5
 allocation tests, `TenantConnectionResolverTests`, API baseline, the interface/config/context/dialect/tenant
 files listed in 7.1. Untracked: `ConnectionCeiling.cs`, `ServerEndpoint.cs`, `OpenLoopLoad.cs`,
 `PostgreSqlBackpressureBenchmarks.cs`, `SqlServerConnectionGovernanceBenchmarks.cs`,
-`ReleaseBuildFactAttribute.cs`, the new unit/shape/integration test files.
+the new unit/shape/integration test files.
 
 `pengdows.hangfire` (`2.0.6` @ `d090165`) — modified `pengdows.hangfire.stress.tests.csproj` (adds
 `Hangfire.PostgreSql` 1.21.1); untracked `HangfireStartupStormFacts.cs`.
@@ -474,7 +454,7 @@ Gotchas that cost time:
 - **Correctness fragments are cleared at the start of each run** and `CRUD_BENCH_ARTIFACTS_DIR` is not honored
   by the child processes; read the `Fails` column / log output right after a run, and look for sidecars under
   the working directory's `BenchmarkDotNet.Artifacts/results`.
-- **Run unit tests with `-c Release`** for anything touching the governor; Debug skips two allocation guards.
+- **Run unit tests with `-c Release`** for anything touching the governor; Debug runs the two allocation guards with a stated allowance (`OptimizedBuild.cs`).
   Filtered runs trip the 83% coverage gate (an artifact).
 - A benchmark build and a test build of the library share outputs per configuration; don't edit library code
   while a long benchmark is still launching new arms.

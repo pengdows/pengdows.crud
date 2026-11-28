@@ -16,7 +16,7 @@ This is the detail most likely to surprise someone reasoning about ordering guar
 
 ## Throughput and backpressure
 
-Each thread can generate up to 4096 IDs/ms (a 12-bit counter) independently of other threads. Exceeding that within one thread makes `NewUuid7()` (and `NewUuid7Bytes`/`NewUuid7RfcBytes`) **block** until the next millisecond (bounded spin, then `Thread.Sleep(SleepMs)`).
+Each thread can generate up to 4096 IDs/ms (a 12-bit counter) independently of other threads. Exceeding that within one thread makes `NewUuid7()` (and `NewUuid7Bytes`/`NewUuid7RfcBytes`) **block** until the wall clock catches up with the logical clock, which may lead it by at most `MaxLogicalLeadMs` (10 ms); each wait is about one millisecond. `MaxSpinCount` and `SleepMs` are retained for compatibility and no longer affect counter overflow.
 
 `TryNewUuid7(out Guid result)` never blocks — it returns `false` on counter overflow, for latency-sensitive call sites that would rather skip/retry than wait. With `Uuid7Options.FailFastOnBurst` set, `NewUuid7()`/`NewUuid7Bytes`/`NewUuid7RfcBytes` throw `InvalidOperationException` on overflow instead of blocking.
 
@@ -26,7 +26,7 @@ On a backward clock jump, the generator never resyncs to the observed wall-clock
 - **Small drift** (≤ `Uuid7Options.MaxNegativeSkewMs`, default 5ms): pins to the thread's own last timestamp.
 - **Large drift**: adopts the cross-thread global epoch instead, if it's further ahead.
 
-Blocking on counter exhaustion during a large backward clock jump is intentionally unbounded in wall-clock duration (only the spin/sleep cadence is bounded) — trading worst-case latency for strict per-thread ordering. Use `TryNewUuid7` if that trade-off is wrong for your workload.
+Counter exhaustion during a backward clock step is bounded. The logical clock may lead the wall clock by a fixed internal limit; within it, `NewUuid7` waits for the wall clock (about one millisecond per wait). Past that limit, a backward step larger than the lead makes `NewUuid7` throw `InvalidOperationException` rather than stall for the length of the step, and `TryNewUuid7` returns `false`. Use `TryNewUuid7` if throwing is the wrong behavior for your workload.
 
 ## Configuring for your deployment
 
@@ -39,11 +39,11 @@ Uuid7Optimized.Configure(new Uuid7Options(
 
 | `Uuid7ClockMode` | Accuracy assumption | Behavior | Use when |
 |---|---|---|---|
-| `PtpSynced` | ±0.1–1.0ms | Tight skew tolerance, shorter spin waits; mode defaults turn `FailFastOnBurst` on (throw instead of block) | PTP-disciplined clusters (EKS Nitro, on-prem PTP) |
-| `NtpSynced` (default) | ±1–10ms | Conservative skew tolerance, longer spin waits, blocks on burst | Most cloud environments with ordinary NTP |
+| `PtpSynced` | ±0.1–1.0ms | Tight skew tolerance (`MaxNegativeSkewMs` capped at 1); mode defaults turn `FailFastOnBurst` on (throw instead of block) | PTP-disciplined clusters (EKS Nitro, on-prem PTP) |
+| `NtpSynced` (default) | ±1–10ms | Conservative skew tolerance, blocks on burst | Most cloud environments with ordinary NTP |
 | `SingleInstance` | N/A | Generous skew tolerance, no cross-node ordering concerns | Single-writer services, embedded systems |
 
-`Uuid7Options` fields: `Mode`, `MaxNegativeSkewMs` (default 5), `MaxSpinCount` (default 128, spin-wait cycles before sleeping on counter overflow), `SleepMs` (default 1), `FailFastOnBurst` (default `false`; when true, the blocking generators throw on burst exhaustion — see above).
+`Uuid7Options` fields: `Mode`, `MaxNegativeSkewMs` (default 5), `MaxSpinCount` (default 128) and `SleepMs` (default 1) are retained for compatibility and have no effect on counter overflow, `FailFastOnBurst` (default `false`; when true, the blocking generators throw on burst exhaustion — see above).
 
 The example above passes custom values, so `FailFastOnBurst` stays at its record default `false` (it blocks on burst) even in `PtpSynced`; set `FailFastOnBurst: true` explicitly to throw. If you pass only `Mode` (every other field left at its record default), `Configure` substitutes that mode's own defaults — for `PtpSynced` that includes `FailFastOnBurst = true`. If you pass custom values, they are clamped per mode: `PtpSynced` caps `MaxNegativeSkewMs` at 1 and `MaxSpinCount` at 64; `NtpSynced` raises them to at least 5 and 128; `SingleInstance` uses them as given.
 

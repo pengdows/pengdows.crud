@@ -88,10 +88,12 @@ blocks the calling thread on the governor drain wait (`WaitForDrainAsync(...).Ge
 so prefer `DisposeAsync()` when a drain could take a while.
 
 **Constructor-failure cleanup** (a failed `DatabaseContext` construction, not a normal disposal)
-is much narrower than the sequence above: if connection initialization fails, the initialization
-connection is disposed (any exception from that is ignored), the failure is logged, and the
-original construction exception is rethrown unchanged. The full disposal sequence does not run
-for a context whose constructor threw.
+is narrower than the sequence above: the failure is logged, the initialization connection is disposed
+best-effort (its exception is swallowed), and then `ReleaseResourcesAfterFailedConstruction` releases the
+unique-connection-string claim, any persistent connections (sentinels), the owned data sources and both
+governors. Those governors are disposed without the drain wait. The original construction exception is
+rethrown unchanged. The full disposal sequence (drain, then the deferral path) does not run for a context
+whose constructor threw.
 
 ## The exception you get after disposal
 
@@ -143,10 +145,11 @@ whatever pool/mode it came from, and a later `Dispose()` does not attempt a seco
 `Dispose()`/`DisposeAsync()` release, in order: the underlying `DbDataReader` (after recording
 the reader's metrics once), the `DbCommand`, the connection (and its governor permit, when the
 connection is ephemeral), every lock layer acquired to open the reader, and the lifetime-listener
-notification. The steps run sequentially — an exception from an earlier step (other than a known
-MySql.Data `NullReferenceException` quirk during reader/command disposal, which is suppressed)
-propagates and the remaining steps are skipped, so a provider that throws while disposing its
-reader can leave the rest of the lease unreleased.
+notification. The steps run in that order, and each one runs even when an earlier step throws: the first exception is
+kept and rethrown after every step has run (`ExceptionDispatchInfo` in `TrackedReader`'s `Dispose` and
+`DisposeAsync` paths), so a provider that throws while disposing its reader does not leave the rest of the
+lease unreleased. The known MySql.Data `NullReferenceException` quirk during reader/command disposal is
+suppressed and is not rethrown.
 
 `Close()` delegates to `Dispose()` and is equivalent to disposing the tracked reader: it closes
 the underlying `DbDataReader`, disposes the command, releases the connection/permit and locks,

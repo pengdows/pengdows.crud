@@ -95,3 +95,4 @@ testbed-results.json
 
 __pycache__/
 *.pyc
+.serena/

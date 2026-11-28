@@ -16,7 +16,7 @@ The suite uses a purpose-built "equal footing" design — each framework gets th
 
 On PostgreSQL all three frameworks run with the same Npgsql auto-prepare configuration (see below); an earlier run that gave only pengdows auto-prepare was biased and is superseded.
 
-All three hit the same database. The benchmarks are tested against two databases with very different latency profiles — SQLite (embedded, sub-microsecond round trip) and PostgreSQL (network, ~190 μs round trip) — because the overhead profile of a framework looks very different depending on which dominates: the framework or the wire.
+All three hit the same database. The benchmarks are tested against two databases with very different latency profiles — SQLite (embedded; a whole Dapper single-record operation takes about 22 µs) and PostgreSQL (network, ~190 μs round trip) — because the overhead profile of a framework looks very different depending on which dominates: the framework or the wire.
 
 **RecordCount** parameterizes the loop inside each benchmark method. `ReadSingle×N` makes N individual queries. `ReadList` makes ONE query that returns all N rows. This lets you measure both bulk-read and per-row performance in the same suite.
 
@@ -24,7 +24,7 @@ All three hit the same database. The benchmarks are tested against two databases
 
 The PostgreSQL benchmark's `DatabaseContext` is constructed with `NpgsqlFactory.Instance` and a standard connection string. The framework bakes two optimizations directly into the Npgsql `NpgsqlDataSource` at startup (`PostgreSqlDialect.cs`; YugabyteDB's dialect turns auto-prepare off again):
 
-1. **Session settings baked into startup Options** — `standard_conforming_strings`, `client_min_messages`, and `default_transaction_read_only` are injected as `-c key=value` tokens in the connection string `Options` parameter. PostgreSQL treats these as session-level GUC defaults, so `RESET ALL` on pool return restores them. This eliminates the per-checkout `SET` round-trip (~190 μs) that prior versions paid.
+1. **Session settings baked into startup Options** — `standard_conforming_strings`, `client_min_messages`, and `default_transaction_read_only` are injected as `-c key=value` tokens in the connection string `Options` parameter. PostgreSQL treats these as session-level GUC defaults, so `RESET ALL` on pool return restores them. This eliminates the per-checkout `SET` round-trip (about 190 μs; **UNVERIFIED**: no result file contains this figure) that prior versions paid.
 
 2. **Npgsql auto-prepare enabled** — `MaxAutoPrepare=64` and `AutoPrepareMinUsages=2` are baked into the DataSource. After two executions of the same SQL text on a given connection, Npgsql transparently server-side prepares it, eliminating PostgreSQL's parse and plan phase on subsequent calls.
 
@@ -36,7 +36,7 @@ The `GlobalSetup` method runs a 20-iteration pre-warming pass over every reusabl
 
 ## SQLite Results (embedded, 2026-03-04)
 
-SQLite exposes framework overhead most clearly because the database round trip itself takes only ~15–20 μs.
+SQLite exposes framework overhead most clearly because a whole Dapper single-record operation takes only about 22 μs, so the database round trip is a small part of it (the bare round trip is not measured separately).
 
 ### Single-record operations (N=1)
 
@@ -49,11 +49,11 @@ SQLite exposes framework overhead most clearly because the database round trip i
 | FilteredQuery | 40.0 μs / 8.9 KB | 26.3 μs / 4.3 KB | 119.8 μs / 59.1 KB | **1.52x slower** | **3.0x faster** |
 | Aggregate | 63.1 μs / 5.6 KB | 51.6 μs / 1.3 KB | 111.2 μs / 41.9 KB | **1.22x slower** | **1.8x faster** |
 
-> The Delete benchmark measures INSERT+DELETE per iteration (rows must exist before they can be deleted), so its absolute time reflects two SQL executions. The overhead ratio vs Dapper is the same ~1.4x as other operations.
+> There is no Delete row in this table. The DeleteOnly and DeleteInsertCycle benchmarks measure INSERT+DELETE per iteration, so their absolute times reflect two SQL executions. The previously quoted ~1.4x Delete ratio had no source row and is removed.
 
-On embedded SQLite, pengdows is consistently **1.4–1.6x slower than Dapper** per operation, and **2–4x faster than EF Core**. The ~12 μs overhead vs Dapper comes from the connection pool lifecycle management, parameter binding infrastructure, and typed mapping — all things Dapper does not do. The 30 μs per-operation cost is dominated by the SQLite round trip itself (~18 μs), so the framework overhead is small relative to the work done.
+On embedded SQLite, pengdows is **1.2x to 1.6x slower than Dapper** per operation (Aggregate 1.22x; the other rows 1.42x to 1.58x), and **1.8x to 3.8x faster than EF Core**. The ~12 μs overhead vs Dapper comes from the connection pool lifecycle management, parameter binding infrastructure, and typed mapping — all things Dapper does not do. The ~30 μs per-operation cost is mostly the SQLite round trip, which is not measured separately, so the framework overhead is small relative to the work done.
 
-EF Core's per-operation allocation is 6–12x heavier than pengdows. On memory-constrained or high-throughput servers, this compounds.
+EF Core's per-operation allocation is 5.7x to 8.1x that of pengdows at N=1 on SQLite (table above). On memory-constrained or high-throughput servers, this compounds.
 
 ### Batch reads — where pengdows closes the gap
 
@@ -77,11 +77,13 @@ At 100 records, `ReadList` on SQLite is within **7% of Dapper** — the gap esse
 | 10 | 32.0 μs | 20.2 μs |
 | 100 | 32.8 μs | 21.0 μs |
 
-This proves the "open late, close early" design is working correctly — connections are not accumulated or held between benchmark iterations regardless of record volume.
+The flat timing shows that the per-query cost does not grow with the record count. It does not measure connection lifecycle directly, so it does not prove the "open late, close early" design; that claim needs a direct measurement of connections opened, held and closed.
 
 ---
 
 ## PostgreSQL Results (network database, 2026-03-15, equal footing)
+
+> **Superseded for ratios:** the current PostgreSQL run is 2026-11-27 (pengdows ÷ Dapper 0.959 to 1.031; see `benchmarks/README.md`). The tables below are the 2026-03-15 run, whose Dapper arms left two columns unmapped until 2026-10-19 (`benchmarks/CrudBenchmarks/results/row-scaling-2026-10-19.md`).
 
 A single network round trip to a local Docker PostgreSQL is ~140-200 μs, so framework overhead is a small share of every operation. All three frameworks use identical Npgsql auto-prepare configuration. `P÷D` is pengdows mean ÷ Dapper mean (below 1.0 means pengdows is faster); `EF÷P` is EF Core mean ÷ pengdows mean.
 
@@ -124,12 +126,12 @@ At 100 records `ReadList` (one query, 100 rows) costs 204 μs for pengdows, 186 
 
 | Scenario | pengdows vs Dapper | pengdows vs EF Core |
 |----------|--------------------|---------------------|
-| SQLite, single op | 1.4–1.6x slower | **2–4x faster** |
+| SQLite, single op | 1.2–1.6x slower | **1.8–3.8x faster** |
 | SQLite, 100-row batch read | **~parity (7% slower)** | ~1.1x faster |
 | PostgreSQL, reads | **parity (within about 10%)** | **1.4–1.6x faster** |
 | PostgreSQL, writes | **parity (Create about 5–8% slower)** | **1.1–1.3x faster** |
 | PostgreSQL, 100-row batch read | **parity (about 10% slower)** | **1.4x faster** |
-| Memory per operation | about 2x more than Dapper (up to 3x on SQLite) | **5–12x less than EF Core** |
+| Memory per operation | 1.5–2.4x Dapper on PostgreSQL; 2.1–4.3x on SQLite (N=1) | **EF Core uses 4.6–8.6x (PostgreSQL) and 5.7–8.1x (SQLite) more** |
 
 ---
 
@@ -141,7 +143,7 @@ At 100 records `ReadList` (one query, 100 rows) costs 204 μs for pengdows, 186 
 
 **If you read rows in sets** — which is the right pattern for almost all real applications: pengdows is within about 10% of Dapper at every RecordCount on PostgreSQL batch reads, and within 7% on SQLite at 100 rows. More importantly, it beats EF Core comfortably at all scales. Use `LoadListAsync` or `RetrieveStreamAsync` rather than calling `RetrieveOneAsync` in a loop.
 
-**Memory:** pengdows uses about 2x more heap than raw Dapper per operation on PostgreSQL (up to about 3x on SQLite). This reflects real infrastructure: connection pool tracking, `ISqlContainer` state, compiled accessor caches, and type mapping — overhead that provides strong typing, audit fields, optimistic concurrency, and connection safety guarantees. EF Core uses 5–12x more memory than pengdows for the same operations.
+**Memory:** pengdows uses about 1.5x to 2.4x the heap of raw Dapper per operation on PostgreSQL, and 2.1x to 4.3x on SQLite (N=1). This reflects real infrastructure: connection pool tracking, `ISqlContainer` state, compiled accessor caches, and type mapping — overhead that provides strong typing, audit fields, optimistic concurrency, and connection safety guarantees. EF Core uses 4.6x to 8.6x more memory than pengdows on PostgreSQL and 5.7x to 8.1x on SQLite (N=1), for the same operations.
 
 **The framework overhead is not query time.** Changing to a faster ORM does not make your PostgreSQL server issue plans faster. Profile your actual queries before optimizing framework choice.
 

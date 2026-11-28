@@ -231,7 +231,7 @@ All execution methods return `ValueTask` (not `Task`) for reduced allocations:
 
 ```csharp
 ValueTask<int>             ExecuteNonQueryAsync(commandType);          // Row count
-ValueTask<T>               ExecuteScalarRequiredAsync<T>(commandType); // Single value — throws if no rows or null
+ValueTask<T>               ExecuteScalarRequiredAsync<T>(commandType); // Single value — throws if no rows; null throws for non-nullable T, returns default for nullable T
 ValueTask<T?>              ExecuteScalarOrNullAsync<T>(commandType);   // Single value — null if no rows or DBNull
 ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(commandType);      // Unambiguous: None/Null/Value
 ValueTask<ITrackedReader>  ExecuteReaderAsync(commandType);            // Data reader
@@ -265,7 +265,7 @@ services.AddSingleton<IDatabaseContext>(sp =>
 
 // Extended gateway as singleton
 services.AddSingleton<IOrderGateway>(sp =>
-    new OrderGateway(sp.GetRequiredService<IDatabaseContext>(), sp.GetRequiredService<IAuditValueResolver>()));
+    new OrderGateway(sp.GetRequiredService<IDatabaseContext>()));
 
 // AuditResolver is SINGLETON - must be thread-safe (use IHttpContextAccessor/AsyncLocal internally)
 services.AddSingleton<IAuditValueResolver, OidcAuditContextProvider>();
@@ -383,12 +383,12 @@ public class OidcAuditContextProvider : IAuditValueResolver
 [Table("orders")]
 public class Order
 {
-    [Id] [Column("id")] public long Id { get; set; }
+    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
 
-    [CreatedBy] [Column("created_by")] public string CreatedBy { get; set; }
-    [CreatedOn] [Column("created_at")] public DateTime CreatedAt { get; set; }
-    [LastUpdatedBy] [Column("updated_by")] public string UpdatedBy { get; set; }
-    [LastUpdatedOn] [Column("updated_at")] public DateTime UpdatedAt { get; set; }
+    [CreatedBy] [Column("created_by", DbType.String)] public string CreatedBy { get; set; }
+    [CreatedOn] [Column("created_at", DbType.DateTime)] public DateTime CreatedAt { get; set; }
+    [LastUpdatedBy] [Column("updated_by", DbType.String)] public string UpdatedBy { get; set; }
+    [LastUpdatedOn] [Column("updated_at", DbType.DateTime)] public DateTime UpdatedAt { get; set; }
 }
 ```
 
@@ -471,15 +471,15 @@ await _gateway.BatchUpdateAsync(entities, tenantCtx);
 public class OrderItem
 {
     [Id(false)]               // Surrogate for FK references
-    [Column("id")]
+    [Column("id", DbType.Int64)]
     public long Id { get; set; }
 
     [PrimaryKey(1)]           // Business key part 1
-    [Column("order_id")]
+    [Column("order_id", DbType.Int32)]
     public int OrderId { get; set; }
 
     [PrimaryKey(2)]           // Business key part 2
-    [Column("product_id")]
+    [Column("product_id", DbType.Int32)]
     public int ProductId { get; set; }
 }
 ```
@@ -528,7 +528,7 @@ Use lowest number possible:
 | `PreventDatabaseUnload` (1) | Sentinel connection that is NEVER used for operations — keeps an embedded/local database (or a proxy/serverless endpoint) from unloading when idle. `Best` picks it for SQL Server LocalDB, Firebird and Db2 LUW. NOT for connection reuse or efficiency. `KeepAlive` is only an `[Obsolete]` alias of the same value. |
 | `SingleWriter` (2) | File-based SQLite/DuckDB/Access/pengdows.flatfile: serializes writes through a governor (ephemeral connections, no pinned writer) |
 | `SingleConnection` (4) | In-memory `:memory:` SQLite/DuckDB |
-| `Best` (15) | Auto-select optimal mode for the database and connection string; an explicit `Standard` is always honored |
+| `Best` (15) | Auto-select optimal mode for the database and connection string; an explicit `Standard` is honored everywhere except SQLite and FlatFile, which coerce it to `SingleWriter` |
 
 ```csharp
 // Using IDatabaseContextConfiguration to specify DbMode with a factory
@@ -592,7 +592,7 @@ await using var txn = await Context.BeginTransactionAsync(IsolationProfile.SafeN
 ```
 
 **Isolation rules:**
-- A write transaction with neither a level nor a profile defaults to `ReadCommitted`; only a read-only `BeginTransaction` uses the `SafeNonBlockingReads` mapping (it logs a warning if degraded).
+- A write transaction with neither a level nor a profile defaults to `ReadCommitted` (or `Serializable`, then the first supported level, where `ReadCommitted` is unsupported); only a read-only `BeginTransaction` uses the `SafeNonBlockingReads` mapping where the product honors it.
 - Isolation fails up, never down: an unsupported explicit `IsolationLevel` runs as the weakest supported level at least as strong, and throws `InvalidOperationException` if none exists (e.g. `Serializable` on TiDB/Snowflake/SingleStore).
 - An `IsolationProfile` throws `TransactionModeNotSupportedException` rather than run below its guarantee: `StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile, `SafeNonBlockingReads` on SQL Server with neither snapshot isolation nor READ_COMMITTED_SNAPSHOT.
 - Savepoints (`SavepointAsync`/`RollbackToSavepointAsync`/`ReleaseSavepointAsync`) throw `NotSupportedException` where the dialect lacks the capability.
@@ -716,7 +716,7 @@ catch (DeadlockException)
 
 ```csharp
 [Version]
-[Column("version")]
+[Column("version", DbType.Int32)]
 public int Version { get; set; }
 ```
 
@@ -802,12 +802,12 @@ Stored procedures use one of six call styles (`ProcWrappingStyle`: `Call`, `Exec
 
 Tests are required. Coverage minimums are enforced in CI.
 
-- Minimum **83% branch coverage** (CI blocks merge if below)
+- Minimum **83% line coverage** (Cobertura `line-rate` checked by `.github/workflows/deploy.yml`; CI fails below the floor, and `COVERAGE_BASELINE` can raise it)
 - Target **95%+** for new features and public API changes
 - Write tests once the design stabilizes
 - NO skipped tests
 - `pengdows.crud.fakeDb` enables unit testing without a real database
-- Integration tests run against real databases (always-on Docker matrix; Snowflake, SAP HANA, InterBase and Access are opt-in, Aurora needs `INCLUDE_AURORA=true`)
+- Integration tests run against real databases (always-on Docker matrix; Snowflake (`INCLUDE_SNOWFLAKE`), SAP HANA (`INCLUDE_SAPHANA`) and InterBase (`INCLUDE_INTERBASE`) are opt-in; Access runs whenever the OS is Windows, with no env var; Aurora needs `INCLUDE_AURORA=true`)
 
 ## Core Invariants
 
@@ -818,7 +818,7 @@ Tests are required. Coverage minimums are enforced in CI.
 5. **TenantContextRegistry is SINGLETON** - manages per-tenant contexts
 6. **Transactions are operation-scoped** - create inside methods, never store as fields
 7. **ITrackedReader is a lease** - pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** - isolated SQLite/DuckDB `:memory:` = SingleConnection; file-based SQLite/DuckDB/Access/FlatFile = SingleWriter; SQL Server LocalDB, Firebird and Db2 LUW = PreventDatabaseUnload; all others = Standard (explicit `Standard` always honored)
+8. **DbMode.Best auto-selects** - isolated SQLite/DuckDB `:memory:` = SingleConnection; file-based SQLite/DuckDB/Access/FlatFile = SingleWriter; SQL Server LocalDB, Firebird and Db2 LUW = PreventDatabaseUnload; all others = Standard (an explicit `Standard` is honored except on SQLite and FlatFile, which coerce it to `SingleWriter`)
 9. **Always use WrapObjectName()** - for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** - incompatible with connection management, use Context.BeginTransaction()
 11. **Execution methods return ValueTask** - not Task, for reduced allocations

@@ -37,7 +37,7 @@ The full contract, with the per-database rationale and live-verification trail, 
 
 ### SingleWriter
 
-- Semantics: Identical to Standard, plus a governor profile: writable connections capped at 1 concurrent writer, read-only connections allow 0 writers; writer-starvation-prevention turnstile enabled.
+- Semantics: Identical to Standard, plus a governor profile: writable connections capped at 1 concurrent writer; the read-only pool is not capped by this mode (read-only connections cannot write); writer-starvation-prevention turnstile enabled.
 - Reads:
   - Non-transactional → ephemeral read-only connections that use the read-only session settings.
   - Read-only transactions → ephemeral read-only connections (reader concurrency pauses while writers wait).
@@ -99,7 +99,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 - The session settings (`GetBaseSessionSettings()`) are applied once per `TrackedConnection` wrapper, at its first open.
   - Pinned (`SingleConnection`): the one wrapper lives for the context, so it runs once.
-  - Ephemeral (`Standard`, `SingleWriter`): a wrapper is created per operation, so it runs on every checkout, even when the provider's pool returns an already-open physical connection. This is deliberate; see `docs/connection/connection-modes.md`, section 4.
+  - Ephemeral (`Standard`, `SingleWriter`): a wrapper is created per operation, so the settings are built and sent on every checkout, even when the provider's pool returns an already-open physical connection. In the default `Normal` mode only the settings that differ from the captured snapshot are sent (the statement may be empty); `Paranoid` sends all of them. This is deliberate; see `docs/connection/connection-modes.md`, section 4, and `docs/session-settings.md`.
 - Do not mutate session-scoped settings mid-connection when using pooling.
 - ReadWriteMode.ReadOnly:
   - `SqlContainer` pre-guards every write in code: it throws `ReadOnlyContextException` (a `NotSupportedException`) for `ExecutionType.Write` before any provider call is made.
