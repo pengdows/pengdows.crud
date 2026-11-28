@@ -186,7 +186,8 @@ internal class MySqlDialect : SqlDialect
 
     // MySQL rounds fractional seconds a column can't hold, so TimeOnly 23:59:59.9999999 was stored
     // in TIME as 24:00:00 and a DATETIME crossed into the next day. TIME_TRUNCATE_FRACTIONAL (MySQL
-    // 8.0.8+) truncates instead, as MariaDB, PostgreSQL, Firebird and SQL Server do. Confirmed live
+    // 8.0.8+) truncates instead, as MariaDB, PostgreSQL and Firebird do (SQL Server's temporal columns
+    // are truncated by the gateway before binding, SqlDialect.TruncateTemporal). Confirmed live
     // 2026-09-29: with the mode, 23:59:59.9999999 stores as 23:59:59 (TIME, DATETIME) and
     // 23:59:59.999 (DATETIME(3)).
     private const string TimeTruncateFractionalFlag = "TIME_TRUNCATE_FRACTIONAL";

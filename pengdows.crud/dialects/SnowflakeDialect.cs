@@ -659,7 +659,12 @@ internal class SnowflakeDialect : SqlDialect
             SpatialFormat = SpatialWireFormat.ExtendedTextOrHex,
             RegisterTypeMappings = RegisterSnowflakeTypeMappings,
             // An OBJECT is read as its JSON text, which a dictionary property takes (TextCollections, shared with DuckDB).
-            RegisterCoercions = registry => TextCollections.RegisterCoercions(registry, SupportedDatabase.Snowflake)
+            // A VECTOR(FLOAT, n) is returned as its bracketed text ("[1.000000,2.000000,3.000000]"), the form BracketedVectorCoercion reads.
+            RegisterCoercions = registry =>
+            {
+                TextCollections.RegisterCoercions(registry, SupportedDatabase.Snowflake);
+                registry.Register(SupportedDatabase.Snowflake, new pengdows.crud.types.coercion.BracketedVectorCoercion());
+            }
         };
 
     private static void RegisterSnowflakeTypeMappings(AdvancedTypeRegistry registry)
